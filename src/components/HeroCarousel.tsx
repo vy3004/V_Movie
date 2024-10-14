@@ -126,12 +126,12 @@ const MovieDetails = ({ movie }: { movie: Movie }) => (
 const CategoryAndCountry = ({ movie }: { movie: Movie }) => (
   <div className="space-x-2">
     {movie.country.map((ctr) => (
-      <Badge className="bg-white/40" key={ctr.id}>
+      <Badge className="bg-white/40" key={ctr.slug}>
         {ctr.name}
       </Badge>
     ))}
     {movie.category.map((cate) => (
-      <Badge className="bg-white/40" key={cate.id}>
+      <Badge className="bg-white/40" key={cate.slug}>
         {cate.name}
       </Badge>
     ))}
