@@ -20,8 +20,8 @@ const DropdownMenu = ({
     <Button className="group-hover:bg-custom-gradient">{title}</Button>
     <div className="absolute left-1/2 -translate-x-1/2 hidden group-hover:block w-max z-10">
       <div className="h-4 opacity-0" />
-      <div className="absolute left-1/2 -translate-x-1/2 top-2 border-b-8 border-b-secondary border-x-8 border-x-transparent size-0" />
-      <div className="p-4 grid grid-cols-3 gap-4 bg-secondary rounded-md">
+      <div className="absolute left-1/2 -translate-x-1/2 top-2 border-b-8 border-b-gray-800 border-x-8 border-x-transparent size-0" />
+      <div className="p-4 grid grid-cols-3 gap-4 bg-gray-800 rounded-md">
         {items && items.length > 0 ? (
           items.map((item) => (
             <Link

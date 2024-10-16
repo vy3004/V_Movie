@@ -1,7 +1,7 @@
 import axios from "axios";
 
 import { apiConfig, WEB_TITLE } from "@/lib/configs";
-import { PageMoviesData } from "@/lib/types";
+import { PageMovieData, PageMoviesData } from "@/lib/types";
 
 export const fetchMovies = async (
   slug: string,
@@ -37,12 +37,35 @@ export const fetchMovies = async (
   }
 };
 
-export const fetchDetailMovie = async ({ slug }: { slug: string }) => {
+export const fetchDetailMovie = async ({
+  slug,
+}: {
+  slug: string;
+}): Promise<PageMovieData> => {
   try {
-    const response = await axios.get(`${apiConfig.MOVIE_URL}${slug}`);
-    return response.data.data;
+    const { data } = await axios.get(`${apiConfig.MOVIE_URL}${slug}`);
+
+    return {
+      ...data.data,
+      seoOnPage: {
+        ...data.data.seoOnPage,
+        titleHead: `${WEB_TITLE} | ${data.data.seoOnPage.titleHead}`,
+      },
+    };
   } catch (error) {
     console.error("Error fetching detail movie:", error);
+    return {
+      seoOnPage: {
+        titleHead: WEB_TITLE,
+        descriptionHead: "",
+        og_image: [],
+        og_url: "",
+        og_type: "video.movie",
+      },
+      breadCrumb: [],
+      params: { slug },
+      item: null,
+    };
   }
 };
 

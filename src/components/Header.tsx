@@ -16,7 +16,7 @@ const Header = () => {
 
   const handleScroll = () => {
     const scrollPosition = window.scrollY;
-    if (scrollPosition > 100) {
+    if (scrollPosition > 50) {
       setBgColor("bg-background");
     } else {
       setBgColor("bg-transparent");

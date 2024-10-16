@@ -14,10 +14,10 @@ const Banner = () => {
       />
       <div className="absolute inset-0 bg-banner-gradient" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center w-1/2 space-y-4">
-        <h3 className="text-3xl font-bold">
+        <h1 className="text-3xl font-bold">
           <span className="text-primary">V·Movie</span> là nền tảng tốt nhất để
           xem phim và chương trình yêu thích của bạn, mọi lúc, mọi nơi.
-        </h3>
+        </h1>
         <p>
           Bạn có thể thưởng thức nhiều nội dung đa dạng, bao gồm các bộ phim bom
           tấn mới nhất, phim kinh điển, chương trình truyền hình nổi tiếng, v.v.

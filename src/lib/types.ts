@@ -25,7 +25,7 @@ interface SeoOnPage {
   og_url: string;
 }
 
-interface BreadCrumb {
+export interface BreadCrumb {
   name: string;
   slug?: string;
   isCurrent?: boolean;
@@ -48,7 +48,7 @@ interface Time {
   time: string;
 }
 
-interface ServerData {
+export interface ServerData {
   name: string;
   slug: string;
   filename: string;
@@ -56,7 +56,7 @@ interface ServerData {
   link_m3u8: string;
 }
 
-interface Episode {
+export interface Episode {
   server_name: string;
   server_data: ServerData[];
 }
@@ -75,6 +75,7 @@ export interface Movie {
   status: string;
   thumb_url: string;
   poster_url: string;
+  trailer_url: string;
   is_copyright: boolean;
   sub_docquyen: boolean;
   chieurap: boolean;
@@ -103,5 +104,5 @@ export interface PageMovieData {
   seoOnPage: SeoOnPage;
   breadCrumb: BreadCrumb[];
   params: { slug: string };
-  item: Movie;
+  item: Movie | null;
 }
