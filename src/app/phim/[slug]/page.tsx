@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 
+import Container from "@/components/Container";
 import BreadCrumb from "@/components/BreadCrumb";
 import MovieDetail from "@/components/MovieDetail";
+import WatchMovie from "@/components/WatchMovie";
 
 import { fetchDetailMovie } from "@/lib/apiClient";
-import WatchMovie from "@/components/WatchMovie";
 
 interface PageProps {
   params: { slug: string };
@@ -62,12 +63,12 @@ export default async function MoviePage({ params, searchParams }: PageProps) {
   const isWatching = !!tap && isValidEpisode(tap);
 
   return (
-    <div className="py-4 col-span-8 space-y-8">
+    <Container className="py-4 col-span-8 space-y-8">
       <BreadCrumb breadCrumb={data.breadCrumb} />
 
       <MovieDetail movie={data.item} isWatching={isWatching} />
 
       {isWatching && <WatchMovie movie={data.item} />}
-    </div>
+    </Container>
   );
 }

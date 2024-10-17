@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi">
+    <html lang="vi" className="scroll-smooth">
       <body className={`${roboto.className} antialiased`}>
         <ReactQueryClientProvider>
           <BaseDataContextProvider>

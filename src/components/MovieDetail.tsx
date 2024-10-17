@@ -152,7 +152,7 @@ export const ActionButtons = ({
 }) => {
   const hrefWatchMovie =
     movie.episodes && movie.episodes[0]
-      ? `/phim/${movie.slug}?tap=${movie.episodes[0].server_data[0].slug}`
+      ? `/phim/${movie.slug}?tap=${movie.episodes[0].server_data[0].slug}#video`
       : `/phim/${movie.slug}`;
 
   return (

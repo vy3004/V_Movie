@@ -7,7 +7,7 @@ import Loading from "@/components/Loading";
 import { useData } from "@/providers/BaseDataContextProvider";
 
 import { CateCtr } from "@/lib/types";
-import { menuConfig } from "@/lib/configs";
+import { typesMovie } from "@/lib/configs";
 
 const DropdownMenu = ({
   title,
@@ -46,15 +46,17 @@ const Menu = () => {
 
   return (
     <nav className="flex items-center space-x-2 mt-1 relative">
-      {menuConfig.map((item) => (
-        <Link key={item.slug} href={item.slug}>
-          <Button
-            className={pathname === item.slug ? "bg-custom-gradient" : ""}
-          >
-            {item.name}
-          </Button>
-        </Link>
-      ))}
+      {Object.values(typesMovie)
+        .splice(0, 5)
+        .map((item) => (
+          <Link key={item.slug} href={item.slug}>
+            <Button
+              className={pathname === item.slug ? "bg-custom-gradient" : ""}
+            >
+              {item.name}
+            </Button>
+          </Link>
+        ))}
 
       <DropdownMenu title="Thể loại" items={categories} />
 

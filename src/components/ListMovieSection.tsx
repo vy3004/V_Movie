@@ -6,7 +6,7 @@ import MovieSection from "@/components/MovieSection";
 import Loading from "@/components/Loading";
 
 import { fetchMovies } from "@/lib/apiClient";
-import { pathNameMovies } from "@/lib/configs";
+import { typesMovie } from "@/lib/configs";
 import { Movie } from "@/lib/types";
 
 type MoviesData = {
@@ -16,7 +16,7 @@ type MoviesData = {
   anime: Movie[];
 };
 
-type PathNameKeys = keyof typeof pathNameMovies;
+type TypesMovieKeys = keyof typeof typesMovie;
 
 const ListMovieSection = () => {
   const [moviesData, setMoviesData] = useState<MoviesData>({
@@ -44,6 +44,8 @@ const ListMovieSection = () => {
   }, [loadMore, loading]);
 
   useEffect(() => {
+    const currentYear = new Date().getFullYear();
+
     const loadMovies = async () => {
       if (loadMore) {
         setLoading(true);
@@ -58,9 +60,13 @@ const ListMovieSection = () => {
         for (const section of sections) {
           if (moviesData[section].length === 0) {
             const pathName =
-              pathNameMovies[section.toUpperCase() as PathNameKeys];
+              typesMovie[section.toUpperCase() as TypesMovieKeys].slug;
 
-            const data = await fetchMovies(pathName, 1);
+            const data = await fetchMovies(
+              pathName,
+              "1",
+              currentYear.toString()
+            );
 
             setMoviesData((prev) => ({
               ...prev,
@@ -83,30 +89,30 @@ const ListMovieSection = () => {
     <div className="space-y-12">
       {moviesData.single.length > 0 && (
         <MovieSection
-          title="Phim lẻ"
+          title={typesMovie.SINGLE.name}
           movies={moviesData.single}
-          hrefViewMore="/phim-le"
+          hrefViewMore={typesMovie.SINGLE.slug}
         />
       )}
       {moviesData.series.length > 0 && (
         <MovieSection
-          title="Phim bộ"
+          title={typesMovie.SERIES.name}
           movies={moviesData.series}
-          hrefViewMore="/phim-bo"
+          hrefViewMore={typesMovie.SERIES.slug}
         />
       )}
       {moviesData.tv_shows.length > 0 && (
         <MovieSection
-          title="Truyền hình"
+          title={typesMovie.TV_SHOWS.name}
           movies={moviesData.tv_shows}
-          hrefViewMore="/tv-shows"
+          hrefViewMore={typesMovie.TV_SHOWS.slug}
         />
       )}
       {moviesData.anime.length > 0 && (
         <MovieSection
-          title="Hoạt hình"
+          title={typesMovie.ANIME.name}
           movies={moviesData.anime}
-          hrefViewMore="/hoat-hinh"
+          hrefViewMore={typesMovie.ANIME.slug}
         />
       )}
       {loading && <Loading />}

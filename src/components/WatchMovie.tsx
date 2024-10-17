@@ -34,7 +34,7 @@ const WatchMovie = ({ movie }: WatchMovieProps) => {
 
   const handleChangeServer = (serverData: ServerData) => {
     setCurrentServerData(serverData);
-    router.push(`?tap=${serverData.slug}`);
+    router.push(`?tap=${serverData.slug}#video`);
   };
 
   return (

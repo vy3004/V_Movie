@@ -32,6 +32,24 @@ export interface BreadCrumb {
   position: number;
 }
 
+interface Pagination {
+  totalItems: number;
+  totalItemsPerPage: number;
+  currentPage: number;
+  pageRanges: number;
+}
+
+interface Params {
+  type_slug: string;
+  filterCategory: string[];
+  filterCountry: string[];
+  filterYear: string;
+  filterType: string;
+  sortField: string;
+  sortType: string;
+  pagination: Pagination;
+}
+
 interface Tmdb {
   type: string;
   id: string;
@@ -98,6 +116,7 @@ export interface PageMoviesData {
   breadCrumb: BreadCrumb[];
   titlePage: string;
   items: Movie[];
+  params: Params;
 }
 
 export interface PageMovieData {

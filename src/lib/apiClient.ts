@@ -5,12 +5,23 @@ import { PageMovieData, PageMoviesData } from "@/lib/types";
 
 export const fetchMovies = async (
   slug: string,
-  page: number
+  page?: string,
+  year?: string,
+  category?: string,
+  country?: string,
+  type?: string
 ): Promise<PageMoviesData> => {
   try {
-    const { data } = await axios.get(
-      `${apiConfig.MOVIES_URL}${slug}?page=${page}`
-    );
+    const queryParams = new URLSearchParams();
+
+    if (page) queryParams.append("page", page);
+    if (year) queryParams.append("year", year);
+    if (category) queryParams.append("category", category);
+    if (country) queryParams.append("country", country);
+    if (type) queryParams.append("type", type);
+
+    const url = `${apiConfig.MOVIES_URL}${slug}?${queryParams.toString()}`;
+    const { data } = await axios.get(url);
 
     return {
       ...data.data,
@@ -33,6 +44,21 @@ export const fetchMovies = async (
       breadCrumb: [],
       titlePage: WEB_TITLE,
       items: [],
+      params: {
+        type_slug: slug,
+        filterCategory: [],
+        filterCountry: [],
+        filterYear: "",
+        filterType: "",
+        sortField: "",
+        sortType: "",
+        pagination: {
+          totalItems: 0,
+          totalItemsPerPage: 0,
+          currentPage: 0,
+          pageRanges: 0,
+        },
+      },
     };
   }
 };

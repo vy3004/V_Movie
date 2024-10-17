@@ -1,36 +1,23 @@
-export const menuConfig = [
-  {
-    name: "Phim lẻ",
-    slug: "/phim-le",
-  },
-  {
-    name: "Phim bộ",
-    slug: "/phim-bo",
-  },
-  {
-    name: "Truyền hình",
-    slug: "/tv-shows",
-  },
-  {
-    name: "Hoạt hình",
-    slug: "/hoat-hinh",
-  },
-];
+const BASE_MOVIE_API = process.env.NEXT_PUBLIC_MOVIE_API;
+const BASE_IMG_API = process.env.NEXT_PUBLIC_IMG_API;
 
 export const WEB_TITLE = "V · Movie";
 
 export const apiConfig = {
-  MOVIES_URL: `${process.env.NEXT_PUBLIC_MOVIE_API}/danh-sach/`,
-  MOVIE_URL: `${process.env.NEXT_PUBLIC_MOVIE_API}/phim/`,
-  CATEGORIES_URL: `${process.env.NEXT_PUBLIC_MOVIE_API}/the-loai/`,
-  COUNTRIES_URL: `${process.env.NEXT_PUBLIC_MOVIE_API}/quoc-gia/`,
-  IMG_URL: `${process.env.NEXT_PUBLIC_IMG_API}/uploads/movies/`,
+  MOVIES_URL: `${BASE_MOVIE_API}/danh-sach/`,
+  MOVIE_URL: `${BASE_MOVIE_API}/phim/`,
+  CATEGORIES_URL: `${BASE_MOVIE_API}/the-loai/`,
+  COUNTRIES_URL: `${BASE_MOVIE_API}/quoc-gia/`,
+  IMG_URL: `${BASE_IMG_API}/uploads/movies/`,
 };
 
-export const pathNameMovies = {
-  NEW: "phim-moi-cap-nhat",
-  SINGLE: "/phim-le",
-  SERIES: "/phim-bo",
-  TV_SHOWS: "/tv-shows",
-  ANIME: "/hoat-hinh",
+export const typesMovie = {
+  NEW: { name: "Phim mới", slug: "/phim-moi-cap-nhat" },
+  SINGLE: { name: "Phim lẻ", slug: "/phim-le" },
+  SERIES: { name: "Phim bộ", slug: "/phim-bo" },
+  TV_SHOWS: { name: "TV Shows", slug: "/tv-shows" },
+  ANIME: { name: "Hoạt hình", slug: "/hoat-hinh" },
+  VIETSUB: { name: "Phim Vietsub", slug: "/phim-vietsub" },
+  THUYET_MINH: { name: "Phim thuyết minh", slug: "/phim-thuyet-minh" },
+  LONG_TIENG: { name: "Phim lồng tiếng", slug: "/phim-long-tieng" },
 };

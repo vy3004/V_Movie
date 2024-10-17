@@ -32,6 +32,9 @@ export default function BaseDataContextProvider({
 
   categories?.pop();
 
+  categories?.sort((a, b) => a.name.localeCompare(b.name));
+  countries?.sort((a, b) => a.name.localeCompare(b.name));
+
   return (
     <BaseDataContext.Provider value={{ categories, countries }}>
       {children}
