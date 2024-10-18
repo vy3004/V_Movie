@@ -11,9 +11,11 @@ import { typesMovie } from "@/lib/configs";
 
 const DropdownMenu = ({
   title,
+  query,
   items,
 }: {
   title: string;
+  query: string;
   items?: CateCtr[];
 }) => (
   <div className="relative group inline-block">
@@ -26,7 +28,7 @@ const DropdownMenu = ({
           items.map((item) => (
             <Link
               key={item.slug}
-              href={item.slug}
+              href={`${typesMovie.NEW.slug}?${query}=${item.slug}`}
               className="text-center hover:text-primary"
             >
               {item.name}
@@ -58,9 +60,9 @@ const Menu = () => {
           </Link>
         ))}
 
-      <DropdownMenu title="Thể loại" items={categories} />
+      <DropdownMenu title="Thể loại" query="category" items={categories} />
 
-      <DropdownMenu title="Quốc gia" items={countries} />
+      <DropdownMenu title="Quốc gia" query="country" items={countries} />
     </nav>
   );
 };

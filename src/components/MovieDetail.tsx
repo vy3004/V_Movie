@@ -75,28 +75,7 @@ export const MovieInfo = ({
     </h1>
     <h3 className="text-3xl line-clamp-1">{movie.origin_name}</h3>
     <div className="space-y-4 text-sm pt-8">
-      <div className="space-x-2">
-        <Badge className="uppercase">{movie.tmdb.type}</Badge>
-        <Badge>{movie.quality}</Badge>
-        <Badge>
-          {movie.lang} {movie.sub_docquyen && "độc quyền"}
-        </Badge>
-      </div>
-
-      <div className="space-x-2 flex items-center text-sm">
-        <BorderedItem className="text-primary font-semibold flex items-center">
-          <StarIcon className="mr-1 size-4" />{" "}
-          {movie.tmdb.vote_average.toFixed(0)}
-        </BorderedItem>
-
-        <span className="border-r-2 pr-2">{movie.year}</span>
-        {movie.chieurap && <BorderedItem>Chiếu rạp</BorderedItem>}
-        {movie.tmdb.season && (
-          <BorderedItem>Phần {movie.tmdb.season}</BorderedItem>
-        )}
-        <BorderedItem>{movie.time}</BorderedItem>
-        <BorderedItem>{movie.episode_current}</BorderedItem>
-      </div>
+      <MovieTags movie={movie} className="space-y-4" />
 
       <CategoryAndCountry movie={movie} />
 
@@ -124,6 +103,39 @@ export const MovieInfo = ({
           )}
         </div>
       )}
+    </div>
+  </div>
+);
+
+export const MovieTags = ({
+  movie,
+  className,
+}: {
+  movie: Movie;
+  className?: string;
+}) => (
+  <div className={className}>
+    <div className="space-x-2">
+      <Badge className="uppercase">{movie.tmdb.type}</Badge>
+      <Badge>{movie.quality}</Badge>
+      <Badge>
+        {movie.lang} {movie.sub_docquyen && "độc quyền"}
+      </Badge>
+    </div>
+
+    <div className="space-x-2 flex items-center">
+      <BorderedItem className="text-primary font-semibold flex items-center">
+        <StarIcon className="mr-1 size-4" />{" "}
+        {movie.tmdb.vote_average.toFixed(0)}
+      </BorderedItem>
+
+      <span className="border-r-2 pr-2">{movie.year}</span>
+      {movie.chieurap && <BorderedItem>Chiếu rạp</BorderedItem>}
+      {movie.tmdb.season && (
+        <BorderedItem>Phần {movie.tmdb.season}</BorderedItem>
+      )}
+      <BorderedItem>{movie.time}</BorderedItem>
+      <BorderedItem>{movie.episode_current}</BorderedItem>
     </div>
   </div>
 );

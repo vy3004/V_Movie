@@ -9,7 +9,7 @@ import { fetchDetailMovie } from "@/lib/apiClient";
 
 interface PageProps {
   params: { slug: string };
-  searchParams: { [key: string]: string | undefined };
+  searchParams: Record<string, string | undefined>;
 }
 
 export async function generateMetadata({ params, searchParams }: PageProps) {

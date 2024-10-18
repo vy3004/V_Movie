@@ -1,7 +1,7 @@
-import Link from "next/link";
+"use client";
 
-import { ChevronLeftIcon } from "@heroicons/react/24/solid";
-import { ChevronRightIcon } from "@heroicons/react/24/solid";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
 
 type PaginationProps = {
   currentPage: number;
@@ -9,6 +9,9 @@ type PaginationProps = {
 };
 
 const Pagination = ({ currentPage, totalPages }: PaginationProps) => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const getPageNumbers = () => {
     const pageNumbers = [];
     if (totalPages <= 5) {
@@ -35,46 +38,58 @@ const Pagination = ({ currentPage, totalPages }: PaginationProps) => {
     return pageNumbers;
   };
 
+  const handlePageChange = (pageNumber: number | string) => {
+    if (pageNumber === currentPage || pageNumber === "...") return;
+
+    const current = new URLSearchParams(searchParams.toString());
+
+    current.set("page", pageNumber.toString());
+    router.push(`?${current.toString()}`);
+  };
+
   const pageNumbers = getPageNumbers();
 
   return (
     <div className="flex justify-center">
       <ul className="flex">
-        <Link
+        <button
           className={`border rounded-l-lg px-3 py-2 flex items-center ${
             currentPage === 1
               ? "opacity-50 cursor-not-allowed"
               : "hover:text-primary"
           }`}
-          href={`${currentPage > 1 ? `?page=${currentPage - 1}` : "#"}`}
+          onClick={() => handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
         >
           <ChevronLeftIcon className="size-5" />
-        </Link>
+        </button>
+
         {pageNumbers.map((number, index) => (
-          <Link
+          <button
             key={index}
             className={`border px-3 py-2 cursor-pointer ${
               currentPage === number
                 ? "bg-primary border-primary"
                 : "hover:text-primary"
             } ${number === "..." ? "cursor-not-allowed" : ""}`}
-            href={`${number !== "..." ? `?page=${number}` : "#"}`}
+            onClick={() => handlePageChange(number)}
+            disabled={number === "..."}
           >
             {number}
-          </Link>
+          </button>
         ))}
-        <Link
+
+        <button
           className={`border rounded-r-lg px-3 py-2 flex items-center ${
             currentPage === totalPages
               ? "opacity-50 cursor-not-allowed"
               : "hover:text-primary"
           }`}
-          href={`${
-            currentPage < totalPages ? `?page=${currentPage + 1}` : "#"
-          }`}
+          onClick={() => handlePageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
         >
           <ChevronRightIcon className="size-5" />
-        </Link>
+        </button>
       </ul>
     </div>
   );

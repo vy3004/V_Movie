@@ -19,16 +19,15 @@ export default function MovieCard({ movie }: MovieCardProps) {
 
   return (
     <Link href={`phim/${movie.slug}`} className="space-y-2 relative group">
-      <div className="h-5/6 rounded-lg overflow-hidden">
+      <div className="relative aspect-[3/4] h-5/6 w-full rounded-lg overflow-hidden">
         <Image
           src={imgSrc}
           onError={() => setImgSrc("/error_img.png")}
           alt={movie.origin_name}
-          width={500}
-          height={750}
+          fill
           placeholder="blur"
           blurDataURL="/blur_img.jpg"
-          className="object-cover h-full hover:scale-110 transition duration-500 ease-in-out"
+          className="absolute inset-0 object-cover h-full hover:scale-110 transition duration-500 ease-in-out"
         />
       </div>
       <div className="absolute right-2 top-0 bg-black/80 rounded-lg px-2 py-1 flex items-center gap-1 text-xs text-primary font-semibold">

@@ -7,14 +7,12 @@ import ListMovieSection from "@/components/ListMovieSection";
 import { fetchMovies } from "@/lib/apiClient";
 import { typesMovie } from "@/lib/configs";
 
-const currentYear = new Date().getFullYear();
+const currentYear = new Date().getFullYear().toString();
 
 export async function generateMetadata() {
-  const dataNewMovies = await fetchMovies(
-    typesMovie.NEW.slug,
-    "1",
-    currentYear.toString()
-  );
+  const dataNewMovies = await fetchMovies(typesMovie.NEW.slug, {
+    year: currentYear,
+  });
 
   return {
     title: dataNewMovies.seoOnPage.titleHead,
@@ -30,11 +28,9 @@ export async function generateMetadata() {
 }
 
 export default async function HomePage() {
-  const dataNewMovies = await fetchMovies(
-    typesMovie.NEW.slug,
-    "1",
-    currentYear.toString()
-  );
+  const dataNewMovies = await fetchMovies(typesMovie.NEW.slug, {
+    year: currentYear,
+  });
 
   const isData = dataNewMovies.items.length > 0;
 

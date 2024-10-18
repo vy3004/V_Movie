@@ -5,20 +5,17 @@ import { PageMovieData, PageMoviesData } from "@/lib/types";
 
 export const fetchMovies = async (
   slug: string,
-  page?: string,
-  year?: string,
-  category?: string,
-  country?: string,
-  type?: string
+  searchParams: Record<string, string | undefined> = {}
 ): Promise<PageMoviesData> => {
   try {
-    const queryParams = new URLSearchParams();
+    const filteredParams = Object.entries(searchParams)
+      .filter(([, value]) => value !== undefined)
+      .reduce((acc, [key, value]) => {
+        if (value) acc[key] = value;
+        return acc;
+      }, {} as Record<string, string>);
 
-    if (page) queryParams.append("page", page);
-    if (year) queryParams.append("year", year);
-    if (category) queryParams.append("category", category);
-    if (country) queryParams.append("country", country);
-    if (type) queryParams.append("type", type);
+    const queryParams = new URLSearchParams(filteredParams);
 
     const url = `${apiConfig.MOVIES_URL}${slug}?${queryParams.toString()}`;
     const { data } = await axios.get(url);

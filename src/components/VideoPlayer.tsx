@@ -6,11 +6,11 @@ interface VideoPlayerProps {
 const VideoPlayer = ({ movieSrc, movieName }: VideoPlayerProps) => {
   return (
     <div className="my-8 space-y-4">
-      <div className="relative h-0 pb-[56.25%] overflow-hidden rounded-lg">
+      <div className="relative aspect-video overflow-hidden rounded-lg">
         <iframe
           id="video"
           src={movieSrc}
-          className="absolute top-0 left-0 size-full"
+          className="absolute inset-0 size-full"
           width="100%"
           height="100%"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
