@@ -19,7 +19,7 @@ interface MovieSectionProps {
 
 const MovieSection = ({ title, movies, hrefViewMore }: MovieSectionProps) => {
   return (
-    <div className="space-y-4">
+    <div>
       <div className="relative z-20 flex items-center justify-between font-bold">
         <h1 className="text-2xl">{title}</h1>
 
@@ -38,13 +38,16 @@ const MovieSection = ({ title, movies, hrefViewMore }: MovieSectionProps) => {
       >
         <CarouselContent>
           {movies.map((movie) => (
-            <CarouselItem key={movie._id} className="!basis-1/6">
+            <CarouselItem
+              key={movie._id}
+              className="!basis-1/2 sm:!basis-1/3 md:!basis-1/4 lg:!basis-1/6 py-4"
+            >
               <MovieCard movie={movie} />
             </CarouselItem>
           ))}
         </CarouselContent>
-        <CarouselPrevious />
-        <CarouselNext />
+        <CarouselPrevious className="hidden sm:block" />
+        <CarouselNext className="hidden sm:block" />
       </Carousel>
     </div>
   );

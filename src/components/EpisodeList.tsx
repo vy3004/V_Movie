@@ -14,7 +14,7 @@ const EpisodeList = ({
   return servers.map((server, serverIdx) => (
     <div key={serverIdx} className="mb-6">
       <h3 className="text-lg font-bold mb-2">{server.server_name}</h3>
-      <div className="grid grid-cols-8 gap-4">
+      <div className="grid grid-cols-4 sm:grid-cols-8 gap-4">
         {server.server_data.length > 0 ? (
           server.server_data.map((sv) => (
             <button

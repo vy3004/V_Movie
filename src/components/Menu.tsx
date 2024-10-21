@@ -47,7 +47,7 @@ const Menu = () => {
   const { categories, countries } = useData();
 
   return (
-    <nav className="flex items-center space-x-2 mt-1 relative">
+    <nav className="space-x-2 mt-1 relative hidden lg:flex lg:items-center">
       {Object.values(typesMovie)
         .splice(0, 5)
         .map((item) => (

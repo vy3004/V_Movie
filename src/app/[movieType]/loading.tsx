@@ -4,7 +4,7 @@ import Loading from "@/components/Loading";
 
 export default function LoadingPage() {
   return (
-    <div className="h-screen col-span-8 flex items-center justify-center gap-2">
+    <div className="h-screen col-span-12 xl:col-span-8 flex items-center justify-center gap-2">
       <Loading />
       <Image
         className="w-56"

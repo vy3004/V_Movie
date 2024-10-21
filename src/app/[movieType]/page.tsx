@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import Container from "@/components/Container";
 import MovieCard from "@/components/MovieCard";
 import MovieFilter from "@/components/MovieFilter";
 import Pagination from "@/components/Pagination";
@@ -40,10 +39,10 @@ export default async function MoviesPage({ params, searchParams }: PageProps) {
   const totalPages = Math.ceil(totalItems / totalItemsPerPage);
 
   return (
-    <Container className="col-span-8 py-4 space-y-8">
+    <div className="col-span-12 xl:col-span-8 py-4 space-y-8">
       <MovieFilter breadCrumb={data.breadCrumb} />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {data.items.length > 0 ? (
           data.items.map((movie) => <MovieCard key={movie._id} movie={movie} />)
         ) : (
@@ -62,6 +61,6 @@ export default async function MoviesPage({ params, searchParams }: PageProps) {
       {totalPages > 1 && (
         <Pagination currentPage={currentPage} totalPages={totalPages} />
       )}
-    </Container>
+    </div>
   );
 }

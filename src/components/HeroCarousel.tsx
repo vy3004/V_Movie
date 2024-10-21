@@ -33,7 +33,7 @@ const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
     >
       <CarouselContent>
         {movies.map((movie, i) => (
-          <CarouselItem key={movie._id} className="relative">
+          <CarouselItem key={movie._id} className="relative mb-10 sm:mb-0">
             <Image
               src={`${apiConfig.IMG_URL}${movie.poster_url}`}
               alt={movie.origin_name}
@@ -42,7 +42,7 @@ const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
               priority={i === 0}
               placeholder="blur"
               blurDataURL="/blur_img.jpg"
-              className="w-full h-full object-cover"
+              className="size-full object-cover"
             />
             {/* Overlay gradients */}
             <div className="absolute inset-0 bg-hero-top" />
@@ -50,16 +50,16 @@ const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
             <div className="absolute inset-0 bg-hero-bottom" />
 
             {/* Movie details */}
-            <div className="absolute top-1/4 left-24 max-w-[50%] select-none">
+            <div className="absolute top-1/4 left-10 sm:left-24 w-max-[80%] lg:max-w-[50%] select-none">
               <MovieInfo movie={movie} isDetail={false} />
-              <ActionButtons movie={movie} className="mt-12" />
+              <ActionButtons movie={movie} className="mt-4 md:mt-12" />
             </div>
           </CarouselItem>
         ))}
       </CarouselContent>
-      <CarouselPrevious className="left-7 top-1/3" />
-      <CarouselNext className="right-7 top-1/3" />
-      <CarouselDots className="right-20 bottom-[40%]" />
+      <CarouselPrevious className="left-7 top-1/3 hidden sm:block" />
+      <CarouselNext className="right-7 top-1/3 hidden sm:block" />
+      <CarouselDots className="right-5 sm:right-20 bottom-[10%] md:bottom-[20%] xl:bottom-[40%]" />
     </Carousel>
   );
 };

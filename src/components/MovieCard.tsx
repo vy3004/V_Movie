@@ -18,7 +18,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
   );
 
   return (
-    <Link href={`phim/${movie.slug}`} className="space-y-2 relative group">
+    <Link href={`/phim/${movie.slug}`} className="space-y-2 relative group">
       <div className="relative aspect-[3/4] h-5/6 w-full rounded-lg overflow-hidden">
         <Image
           src={imgSrc}

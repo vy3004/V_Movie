@@ -20,15 +20,15 @@ body {
   }
 }
 
-body::-webkit-scrollbar {
+::-webkit-scrollbar {
   width: 0.4rem;
 }
 
-body::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
   background: var(--background);
 }
 
-body::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
   background: linear-gradient(#f5515f 0%, #9f041b 100%);
   border-radius: 10px;
 }

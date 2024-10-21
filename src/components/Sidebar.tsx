@@ -35,7 +35,7 @@ const Sidebar = () => {
   };
 
   return (
-    <div className="col-span-4 py-3.5 px-4 rounded-t-lg bg-background">
+    <div className="col-span-12 xl:col-span-4 py-3.5 px-4 rounded-t-lg bg-background">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-primary font-bold uppercase">Top phim hot</h2>
 

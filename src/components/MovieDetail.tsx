@@ -7,29 +7,35 @@ import { Movie } from "@/lib/types";
 
 interface MovieDetailProps {
   movie: Movie;
-  isWatching: boolean;
 }
 
 const MovieDetail = ({ movie }: MovieDetailProps) => {
   return (
     <div className="grid grid-cols-3 gap-4">
-      <div className="relative">
-        <Image
-          src={`${apiConfig.IMG_URL}${movie.thumb_url}`}
-          alt={movie.origin_name}
-          width={500}
-          height={750}
-          placeholder="blur"
-          blurDataURL="/blur_img.jpg"
-          className="object-cover h-full rounded-lg"
-        />
-        <ActionButtons
-          className="absolute bottom-4 w-full justify-center"
-          movie={movie}
-        />
-      </div>
+      <Image
+        src={`${apiConfig.IMG_URL}${movie.thumb_url}`}
+        alt={movie.origin_name}
+        width={500}
+        height={750}
+        placeholder="blur"
+        blurDataURL="/blur_img.jpg"
+        className="object-cover aspect-[3/4] rounded-lg hidden sm:block"
+      />
+      <Image
+        src={`${apiConfig.IMG_URL}${movie.poster_url}`}
+        alt={movie.origin_name}
+        width={750}
+        height={500}
+        placeholder="blur"
+        blurDataURL="/blur_img.jpg"
+        className="object-cover col-span-3 rounded-lg block sm:hidden"
+      />
 
-      <MovieInfo className="col-span-2" movie={movie} isDetail={true} />
+      <MovieInfo
+        className="col-span-3 sm:col-span-2"
+        movie={movie}
+        isDetail={true}
+      />
     </div>
   );
 };
@@ -55,7 +61,7 @@ const BorderedItem = ({
   children: React.ReactNode;
   className?: string;
 }) => (
-  <span className={`border-r-2 pr-2 last:border-0 ${className}`}>
+  <span className={`border-r-2 pr-2 last:border-0 line-clamp-1 ${className}`}>
     {children}
   </span>
 );
@@ -70,12 +76,14 @@ export const MovieInfo = ({
   isDetail: boolean;
 }) => (
   <div className={className}>
-    <h1 className="text-5xl font-extrabold text-primary line-clamp-1 pb-1">
+    <h1 className="text-xl font-extrabold text-primary line-clamp-1 md:leading-tight sm:text-3xl md:text-5xl">
       {movie.name}
     </h1>
-    <h3 className="text-3xl line-clamp-1">{movie.origin_name}</h3>
-    <div className="space-y-4 text-sm pt-8">
-      <MovieTags movie={movie} className="space-y-4" />
+    <h3 className="text-sm line-clamp-1 sm:text-xl md:text-3xl">
+      {movie.origin_name}
+    </h3>
+    <div className="space-y-1 sm:space-y-4 text-xs md:text-sm pt-4 md:pt-8">
+      <MovieTags movie={movie} className="space-y-2 sm:space-y-4" />
 
       <CategoryAndCountry movie={movie} />
 
@@ -141,7 +149,7 @@ export const MovieTags = ({
 );
 
 const CategoryAndCountry = ({ movie }: { movie: Movie }) => (
-  <div className="space-x-2">
+  <div className="space-x-2 line-clamp-1 leading-6">
     {movie.country.map((ctr) => (
       <Badge className="bg-white/40" key={ctr.slug}>
         {ctr.name}
@@ -173,11 +181,11 @@ export const ActionButtons = ({
         href={hrefWatchMovie}
         className="flex items-center font-bold bg-primary rounded px-4 py-3"
       >
-        <PlayIcon className="size-8" />
-        Xem Phim
+        <PlayIcon className="size-4 md:size-8" />
+        <span className="hidden md:block">Xem Phim</span>
       </Link>
       <button className="bg-foreground rounded p-3">
-        <PlusIcon className="size-8 text-background" />
+        <PlusIcon className="size-4 md:size-8 text-background" />
       </button>
     </div>
   );

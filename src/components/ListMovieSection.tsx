@@ -82,7 +82,7 @@ const ListMovieSection = () => {
   }, [loadMore, moviesData]);
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-6 sm:space-y-12">
       {moviesData.single.length > 0 && (
         <MovieSection
           title={typesMovie.SINGLE.name}

@@ -8,6 +8,7 @@ import { BookmarkIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
 import Container from "@/components/Container";
 import Menu from "@/components/Menu";
+import MenuMobile from "./MenuMobile";
 
 const Header = () => {
   const pathName = usePathname();
@@ -37,10 +38,12 @@ const Header = () => {
       }`}
     >
       <Container className="flex items-center justify-between py-1">
-        <div className="flex items-center space-x-8">
+        <div className="flex items-center gap-2 sm:gap-8">
+          <MenuMobile />
+
           <Link href={"/"}>
             <Image
-              className="w-44"
+              className="w-32 sm:w-44"
               src="/logo.png"
               alt="Logo"
               width={192}
@@ -54,10 +57,10 @@ const Header = () => {
 
         <div className="flex items-center space-x-4 mt-1">
           <button>
-            <MagnifyingGlassIcon className="h-6 w-6 hover:text-primary" />
+            <MagnifyingGlassIcon className="size-6 hover:text-primary" />
           </button>
           <button>
-            <BookmarkIcon className="h-6 w-6 hover:text-primary" />
+            <BookmarkIcon className="size-6 hover:text-primary" />
           </button>
         </div>
       </Container>

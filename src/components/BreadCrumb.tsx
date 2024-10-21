@@ -73,11 +73,19 @@ const BreadCrumb = ({ breadCrumb }: BreadCrumbProps) => {
   );
 
   const renderSingleItem = (item: BreadCrumbType, idx: number) => {
-    if (item.isCurrent) return <div key={idx}>{item.name}</div>;
+    if (item.isCurrent)
+      return (
+        <div key={idx} className="line-clamp-1">
+          {item.name}
+        </div>
+      );
 
     return (
       <div key={idx} className="flex items-center space-x-2">
-        <Link href={item.slug || "#"} className="hover:text-primary">
+        <Link
+          href={item.slug || "#"}
+          className="hover:text-primary line-clamp-1"
+        >
           {item.name}
         </Link>
         <ChevronDoubleRightIcon className="size-5" />

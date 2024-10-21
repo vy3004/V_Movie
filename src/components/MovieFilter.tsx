@@ -92,7 +92,7 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
       </div>
 
       {showFilters && (
-        <form className="flex items-center justify-between bg-gray-800 p-4 rounded">
+        <form className="grid grid-cols-2 md:grid-cols-5 gap-2 bg-gray-800 p-4 rounded">
           <SelectInput
             name="movieType"
             value={filters.movieType}
@@ -101,7 +101,7 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
               value: type.slug,
               label: type.name,
             }))}
-            placeholder="Chọn loại phim"
+            placeholder="Loại phim"
           />
 
           {categories && (
@@ -113,7 +113,7 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
                 value: category.slug,
                 label: category.name,
               }))}
-              placeholder="Chọn thể loại"
+              placeholder="Thể loại"
             />
           )}
 
@@ -126,7 +126,7 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
                 value: country.slug,
                 label: country.name,
               }))}
-              placeholder="Chọn quốc gia"
+              placeholder="Quốc gia"
             />
           )}
 
@@ -135,14 +135,14 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
             name="year"
             value={filters.year}
             onChange={handleFilterChange}
-            placeholder="Nhập năm"
+            placeholder="Năm"
             className="px-3 py-2 bg-secondary rounded"
           />
 
           <button
             type="button"
             onClick={handleFilter}
-            className="px-4 py-2 bg-primary rounded"
+            className="px-4 py-2 bg-primary rounded col-span-2 md:col-span-1"
           >
             Lọc phim
           </button>

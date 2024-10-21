@@ -1,6 +1,3 @@
-import { redirect } from "next/navigation";
-
-import Container from "@/components/Container";
 import BreadCrumb from "@/components/BreadCrumb";
 import MovieDetail from "@/components/MovieDetail";
 import WatchMovie from "@/components/WatchMovie";
@@ -41,34 +38,18 @@ export async function generateMetadata({ params, searchParams }: PageProps) {
   };
 }
 
-export default async function MoviePage({ params, searchParams }: PageProps) {
+export default async function MoviePage({ params }: PageProps) {
   const data = await fetchDetailMovie({ slug: params.slug });
 
   if (!data?.item) return null;
 
-  const { tap } = searchParams;
-
-  const isValidEpisode = (value: string) => {
-    const episodeNumber = Number(value);
-
-    if (data.item && data.item.episodes[0].server_data[0].slug === "full") {
-      return value === "full";
-    } else {
-      return Number.isInteger(episodeNumber) && episodeNumber > 0;
-    }
-  };
-
-  if (tap && !isValidEpisode(tap)) redirect(`/phim/${params.slug}`);
-
-  const isWatching = !!tap && isValidEpisode(tap);
-
   return (
-    <Container className="py-4 col-span-8 space-y-8">
+    <div className="py-4 col-span-12 xl:col-span-8 space-y-8">
       <BreadCrumb breadCrumb={data.breadCrumb} />
 
-      <MovieDetail movie={data.item} isWatching={isWatching} />
+      <MovieDetail movie={data.item} />
 
-      {isWatching && <WatchMovie movie={data.item} />}
-    </Container>
+      <WatchMovie movie={data.item} />
+    </div>
   );
 }
