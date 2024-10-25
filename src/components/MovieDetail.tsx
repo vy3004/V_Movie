@@ -81,9 +81,9 @@ export const MovieInfo = ({
     <h1 className="text-xl font-extrabold text-primary line-clamp-1 md:leading-tight sm:text-3xl md:text-5xl">
       {movie.name}
     </h1>
-    <h3 className="text-sm line-clamp-1 sm:text-xl md:text-3xl">
+    <h2 className="text-sm line-clamp-1 sm:text-xl md:text-3xl">
       {movie.origin_name}
-    </h3>
+    </h2>
     <div className="space-y-1 sm:space-y-4 text-xs md:text-sm pt-4 md:pt-8">
       <MovieTags movie={movie} className="space-y-2 sm:space-y-4" />
 
@@ -180,13 +180,14 @@ export const ActionButtons = ({
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <Link
+        aria-label="Xem phim"
         href={hrefWatchMovie}
         className="flex items-center font-bold bg-primary rounded px-4 py-3"
       >
         <PlayIcon className="size-4 md:size-8" />
         <span className="hidden md:block">Xem Phim</span>
       </Link>
-      <button className="bg-foreground rounded p-3">
+      <button aria-label="Lưu phim" className="bg-foreground rounded p-3">
         <PlusIcon className="size-4 md:size-8 text-background" />
       </button>
     </div>

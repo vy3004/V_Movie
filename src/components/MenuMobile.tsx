@@ -50,7 +50,11 @@ const MenuMobile = () => {
 
   return (
     <>
-      <button className="flex items-center xl:hidden" onClick={toggleSidebar}>
+      <button
+        aria-label="Menu"
+        className="flex items-center xl:hidden"
+        onClick={toggleSidebar}
+      >
         <Bars3BottomLeftIcon className="size-6 hover:text-primary" />
       </button>
 

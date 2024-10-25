@@ -18,6 +18,7 @@ const roboto = Roboto({
 export const metadata: Metadata = {
   title: WEB_TITLE,
   description: "Stream movies using the OPhim API",
+  manifest: "/manifest",
 };
 
 export default function RootLayout({

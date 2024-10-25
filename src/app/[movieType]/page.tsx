@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 import MovieCard from "@/components/MovieCard";
 import MovieFilter from "@/components/MovieFilter";
@@ -31,6 +32,8 @@ export async function generateMetadata({ params, searchParams }: PageProps) {
 
 export default async function MoviesPage({ params, searchParams }: PageProps) {
   const data = await fetchMovies(params.movieType, searchParams);
+
+  if (!data) return notFound();
 
   const { pagination } = data.params;
   const currentPage = pagination.currentPage || 1;

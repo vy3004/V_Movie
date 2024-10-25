@@ -21,7 +21,7 @@ const MovieSection = ({ title, movies, hrefViewMore }: MovieSectionProps) => {
   return (
     <div>
       <div className="relative z-20 flex items-center justify-between font-bold">
-        <h1 className="text-2xl">{title}</h1>
+        <h2 className="text-2xl">{title}</h2>
 
         {hrefViewMore && (
           <Link href={hrefViewMore} className="relative group">

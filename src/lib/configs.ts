@@ -1,3 +1,4 @@
+export const BASE_URL = process.env.NEXT_PUBLIC_PORT;
 const BASE_MOVIE_API = process.env.NEXT_PUBLIC_MOVIE_API;
 const BASE_IMG_API = process.env.NEXT_PUBLIC_IMG_API;
 

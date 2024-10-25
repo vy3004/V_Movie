@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation";
+
 import BreadCrumb from "@/components/BreadCrumb";
 import MovieDetail from "@/components/MovieDetail";
 import WatchMovie from "@/components/WatchMovie";
@@ -12,7 +14,7 @@ interface PageProps {
 export async function generateMetadata({ params, searchParams }: PageProps) {
   const data = await fetchDetailMovie({ slug: params.slug });
 
-  if (!data?.seoOnPage) return null;
+  if (!data?.seoOnPage) return notFound();
 
   const title = searchParams.tap
     ? `${data.seoOnPage.titleHead} | Tập ${searchParams.tap}`
@@ -41,7 +43,7 @@ export async function generateMetadata({ params, searchParams }: PageProps) {
 export default async function MoviePage({ params }: PageProps) {
   const data = await fetchDetailMovie({ slug: params.slug });
 
-  if (!data?.item) return null;
+  if (!data?.item) return notFound();
 
   return (
     <div className="col-span-12 xl:col-span-8 py-4 space-y-8">
