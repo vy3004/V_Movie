@@ -50,18 +50,20 @@ const Badge = ({
   className?: string;
 }) => (
   <span className={`px-2 py-1 rounded bg-primary ${className}`}>
-    {children}
+    {children || ""}
   </span>
 );
 
-const BorderedItem = ({
+export const BorderedItem = ({
   children,
   className,
 }: {
   children: React.ReactNode;
   className?: string;
 }) => (
-  <span className={`border-r-2 pr-2 last:border-0 line-clamp-1 ${className}`}>
+  <span
+    className={`border-r-2 pr-2 last:border-0 line-clamp-1 ${className || ""}`}
+  >
     {children}
   </span>
 );
@@ -137,7 +139,7 @@ export const MovieTags = ({
         {movie.tmdb.vote_average.toFixed(0)}
       </BorderedItem>
 
-      <span className="border-r-2 pr-2">{movie.year}</span>
+      <BorderedItem>{movie.year}</BorderedItem>
       {movie.chieurap && <BorderedItem>Chiếu rạp</BorderedItem>}
       {movie.tmdb.season && (
         <BorderedItem>Phần {movie.tmdb.season}</BorderedItem>

@@ -44,7 +44,7 @@ export default async function MoviePage({ params }: PageProps) {
   if (!data?.item) return null;
 
   return (
-    <div className="py-4 col-span-12 xl:col-span-8 space-y-8">
+    <div className="col-span-12 xl:col-span-8 py-4 space-y-8">
       <BreadCrumb breadCrumb={data.breadCrumb} />
 
       <MovieDetail movie={data.item} />

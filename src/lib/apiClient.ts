@@ -17,7 +17,11 @@ export const fetchMovies = async (
 
     const queryParams = new URLSearchParams(filteredParams);
 
-    const url = `${apiConfig.MOVIES_URL}${slug}?${queryParams.toString()}`;
+    const baseUrl =
+      slug === "tim-kiem" ? apiConfig.SEARCH_URL : apiConfig.MOVIES_URL;
+
+    const url = `${baseUrl}${slug}?${queryParams.toString()}`;
+
     const { data } = await axios.get(url);
 
     return {

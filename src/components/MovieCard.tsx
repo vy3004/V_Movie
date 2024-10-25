@@ -30,10 +30,12 @@ export default function MovieCard({ movie }: MovieCardProps) {
           className="absolute inset-0 object-cover h-full hover:scale-110 transition duration-500 ease-in-out"
         />
       </div>
-      <div className="absolute right-2 top-0 bg-black/80 rounded-lg px-2 py-1 flex items-center gap-1 text-xs text-primary font-semibold">
-        <StarIcon className="size-3" />
-        {movie.tmdb.vote_average.toFixed(0)}
-      </div>
+      {movie.tmdb && (
+        <div className="absolute right-2 top-0 bg-black/80 rounded-lg px-2 py-1 flex items-center gap-1 text-xs text-primary font-semibold">
+          <StarIcon className="size-3" />
+          {movie.tmdb.vote_average.toFixed(0)}
+        </div>
+      )}
       <div className="line-clamp-2 group-hover:text-primary group-hover:font-semibold">
         {movie.name}
       </div>

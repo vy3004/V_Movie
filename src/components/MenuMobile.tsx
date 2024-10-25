@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { Bars3Icon, ChevronRightIcon } from "@heroicons/react/24/solid";
+import {
+  Bars3BottomLeftIcon,
+  ChevronRightIcon,
+} from "@heroicons/react/24/solid";
 
 import Loading from "@/components/Loading";
 
@@ -47,8 +50,8 @@ const MenuMobile = () => {
 
   return (
     <>
-      <button className="flex items-center lg:hidden" onClick={toggleSidebar}>
-        <Bars3Icon className="size-6 hover:text-primary" />
+      <button className="flex items-center xl:hidden" onClick={toggleSidebar}>
+        <Bars3BottomLeftIcon className="size-6 hover:text-primary" />
       </button>
 
       {/* Sidebar */}

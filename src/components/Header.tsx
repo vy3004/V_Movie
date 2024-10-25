@@ -4,11 +4,11 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { BookmarkIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
 import Container from "@/components/Container";
 import Menu from "@/components/Menu";
-import MenuMobile from "./MenuMobile";
+import MenuMobile from "@/components/MenuMobile";
+import SearchInput from "@/components/SearchInput";
 
 const Header = () => {
   const pathName = usePathname();
@@ -43,7 +43,7 @@ const Header = () => {
 
           <Link href={"/"}>
             <Image
-              className="w-32 sm:w-44"
+              className="h-auto w-32 sm:w-44"
               src="/logo.png"
               alt="Logo"
               width={192}
@@ -55,14 +55,7 @@ const Header = () => {
           <Menu />
         </div>
 
-        <div className="flex items-center space-x-4 mt-1">
-          <button>
-            <MagnifyingGlassIcon className="size-6 hover:text-primary" />
-          </button>
-          <button>
-            <BookmarkIcon className="size-6 hover:text-primary" />
-          </button>
-        </div>
+        <SearchInput />
       </Container>
     </div>
   );
