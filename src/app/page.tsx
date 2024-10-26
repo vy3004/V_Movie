@@ -40,7 +40,7 @@ export default async function HomePage() {
         <>
           <HeroCarousel movies={dataNewMovies.items.slice(0, 6)} />
 
-          <Container className="lg:-mt-[8%] xl:-mt-[16%]">
+          <Container className="mt-4 lg:-mt-[8%] xl:-mt-[16%]">
             <MovieSection
               title="Đề xuất hot"
               movies={dataNewMovies.items.slice(6)}

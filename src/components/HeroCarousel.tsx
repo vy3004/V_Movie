@@ -50,7 +50,7 @@ const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
             <div className="absolute inset-0 bg-hero-bottom" />
 
             {/* Movie details */}
-            <div className="absolute top-1/4 left-10 sm:left-24 w-max-[80%] lg:max-w-[50%] select-none">
+            <div className="absolute top-1/4 left-10 sm:left-24 w-[85%] lg:!w-1/2 select-none">
               <MovieInfo movie={movie} isDetail={false} />
               <ActionButtons movie={movie} className="mt-4 md:mt-12" />
             </div>

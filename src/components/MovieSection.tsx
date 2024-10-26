@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   Carousel,
   CarouselContent,
+  CarouselDots,
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
@@ -21,7 +22,7 @@ const MovieSection = ({ title, movies, hrefViewMore }: MovieSectionProps) => {
   return (
     <div>
       <div className="relative z-20 flex items-center justify-between font-bold">
-        <h2 className="text-2xl">{title}</h2>
+        <h2 className="text-xl sm:text-2xl">{title}</h2>
 
         {hrefViewMore && (
           <Link href={hrefViewMore} className="relative group">
@@ -33,7 +34,7 @@ const MovieSection = ({ title, movies, hrefViewMore }: MovieSectionProps) => {
       <Carousel
         opts={{
           align: "start",
-          slidesToScroll: 6,
+          slidesToScroll: "auto",
         }}
       >
         <CarouselContent>
@@ -48,6 +49,7 @@ const MovieSection = ({ title, movies, hrefViewMore }: MovieSectionProps) => {
         </CarouselContent>
         <CarouselPrevious className="hidden sm:block" />
         <CarouselNext className="hidden sm:block" />
+        <CarouselDots className="block sm:hidden -bottom-2 left-1/2 -translate-x-1/2" />
       </Carousel>
     </div>
   );

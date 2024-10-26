@@ -49,9 +49,9 @@ const Badge = ({
   children: React.ReactNode;
   className?: string;
 }) => (
-  <span className={`px-2 py-1 rounded bg-primary ${className}`}>
+  <div className={`px-2 py-1 rounded bg-primary ${className}`}>
     {children || ""}
-  </span>
+  </div>
 );
 
 export const BorderedItem = ({
@@ -77,7 +77,7 @@ export const MovieInfo = ({
   className?: string;
   isDetail: boolean;
 }) => (
-  <div className={className}>
+  <div className={className || ""}>
     <h1 className="text-xl font-extrabold text-primary line-clamp-1 md:leading-tight sm:text-3xl md:text-5xl">
       {movie.name}
     </h1>
@@ -87,10 +87,13 @@ export const MovieInfo = ({
     <div className="space-y-1 sm:space-y-4 text-xs md:text-sm pt-4 md:pt-8">
       <MovieTags movie={movie} className="space-y-2 sm:space-y-4" />
 
-      <CategoryAndCountry movie={movie} />
+      <CategoryAndCountry
+        movie={movie}
+        className={isDetail ? "flex-wrap" : "overflow-hidden"}
+      />
 
       {isDetail && (
-        <div className="space-y-1">
+        <div className="space-y-1 py-2">
           {movie.director.length > 0 && movie.director[0] !== "" && (
             <div>
               <span className="text-gray-400">Đạo diễn:</span>{" "}
@@ -124,9 +127,11 @@ export const MovieTags = ({
   movie: Movie;
   className?: string;
 }) => (
-  <div className={className}>
-    <div className="space-x-2">
-      <Badge className="uppercase">{movie.tmdb.type}</Badge>
+  <div className={className || ""}>
+    <div className="flex items-center gap-2">
+      {movie.tmdb.type && (
+        <Badge className="uppercase">{movie.tmdb.type}</Badge>
+      )}
       <Badge>{movie.quality}</Badge>
       <Badge>
         {movie.lang} {movie.sub_docquyen && "độc quyền"}
@@ -150,15 +155,21 @@ export const MovieTags = ({
   </div>
 );
 
-const CategoryAndCountry = ({ movie }: { movie: Movie }) => (
-  <div className="space-x-2 line-clamp-1 leading-6">
+const CategoryAndCountry = ({
+  movie,
+  className,
+}: {
+  movie: Movie;
+  className?: string;
+}) => (
+  <div className={`flex items-center gap-2 ${className || ""}`}>
     {movie.country.map((ctr) => (
-      <Badge className="bg-white/40" key={ctr.slug}>
+      <Badge className="bg-white/40 flex-none" key={ctr.slug}>
         {ctr.name}
       </Badge>
     ))}
     {movie.category.map((cate) => (
-      <Badge className="bg-white/40" key={cate.slug}>
+      <Badge className="bg-white/40 flex-none" key={cate.slug}>
         {cate.name}
       </Badge>
     ))}
@@ -178,7 +189,7 @@ export const ActionButtons = ({
       : `/phim/${movie.slug}`;
 
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
+    <div className={`flex items-center gap-2 ${className || ""}`}>
       <Link
         aria-label="Xem phim"
         href={hrefWatchMovie}

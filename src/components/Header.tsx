@@ -13,14 +13,16 @@ import SearchInput from "@/components/SearchInput";
 const Header = () => {
   const pathName = usePathname();
 
-  const [bgColor, setBgColor] = useState("bg-transparent");
+  const [bgColor, setBgColor] = useState("bg-black sm:bg-transparent");
 
   const handleScroll = () => {
-    const scrollPosition = window.scrollY;
-    if (scrollPosition > 50) {
-      setBgColor("bg-background");
-    } else {
-      setBgColor("bg-transparent");
+    if (window.innerWidth > 640) {
+      const scrollPosition = window.scrollY;
+      if (scrollPosition > 50) {
+        setBgColor("bg-background");
+      } else {
+        setBgColor("bg-transparent");
+      }
     }
   };
 
@@ -34,7 +36,7 @@ const Header = () => {
   return (
     <div
       className={`w-full top-0 z-50 transition-all duration-500 ${bgColor} ${
-        pathName === "/" ? "fixed" : "sticky"
+        pathName === "/" ? "sticky sm:fixed" : "sticky"
       }`}
     >
       <Container className="flex items-center justify-between py-1">

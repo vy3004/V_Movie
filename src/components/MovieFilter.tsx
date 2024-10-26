@@ -76,18 +76,21 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
 
   return (
     <>
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-2">
         <BreadCrumb breadCrumb={breadCrumb} />
         <button
+          aria-label="Mở lọc phim"
           onClick={() => setShowFilters((prev) => !prev)}
           className={`flex items-center hover:text-primary ${
             showFilters ? "text-primary" : ""
           }`}
         >
           <AdjustmentsHorizontalIcon
-            className={`size-6 mr-1 ${showFilters ? "rotate-90" : ""}`}
+            className={`size-5 sm:size-6 mr-1 ${
+              showFilters ? "rotate-90" : ""
+            }`}
           />
-          Lọc phim
+          <span className="hidden sm:block">Lọc phim</span>
         </button>
       </div>
 
@@ -140,7 +143,8 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
           />
 
           <button
-            type="button"
+            aria-label="Lọc phim"
+            type="submit"
             onClick={handleFilter}
             className="px-4 py-2 bg-primary rounded col-span-2 md:col-span-1"
           >

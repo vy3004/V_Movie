@@ -94,7 +94,7 @@ const MenuMobile = () => {
                           (subItem: MenuItem, subIndex: number) => (
                             <a
                               key={subIndex}
-                              href={`${item.slug}${subItem.slug}`}
+                              href={`/${item.slug}${subItem.slug}`}
                             >
                               <li className="px-3 py-2 rounded hover:bg-gray-800">
                                 {subItem.name}

@@ -50,47 +50,43 @@ const Pagination = ({ currentPage, totalPages }: PaginationProps) => {
   const pageNumbers = getPageNumbers();
 
   return (
-    <div className="flex justify-center">
-      <ul className="flex">
-        <button
-          className={`border rounded-l-lg px-3 py-2 flex items-center ${
-            currentPage === 1
-              ? "opacity-50 cursor-not-allowed"
-              : "hover:text-primary"
-          }`}
-          onClick={() => handlePageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-        >
-          <ChevronLeftIcon className="size-5" />
-        </button>
+    <div className="flex items-center justify-center rounded-lg bg-background w-fit mx-auto p-1">
+      <button
+        className={`px-1 sm:px-2 py-1 flex items-center justify-center ${
+          currentPage === 1
+            ? "opacity-50 cursor-not-allowed"
+            : "hover:text-primary"
+        }`}
+        onClick={() => handlePageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+      >
+        <ChevronLeftIcon className="size-5" />
+      </button>
 
-        {pageNumbers.map((number, index) => (
-          <button
-            key={index}
-            className={`border px-3 py-2 cursor-pointer ${
-              currentPage === number
-                ? "bg-primary border-primary"
-                : "hover:text-primary"
-            } ${number === "..." ? "cursor-not-allowed" : ""}`}
-            onClick={() => handlePageChange(number)}
-            disabled={number === "..."}
-          >
-            {number}
-          </button>
-        ))}
-
+      {pageNumbers.map((number, index) => (
         <button
-          className={`border rounded-r-lg px-3 py-2 flex items-center ${
-            currentPage === totalPages
-              ? "opacity-50 cursor-not-allowed"
-              : "hover:text-primary"
-          }`}
-          onClick={() => handlePageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
+          key={index}
+          className={`px-1.5 sm:px-3 py-1 rounded cursor-pointer ${
+            currentPage === number ? "bg-primary" : "hover:text-primary"
+          } ${number === "..." ? "cursor-not-allowed" : ""}`}
+          onClick={() => handlePageChange(number)}
+          disabled={number === "..."}
         >
-          <ChevronRightIcon className="size-5" />
+          {number}
         </button>
-      </ul>
+      ))}
+
+      <button
+        className={`px-1 sm:px-2 py-1 flex items-center justify-center ${
+          currentPage === totalPages
+            ? "opacity-50 cursor-not-allowed"
+            : "hover:text-primary"
+        }`}
+        onClick={() => handlePageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+      >
+        <ChevronRightIcon className="size-5" />
+      </button>
     </div>
   );
 };

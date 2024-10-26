@@ -42,7 +42,7 @@ export default async function MoviesPage({ params, searchParams }: PageProps) {
   const totalPages = Math.ceil(totalItems / totalItemsPerPage);
 
   return (
-    <div className="col-span-12 xl:col-span-8 py-4 space-y-8">
+    <div className="col-span-12 xl:col-span-8 py-4 space-y-4 sm:space-y-8">
       <MovieFilter breadCrumb={data.breadCrumb} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">

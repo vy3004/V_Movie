@@ -3,7 +3,7 @@ import { ArrowLeftIcon } from "@heroicons/react/24/solid";
 
 export default function NotFound() {
   return (
-    <div className="w-full py-4 flex flex-col justify-center items-center h-screen">
+    <div className="w-full p-4 flex flex-col justify-center items-center h-screen">
       <div className="relative">
         <h1 className="text-9xl font-extrabold text-white tracking-widest">
           404

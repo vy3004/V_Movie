@@ -66,6 +66,7 @@ const SearchInput = () => {
                 <Link
                   key={movie._id}
                   href={`/phim/${movie.slug}`}
+                  onClick={() => setQuery("")}
                   className="space-y-2 group grid grid-cols-3 gap-2 hover:bg-secondary rounded-lg p-1"
                 >
                   <div className="relative aspect-square rounded overflow-hidden">

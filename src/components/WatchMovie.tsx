@@ -46,7 +46,7 @@ const WatchMovie = ({ movie }: WatchMovieProps) => {
         />
       )}
 
-      {movie.status === "trailer" ? (
+      {movie.status === "trailer" && movie.trailer_url !== "" ? (
         <VideoPlayer
           movieSrc={convertToEmbedUrl(movie.trailer_url)}
           movieName={movie.name + " - Trailer"}

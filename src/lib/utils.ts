@@ -13,3 +13,17 @@ const extractYouTubeVideoId = (url: string): string | null => {
 
   return match ? match[1] : null;
 };
+
+export const formatUrl = (path: string | undefined): string => {
+  if (!path) return "#";
+  if (path.startsWith("/danh-sach/")) return path.replace("/danh-sach", "");
+  if (path.startsWith("/the-loai/"))
+    return `/phim-moi-cap-nhat?category=${encodeURIComponent(
+      path.split("/the-loai/")[1]
+    )}`;
+  if (path.startsWith("/quoc-gia/"))
+    return `/phim-moi-cap-nhat?country=${encodeURIComponent(
+      path.split("/quoc-gia/")[1]
+    )}`;
+  return path;
+};

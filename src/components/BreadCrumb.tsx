@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Fragment } from "react";
 import Link from "next/link";
-import { ChevronDoubleRightIcon, HomeIcon } from "@heroicons/react/24/solid";
+import { ChevronRightIcon, HomeIcon } from "@heroicons/react/24/solid";
 
 import { BreadCrumb as BreadCrumbType } from "@/lib/types";
+import { formatUrl } from "@/lib/utils";
 
 interface BreadCrumbProps {
   breadCrumb: BreadCrumbType[];
@@ -44,14 +45,14 @@ const BreadCrumb = ({ breadCrumb }: BreadCrumbProps) => {
 
   const renderDropdown = (items: BreadCrumbType[], idx: number) => (
     <div key={idx} className="relative" ref={dropdownRef}>
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center gap-0.5 sm:gap-2">
         <button
           className="hover:text-primary"
           onClick={() => setDropdownOpen((prev) => !prev)}
         >
           •••
         </button>
-        <ChevronDoubleRightIcon className="size-5" />
+        <ChevronRightIcon className="size-4 sm:size-5" />
       </div>
       {isDropdownOpen && (
         <div className="absolute w-max bg-gray-800 rounded mt-2 z-10">
@@ -59,7 +60,7 @@ const BreadCrumb = ({ breadCrumb }: BreadCrumbProps) => {
             {items.map((item, index) => (
               <li key={index}>
                 <Link
-                  href={item.slug || "#"}
+                  href={formatUrl(item.slug)}
                   className="block p-2 hover:text-primary"
                 >
                   {item.name}
@@ -81,30 +82,30 @@ const BreadCrumb = ({ breadCrumb }: BreadCrumbProps) => {
       );
 
     return (
-      <div key={idx} className="flex items-center space-x-2">
+      <Fragment key={idx}>
         <Link
-          href={item.slug || "#"}
+          href={formatUrl(item.slug)}
           className="hover:text-primary line-clamp-1"
         >
           {item.name}
         </Link>
-        <ChevronDoubleRightIcon className="size-5" />
-      </div>
+        <ChevronRightIcon className="size-4 sm:size-5" />
+      </Fragment>
     );
   };
 
   return (
     <nav
       aria-label="breadcrumb"
-      className="flex items-center space-x-2 select-none"
+      className="flex items-center gap-0.5 sm:gap-2 select-none text-sm sm:text-base"
     >
       {/* Home link */}
-      <div className="flex items-center space-x-2">
-        <Link href="/">
-          <HomeIcon className="size-6 hover:text-primary" />
-        </Link>
-        <ChevronDoubleRightIcon className="size-5" />
-      </div>
+      {/* <div className="flex items-center gap-0.5 sm:gap-2"> */}
+      <Link aria-label="Trang chủ" href="/">
+        <HomeIcon className="size-5 sm:size-6 hover:text-primary" />
+      </Link>
+      <ChevronRightIcon className="size-4 sm:size-5" />
+      {/* </div> */}
 
       {/* Map through grouped breadcrumbs */}
       {Object.keys(groupedBreadCrumbs).map((position, idx) => {
