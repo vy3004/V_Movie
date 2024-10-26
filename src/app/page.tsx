@@ -51,7 +51,7 @@ export default async function HomePage() {
 
       <Container
         className={`${
-          isData ? "mt-6 sm:mt-12" : "mt-20"
+          isData ? "mt-6 sm:mt-12" : "mt-10 sm:mt-20"
         } mb-12 space-y-6 sm:space-y-12`}
       >
         <Banner />

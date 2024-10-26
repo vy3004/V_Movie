@@ -3,7 +3,6 @@ import Link from "next/link";
 import {
   Carousel,
   CarouselContent,
-  CarouselDots,
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
@@ -49,7 +48,6 @@ const MovieSection = ({ title, movies, hrefViewMore }: MovieSectionProps) => {
         </CarouselContent>
         <CarouselPrevious className="hidden sm:block" />
         <CarouselNext className="hidden sm:block" />
-        <CarouselDots className="block sm:hidden -bottom-2 left-1/2 -translate-x-1/2" />
       </Carousel>
     </div>
   );

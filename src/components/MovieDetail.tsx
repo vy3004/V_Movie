@@ -42,14 +42,14 @@ const MovieDetail = ({ movie }: MovieDetailProps) => {
 
 export default MovieDetail;
 
-const Badge = ({
+export const Badge = ({
   children,
   className,
 }: {
   children: React.ReactNode;
   className?: string;
 }) => (
-  <div className={`px-2 py-1 rounded bg-primary ${className}`}>
+  <div className={`px-2 py-1 rounded bg-primary flex-none ${className}`}>
     {children || ""}
   </div>
 );
@@ -128,7 +128,7 @@ export const MovieTags = ({
   className?: string;
 }) => (
   <div className={className || ""}>
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 overflow-hidden">
       {movie.tmdb.type && (
         <Badge className="uppercase">{movie.tmdb.type}</Badge>
       )}
@@ -164,12 +164,12 @@ const CategoryAndCountry = ({
 }) => (
   <div className={`flex items-center gap-2 ${className || ""}`}>
     {movie.country.map((ctr) => (
-      <Badge className="bg-white/40 flex-none" key={ctr.slug}>
+      <Badge className="bg-white/40" key={ctr.slug}>
         {ctr.name}
       </Badge>
     ))}
     {movie.category.map((cate) => (
-      <Badge className="bg-white/40 flex-none" key={cate.slug}>
+      <Badge className="bg-white/40" key={cate.slug}>
         {cate.name}
       </Badge>
     ))}

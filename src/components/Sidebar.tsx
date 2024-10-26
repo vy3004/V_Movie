@@ -1,17 +1,18 @@
 "use client";
 
+import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import { StarIcon } from "@heroicons/react/24/solid";
 
 import Loading from "@/components/Loading";
+import { Badge, BorderedItem } from "@/components/MovieDetail";
 
 import { Movie } from "@/lib/types";
-import { useData } from "@/providers/BaseDataContextProvider";
-import Link from "next/link";
-import { StarIcon } from "@heroicons/react/24/solid";
 import { apiConfig } from "@/lib/configs";
-import Image from "next/image";
-import { MovieTags } from "./MovieDetail";
+
+import { useData } from "@/providers/BaseDataContextProvider";
 
 type TabType = "day" | "month" | "year";
 const Sidebar = () => {
@@ -100,9 +101,9 @@ const MovieList = ({ movies }: { movies: Movie[] }) => {
           <Link
             key={movie._id}
             href={`/phim/${movie.slug}`}
-            className="space-y-2 group grid grid-cols-3 gap-3"
+            className="space-y-2 group grid grid-cols-3 gap-3 items-center"
           >
-            <div className="relative aspect-[3/4] rounded-lg overflow-hidden">
+            <div className="col-span-1 relative aspect-[3/4] rounded-lg overflow-hidden">
               <Image
                 src={`${apiConfig.IMG_URL}${movie.thumb_url}`}
                 alt={movie.origin_name}
@@ -116,11 +117,28 @@ const MovieList = ({ movies }: { movies: Movie[] }) => {
                 {movie.tmdb.vote_average.toFixed(0)}
               </div>
             </div>
-            <div className="col-span-2 space-y-3">
+            <div className="col-span-2 h-full space-y-3">
               <h3 className="line-clamp-2 group-hover:text-primary group-hover:font-semibold">
                 {movie.name}
               </h3>
-              <MovieTags movie={movie} className="space-y-3 text-xs" />
+              <div className="text-xs space-y-2">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <Badge>{movie.quality}</Badge>
+                  <Badge>
+                    {movie.lang} {movie.sub_docquyen && "độc quyền"}
+                  </Badge>
+                </div>
+
+                <div className="space-x-2 flex items-center">
+                  <BorderedItem>{movie.year}</BorderedItem>
+                  {movie.chieurap && <BorderedItem>Chiếu rạp</BorderedItem>}
+                  {movie.tmdb.season && (
+                    <BorderedItem>Phần {movie.tmdb.season}</BorderedItem>
+                  )}
+                  <BorderedItem>{movie.time}</BorderedItem>
+                  <BorderedItem>{movie.episode_current}</BorderedItem>
+                </div>
+              </div>
             </div>
           </Link>
         ))
