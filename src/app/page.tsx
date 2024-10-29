@@ -1,8 +1,10 @@
+import dynamic from "next/dynamic";
+
 import Container from "@/components/Container";
 import HeroCarousel from "@/components/HeroCarousel";
 import MovieSection from "@/components/MovieSection";
-import Banner from "@/components/Banner";
 import ListMovieSection from "@/components/ListMovieSection";
+const Banner = dynamic(() => import("@/components/Banner"), { ssr: false });
 
 import { fetchMovies } from "@/lib/apiClient";
 import { typesMovie } from "@/lib/configs";

@@ -32,7 +32,7 @@ const withPWA = withPWAInit({
         /^https:\/\/ophim1\.com\/v1\/api\/danh-sach\/phim-moi-cap-nhat\?sort_field=tmdb\.vote_count$/,
       handler: "NetworkFirst",
       options: {
-        cacheName: "api-phim-moi-cap-nhat",
+        cacheName: "api-phim-hot",
         expiration: {
           maxEntries: 50,
           maxAgeSeconds: 60 * 60 * 24, // Cache 1 day
@@ -49,7 +49,7 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "img.ophim.live",
-        pathname: "/**",
+        pathname: "**",
       },
     ],
   },

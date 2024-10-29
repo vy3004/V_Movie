@@ -1,3 +1,4 @@
+import dynamic from "next/dynamic";
 import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
 import "./globals.css";
@@ -6,7 +7,7 @@ import ReactQueryClientProvider from "@/providers/ReactQueryClientProvider";
 import BaseDataContextProvider from "@/providers/BaseDataContextProvider";
 
 import Header from "@/components/Header";
-import Footer from "@/components/Footer";
+const Footer = dynamic(() => import("@/components/Footer"), { ssr: false });
 
 import { WEB_TITLE } from "@/lib/configs";
 

@@ -29,20 +29,21 @@ const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
           delay: 7000,
         }),
       ]}
-      className="max-h-[850px]"
     >
       <CarouselContent>
         {movies.map((movie, i) => (
-          <CarouselItem key={movie._id} className="relative mb-10 sm:mb-0">
+          <CarouselItem
+            key={movie._id}
+            className="relative aspect-video mb-10 sm:mb-0"
+          >
             <Image
               src={`${apiConfig.IMG_URL}${movie.poster_url}`}
               alt={movie.origin_name}
-              width={2000}
-              height={1125}
+              fill
               priority={i === 0}
-              placeholder="blur"
-              blurDataURL="/blur_img.jpg"
-              className="size-full object-cover"
+              loading={i === 0 ? "eager" : "lazy"}
+              sizes="100vw"
+              className="absolute inset-0 size-full object-cover"
             />
             {/* Overlay gradients */}
             <div className="absolute inset-0 bg-hero-top" />

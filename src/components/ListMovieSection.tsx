@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 
-import MovieSection from "@/components/MovieSection";
-import Loading from "@/components/Loading";
+const MovieSection = dynamic(() => import("@/components/MovieSection"), {
+  ssr: false,
+});
+const Loading = dynamic(() => import("@/components/Loading"), { ssr: false });
 
 import { fetchMovies } from "@/lib/apiClient";
 import { typesMovie } from "@/lib/configs";
@@ -69,7 +72,6 @@ const ListMovieSection = () => {
               [section]: data.items,
             }));
             setLoadMore(false);
-
             break;
           }
         }

@@ -28,7 +28,7 @@ const DropdownMenu = ({
           items.map((item) => (
             <Link
               key={item.slug}
-              href={`${typesMovie.NEW.slug}?${query}=${item.slug}`}
+              href={`/${typesMovie.NEW.slug}?${query}=${item.slug}`}
               className="text-center hover:text-primary"
             >
               {item.name}
@@ -51,7 +51,7 @@ const Menu = () => {
       {Object.values(typesMovie)
         .splice(0, 5)
         .map((item) => (
-          <Link key={item.slug} href={item.slug}>
+          <Link key={item.slug} href={`/${item.slug}`}>
             <Button
               className={pathname === item.slug ? "bg-custom-gradient" : ""}
             >

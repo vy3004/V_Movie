@@ -75,7 +75,7 @@ const SearchInput = () => {
                       alt={movie.origin_name}
                       fill
                       placeholder="blur"
-                      blurDataURL="/blur_img.jpg"
+                      blurDataURL="/blur_img.webp"
                       className="absolute inset-0 size-full object-cover"
                     />
                   </div>

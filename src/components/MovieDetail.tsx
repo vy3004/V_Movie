@@ -18,7 +18,7 @@ const MovieDetail = ({ movie }: MovieDetailProps) => {
         width={500}
         height={750}
         placeholder="blur"
-        blurDataURL="/blur_img.jpg"
+        blurDataURL="/blur_img.webp"
         className="object-cover aspect-[3/4] rounded-lg hidden sm:block"
       />
       <Image
@@ -27,7 +27,7 @@ const MovieDetail = ({ movie }: MovieDetailProps) => {
         width={750}
         height={500}
         placeholder="blur"
-        blurDataURL="/blur_img.jpg"
+        blurDataURL="/blur_img.webp"
         className="object-cover col-span-3 rounded-lg block sm:hidden"
       />
 

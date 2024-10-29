@@ -4,11 +4,11 @@ const Banner = () => {
   return (
     <div className="relative aspect-[1.5] sm:aspect-[2] md:aspect-[4] overflow-hidden rounded-lg w-full">
       <Image
-        src={"/banner.jpg"}
+        src={"/banner.webp"}
         alt="Banner"
         fill
         sizes="100vw"
-        blurDataURL="/blur_img.jpg"
+        blurDataURL="/blur_img.webp"
         placeholder="blur"
         className="absolute inset-0 object-cover"
       />

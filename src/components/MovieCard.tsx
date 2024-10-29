@@ -22,11 +22,11 @@ export default function MovieCard({ movie }: MovieCardProps) {
       <div className="relative aspect-[3/4] h-5/6 w-full rounded-lg overflow-hidden">
         <Image
           src={imgSrc}
-          onError={() => setImgSrc("/error_img.png")}
+          onError={() => setImgSrc("/error_img.webp")}
           alt={movie.origin_name}
           fill
           placeholder="blur"
-          blurDataURL="/blur_img.jpg"
+          blurDataURL="/blur_img.webp"
           className="absolute inset-0 object-cover h-full hover:scale-110 transition duration-500 ease-in-out"
         />
       </div>

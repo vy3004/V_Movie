@@ -46,7 +46,7 @@ const Header = () => {
           <Link href={"/"}>
             <Image
               className="h-auto w-32 sm:w-44"
-              src="/logo.png"
+              src="/logo.webp"
               alt="Logo"
               width={192}
               height={56.1}

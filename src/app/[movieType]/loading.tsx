@@ -8,7 +8,7 @@ export default function LoadingPage() {
       <Loading />
       <Image
         className="w-56"
-        src="/logo.png"
+        src="/logo.webp"
         alt="Logo"
         width={224}
         height={66}

@@ -109,7 +109,7 @@ const MovieList = ({ movies }: { movies: Movie[] }) => {
                 alt={movie.origin_name}
                 fill
                 placeholder="blur"
-                blurDataURL="/blur_img.jpg"
+                blurDataURL="/blur_img.webp"
                 className="absolute inset-0 size-full object-cover group-hover:scale-110 transition duration-500 ease-in-out"
               />
               <div className="absolute right-1 top-1 bg-black/80 rounded-lg px-2 py-1 flex items-center gap-1 text-xs text-primary font-semibold">
