@@ -25,6 +25,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
           onError={() => setImgSrc("/error_img.webp")}
           alt={movie.origin_name}
           fill
+          sizes="(max-width: 640px) 50vw, (max-width: 768px) 33.33vw, (max-width: 1024px) 25vw, 16.67vw"
           placeholder="blur"
           blurDataURL="/blur_img.webp"
           className="absolute inset-0 object-cover h-full hover:scale-110 transition duration-500 ease-in-out"

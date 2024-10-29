@@ -1,9 +1,12 @@
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 
 import MovieCard from "@/components/MovieCard";
 import MovieFilter from "@/components/MovieFilter";
-import Pagination from "@/components/Pagination";
+const Pagination = dynamic(() => import("@/components/Pagination"), {
+  ssr: false,
+});
 
 import { fetchMovies } from "@/lib/apiClient";
 

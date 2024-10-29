@@ -1,10 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import VideoPlayer from "@/components/VideoPlayer";
-import EpisodeList from "@/components/EpisodeList";
+const VideoPlayer = dynamic(() => import("@/components/VideoPlayer"), {
+  ssr: false,
+});
+const EpisodeList = dynamic(() => import("@/components/EpisodeList"), {
+  ssr: false,
+});
 
 import { Movie, ServerData } from "@/lib/types";
 import { convertToEmbedUrl } from "@/lib/utils";

@@ -52,6 +52,7 @@ const Pagination = ({ currentPage, totalPages }: PaginationProps) => {
   return (
     <div className="flex items-center justify-center rounded-lg bg-background w-fit mx-auto p-1">
       <button
+        aria-label="Trang trước"
         className={`px-1 sm:px-2 py-1 flex items-center justify-center ${
           currentPage === 1
             ? "opacity-50 cursor-not-allowed"
@@ -65,10 +66,11 @@ const Pagination = ({ currentPage, totalPages }: PaginationProps) => {
 
       {pageNumbers.map((number, index) => (
         <button
+          aria-label={`Trang ${number}`}
           key={index}
-          className={`px-1.5 sm:px-3 py-1 rounded cursor-pointer ${
+          className={`sm:px-3 py-1 rounded cursor-pointer ${
             currentPage === number ? "bg-primary" : "hover:text-primary"
-          } ${number === "..." ? "cursor-not-allowed" : ""}`}
+          } ${number === "..." ? "cursor-not-allowed px-0.5" : "px-2"}`}
           onClick={() => handlePageChange(number)}
           disabled={number === "..."}
         >
@@ -77,6 +79,7 @@ const Pagination = ({ currentPage, totalPages }: PaginationProps) => {
       ))}
 
       <button
+        aria-label="Trang sau"
         className={`px-1 sm:px-2 py-1 flex items-center justify-center ${
           currentPage === totalPages
             ? "opacity-50 cursor-not-allowed"
