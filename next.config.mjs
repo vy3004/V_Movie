@@ -44,11 +44,10 @@ const withPWA = withPWAInit({
 
 const nextConfig = {
   images: {
-    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "img.ophim.live",
+        hostname: "wsrv.nl",
         pathname: "**",
       },
     ],

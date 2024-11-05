@@ -74,6 +74,7 @@ const SearchInput = () => {
                       src={`${apiConfig.IMG_URL}${movie.thumb_url}`}
                       alt={movie.origin_name}
                       fill
+                      sizes="120px"
                       placeholder="blur"
                       blurDataURL="/blur_img.webp"
                       className="absolute inset-0 size-full object-cover"

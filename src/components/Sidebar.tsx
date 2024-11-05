@@ -108,6 +108,7 @@ const MovieList = ({ movies }: { movies: Movie[] }) => {
                 src={`${apiConfig.IMG_URL}${movie.thumb_url}`}
                 alt={movie.origin_name}
                 fill
+                sizes="(max-width: 1280px) 30vw, 20vw"
                 placeholder="blur"
                 blurDataURL="/blur_img.webp"
                 className="absolute inset-0 size-full object-cover group-hover:scale-110 transition duration-500 ease-in-out"

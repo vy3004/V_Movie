@@ -10,7 +10,7 @@ export const apiConfig = {
   MOVIE_URL: `${BASE_MOVIE_API}/phim/`,
   CATEGORIES_URL: `${BASE_MOVIE_API}/the-loai/`,
   COUNTRIES_URL: `${BASE_MOVIE_API}/quoc-gia/`,
-  IMG_URL: `${BASE_IMG_API}/uploads/movies/`,
+  IMG_URL: `https://wsrv.nl/?output=webp&url=${BASE_IMG_API}/uploads/movies/`,
 };
 
 export const typesMovie = {
