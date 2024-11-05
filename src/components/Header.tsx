@@ -2,13 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 import Container from "@/components/Container";
 import Menu from "@/components/Menu";
 import MenuMobile from "@/components/MenuMobile";
 import SearchInput from "@/components/SearchInput";
+import Logo from "@/components/Logo";
 
 const Header = () => {
   const pathName = usePathname();
@@ -44,14 +44,7 @@ const Header = () => {
           <MenuMobile />
 
           <Link href={"/"}>
-            <Image
-              className="h-auto w-32 sm:w-44"
-              src="/logo.webp"
-              alt="Logo"
-              width={192}
-              height={56.1}
-              priority
-            />
+            <Logo className="h-auto w-32 sm:w-44" />
           </Link>
 
           <Menu />

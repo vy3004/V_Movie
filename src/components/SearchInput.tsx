@@ -1,15 +1,14 @@
 import Link from "next/link";
-import Image from "next/image";
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
 import Loading from "@/components/Loading";
+import ImageCustom from "@/components/ImageCustom";
 import { BorderedItem } from "@/components/MovieDetail";
 
 import { fetchMovies } from "@/lib/apiClient";
-import { apiConfig } from "@/lib/configs";
 
 const SearchInput = () => {
   const router = useRouter();
@@ -70,13 +69,11 @@ const SearchInput = () => {
                   className="space-y-2 group grid grid-cols-3 gap-2 hover:bg-secondary rounded-lg p-1"
                 >
                   <div className="relative aspect-square rounded overflow-hidden">
-                    <Image
-                      src={`${apiConfig.IMG_URL}${movie.thumb_url}`}
+                    <ImageCustom
                       alt={movie.origin_name}
-                      fill
-                      sizes="120px"
-                      placeholder="blur"
-                      blurDataURL="/blur_img.webp"
+                      src={movie.thumb_url}
+                      widths={[120]}
+                      loading="lazy"
                       className="absolute inset-0 size-full object-cover"
                     />
                   </div>
@@ -108,7 +105,7 @@ export default SearchInput;
 
 const DropdownResult = ({
   children,
-  className,
+  className = "",
 }: {
   children: React.ReactNode;
   className?: string;

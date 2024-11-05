@@ -1,16 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { StarIcon } from "@heroicons/react/24/solid";
 
 import Loading from "@/components/Loading";
+import ImageCustom from "@/components/ImageCustom";
 import { Badge, BorderedItem } from "@/components/MovieDetail";
 
 import { Movie } from "@/lib/types";
-import { apiConfig } from "@/lib/configs";
 
 import { useData } from "@/providers/BaseDataContextProvider";
 
@@ -104,13 +103,10 @@ const MovieList = ({ movies }: { movies: Movie[] }) => {
             className="space-y-2 group grid grid-cols-3 gap-3 items-center"
           >
             <div className="col-span-1 relative aspect-[3/4] rounded-lg overflow-hidden">
-              <Image
-                src={`${apiConfig.IMG_URL}${movie.thumb_url}`}
+              <ImageCustom
                 alt={movie.origin_name}
-                fill
-                sizes="(max-width: 1280px) 30vw, 20vw"
-                placeholder="blur"
-                blurDataURL="/blur_img.webp"
+                src={movie.thumb_url}
+                widths={[320]}
                 className="absolute inset-0 size-full object-cover group-hover:scale-110 transition duration-500 ease-in-out"
               />
               <div className="absolute right-1 top-1 bg-black/80 rounded-lg px-2 py-1 flex items-center gap-1 text-xs text-primary font-semibold">

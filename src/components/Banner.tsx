@@ -1,16 +1,13 @@
-import Image from "next/image";
+/* eslint-disable @next/next/no-img-element */
 
 const Banner = () => {
   return (
     <div className="relative aspect-[1.5] sm:aspect-[2] md:aspect-[4] overflow-hidden rounded-lg w-full">
-      <Image
-        src={"/banner.webp"}
+      <img
+        src="/banner.webp"
         alt="Banner"
-        fill
-        sizes="100vw"
-        blurDataURL="/blur_img.webp"
-        placeholder="blur"
-        className="absolute inset-0 object-cover"
+        loading="lazy"
+        className="absolute size-full inset-0 object-cover"
       />
       <div className="absolute inset-0 bg-banner-gradient" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center w-full md:w-5/6 lg:w-2/3 xl:w-1/2 space-y-4 p-4">

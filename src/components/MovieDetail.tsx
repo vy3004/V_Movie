@@ -1,5 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
-import Image from "next/image";
 import { PlayIcon, PlusIcon, StarIcon } from "@heroicons/react/24/solid";
 
 import { apiConfig } from "@/lib/configs";
@@ -12,23 +12,16 @@ interface MovieDetailProps {
 const MovieDetail = ({ movie }: MovieDetailProps) => {
   return (
     <div className="grid grid-cols-3 gap-4">
-      <Image
-        src={`${apiConfig.IMG_URL}${movie.thumb_url}`}
+      <img
         alt={movie.origin_name}
-        width={500}
-        height={750}
-        placeholder="blur"
-        blurDataURL="/blur_img.webp"
-        className="object-cover aspect-[3/4] rounded-lg hidden sm:block"
-      />
-      <Image
-        src={`${apiConfig.IMG_URL}${movie.poster_url}`}
-        alt={movie.origin_name}
-        width={750}
-        height={500}
-        placeholder="blur"
-        blurDataURL="/blur_img.webp"
-        className="object-cover col-span-3 rounded-lg block sm:hidden"
+        src={`${apiConfig.IMG_URL}${movie.thumb_url}&w=400`}
+        srcSet={`
+          ${apiConfig.IMG_URL}${movie.thumb_url}&w=400 400w, 
+        ${apiConfig.IMG_URL}${movie.poster_url}&w=640 640w
+      `}
+        sizes="(min-width: 640px) 400px, 640px"
+        loading="lazy"
+        className="object-cover col-span-3 sm:col-span-1 rounded-lg"
       />
 
       <MovieInfo
@@ -44,40 +37,40 @@ export default MovieDetail;
 
 export const Badge = ({
   children,
-  className,
+  className = "",
 }: {
   children: React.ReactNode;
   className?: string;
-}) => (
-  <div className={`px-2 py-1 rounded bg-primary flex-none ${className}`}>
-    {children || ""}
-  </div>
-);
+}) =>
+  children && (
+    <div className={`px-2 py-1 rounded bg-primary flex-none ${className}`}>
+      {children}
+    </div>
+  );
 
 export const BorderedItem = ({
   children,
-  className,
+  className = "",
 }: {
   children: React.ReactNode;
   className?: string;
-}) => (
-  <span
-    className={`border-r-2 pr-2 last:border-0 line-clamp-1 ${className || ""}`}
-  >
-    {children}
-  </span>
-);
+}) =>
+  children && (
+    <span className={`border-r-2 pr-2 last:border-0 line-clamp-1 ${className}`}>
+      {children}
+    </span>
+  );
 
 export const MovieInfo = ({
   movie,
-  className,
+  className = "",
   isDetail,
 }: {
   movie: Movie;
   className?: string;
   isDetail: boolean;
 }) => (
-  <div className={className || ""}>
+  <div className={className}>
     <h1 className="text-xl font-extrabold text-primary line-clamp-1 md:leading-tight sm:text-3xl md:text-5xl">
       {movie.name}
     </h1>
@@ -122,12 +115,12 @@ export const MovieInfo = ({
 
 export const MovieTags = ({
   movie,
-  className,
+  className = "",
 }: {
   movie: Movie;
   className?: string;
 }) => (
-  <div className={className || ""}>
+  <div className={className}>
     <div className="flex items-center gap-2 overflow-hidden">
       {movie.tmdb.type && (
         <Badge className="uppercase">{movie.tmdb.type}</Badge>
@@ -157,12 +150,12 @@ export const MovieTags = ({
 
 const CategoryAndCountry = ({
   movie,
-  className,
+  className = "",
 }: {
   movie: Movie;
   className?: string;
 }) => (
-  <div className={`flex items-center gap-2 ${className || ""}`}>
+  <div className={`flex items-center gap-2 ${className}`}>
     {movie.country.map((ctr) => (
       <Badge className="bg-white/40" key={ctr.slug}>
         {ctr.name}
@@ -178,7 +171,7 @@ const CategoryAndCountry = ({
 
 export const ActionButtons = ({
   movie,
-  className,
+  className = "",
 }: {
   movie: Movie;
   className?: string;
@@ -189,7 +182,7 @@ export const ActionButtons = ({
       : `/phim/${movie.slug}`;
 
   return (
-    <div className={`flex items-center gap-2 ${className || ""}`}>
+    <div className={`flex items-center gap-2 ${className}`}>
       <Link
         aria-label="Xem phim"
         href={hrefWatchMovie}

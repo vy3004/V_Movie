@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { StarIcon } from "@heroicons/react/24/solid";
 
-import { apiConfig } from "@/lib/configs";
+import ImageCustom from "@/components/ImageCustom";
+
 import { Movie } from "@/lib/types";
 
 interface MovieCardProps {
@@ -13,22 +12,15 @@ interface MovieCardProps {
 }
 
 export default function MovieCard({ movie }: MovieCardProps) {
-  const [imgSrc, setImgSrc] = useState(
-    `${apiConfig.IMG_URL}${movie.thumb_url}`
-  );
-
   return (
     <Link href={`/phim/${movie.slug}`} className="space-y-2 relative group">
       <div className="relative aspect-[3/4] h-5/6 w-full rounded-lg overflow-hidden">
-        <Image
-          src={imgSrc}
-          onError={() => setImgSrc("/error_img.webp")}
+        <ImageCustom
+          src={movie.thumb_url}
           alt={movie.origin_name}
-          fill
-          sizes="(max-width: 640px) 50vw, (max-width: 768px) 33.33vw, (max-width: 1024px) 25vw, 16.67vw"
-          placeholder="blur"
-          blurDataURL="/blur_img.webp"
-          className="absolute inset-0 object-cover h-full hover:scale-110 transition duration-500 ease-in-out"
+          widths={[320]}
+          loading="lazy"
+          className="absolute inset-0 object-cover size-full hover:scale-110 transition duration-500 ease-in-out"
         />
       </div>
       {movie.tmdb && (

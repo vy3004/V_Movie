@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Autoplay from "embla-carousel-autoplay";
 
 import {
@@ -12,9 +11,9 @@ import {
   CarouselPrevious,
 } from "@/components/Carousel";
 import { ActionButtons, MovieInfo } from "@/components/MovieDetail";
+import ImageCustom from "@/components/ImageCustom";
 
 import { Movie } from "@/lib/types";
-import { apiConfig } from "@/lib/configs";
 
 const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
   return (
@@ -36,13 +35,12 @@ const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
             key={movie._id}
             className="relative aspect-video mb-10 sm:mb-0"
           >
-            <Image
-              src={`${apiConfig.IMG_URL}${movie.poster_url}`}
+            <ImageCustom
               alt={movie.origin_name}
-              fill
-              priority={i === 0}
-              loading={i === 0 ? "eager" : "lazy"}
+              src={`${movie.poster_url}`}
+              widths={[1920, 1536, 1280, 1024, 768, 640, 432]}
               sizes="100vw"
+              loading={i === 0 ? "eager" : "lazy"}
               className="absolute inset-0 size-full object-cover"
             />
             {/* Overlay gradients */}

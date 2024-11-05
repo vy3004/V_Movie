@@ -6,13 +6,13 @@ const withPWA = withPWAInit({
   dest: "public",
   runtimeCaching: [
     {
-      urlPattern: /^https:\/\/img\.ophim\.live\/.*\.(png|jpg|jpeg|svg|webp)$/,
+      urlPattern: /^https:\/\/wsrv\.nl\/.*\.(png|jpg|jpeg|svg|webp)$/,
       handler: "CacheFirst",
       options: {
         cacheName: "movie-images",
         expiration: {
           maxEntries: 50, // Limit 50 images
-          maxAgeSeconds: 30 * 24 * 60 * 60, // Cache 30 days
+          maxAgeSeconds: 7 * 24 * 60 * 60, // Cache 7 days
         },
       },
     },
@@ -43,15 +43,7 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig = {
-  images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "wsrv.nl",
-        pathname: "**",
-      },
-    ],
-  },
+  reactStrictMode: true,
 };
 
 export default withPWA(nextConfig);
