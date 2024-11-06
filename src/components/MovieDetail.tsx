@@ -20,7 +20,7 @@ const MovieDetail = ({ movie }: MovieDetailProps) => {
         ${apiConfig.IMG_URL}${movie.poster_url}&w=640 640w
       `}
         sizes="(min-width: 640px) 400px, 640px"
-        loading="lazy"
+        loading="eager"
         className="object-cover col-span-3 sm:col-span-1 rounded-lg"
       />
 
@@ -186,7 +186,7 @@ export const ActionButtons = ({
       <Link
         aria-label="Xem phim"
         href={hrefWatchMovie}
-        className="flex items-center font-bold bg-primary rounded px-4 py-3"
+        className="flex items-center font-bold bg-primary hover:bg-main rounded px-4 py-3"
       >
         <PlayIcon className="size-4 md:size-8" />
         <span className="hidden md:block">Xem Phim</span>

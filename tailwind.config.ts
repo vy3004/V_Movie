@@ -13,6 +13,7 @@ const config: Config = {
         secondary: "var(--secondary)",
         foreground: "var(--foreground)",
         primary: "var(--primary)",
+        main: "var(--main)",
       },
       backgroundImage: {
         "custom-gradient": "linear-gradient(0deg, #f5515f 0%, #9f041b 100%)",

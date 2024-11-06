@@ -47,7 +47,7 @@ const BreadCrumb = ({ breadCrumb }: BreadCrumbProps) => {
     <div key={idx} className="relative" ref={dropdownRef}>
       <div className="flex items-center gap-0.5 sm:gap-2">
         <button
-          className="hover:text-primary"
+          className="hover:text-main"
           onClick={() => setDropdownOpen((prev) => !prev)}
         >
           •••
@@ -61,7 +61,7 @@ const BreadCrumb = ({ breadCrumb }: BreadCrumbProps) => {
               <li key={index}>
                 <Link
                   href={formatUrl(item.slug)}
-                  className="block p-2 hover:text-primary"
+                  className="block p-2 hover:text-main"
                 >
                   {item.name}
                 </Link>
@@ -85,7 +85,7 @@ const BreadCrumb = ({ breadCrumb }: BreadCrumbProps) => {
       <Fragment key={idx}>
         <Link
           href={formatUrl(item.slug)}
-          className="hover:text-primary line-clamp-1"
+          className="hover:text-main line-clamp-1"
         >
           {item.name}
         </Link>
@@ -102,7 +102,7 @@ const BreadCrumb = ({ breadCrumb }: BreadCrumbProps) => {
       {/* Home link */}
       {/* <div className="flex items-center gap-0.5 sm:gap-2"> */}
       <Link aria-label="Trang chủ" href="/">
-        <HomeIcon className="size-5 sm:size-6 hover:text-primary" />
+        <HomeIcon className="size-5 sm:size-6 hover:text-main" />
       </Link>
       <ChevronRightIcon className="size-4 sm:size-5" />
       {/* </div> */}

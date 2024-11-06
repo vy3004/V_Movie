@@ -56,7 +56,7 @@ const Pagination = ({ currentPage, totalPages }: PaginationProps) => {
         className={`px-1 sm:px-2 py-1 flex items-center justify-center ${
           currentPage === 1
             ? "opacity-50 cursor-not-allowed"
-            : "hover:text-primary"
+            : "hover:text-main"
         }`}
         onClick={() => handlePageChange(currentPage - 1)}
         disabled={currentPage === 1}
@@ -69,7 +69,7 @@ const Pagination = ({ currentPage, totalPages }: PaginationProps) => {
           aria-label={`Trang ${number}`}
           key={index}
           className={`sm:px-3 py-1 rounded cursor-pointer ${
-            currentPage === number ? "bg-primary" : "hover:text-primary"
+            currentPage === number ? "bg-primary" : "hover:text-main"
           } ${number === "..." ? "cursor-not-allowed px-0.5" : "px-2"}`}
           onClick={() => handlePageChange(number)}
           disabled={number === "..."}
@@ -83,7 +83,7 @@ const Pagination = ({ currentPage, totalPages }: PaginationProps) => {
         className={`px-1 sm:px-2 py-1 flex items-center justify-center ${
           currentPage === totalPages
             ? "opacity-50 cursor-not-allowed"
-            : "hover:text-primary"
+            : "hover:text-main"
         }`}
         onClick={() => handlePageChange(currentPage + 1)}
         disabled={currentPage === totalPages}

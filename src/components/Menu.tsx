@@ -29,7 +29,7 @@ const DropdownMenu = ({
             <Link
               key={item.slug}
               href={`/${typesMovie.NEW.slug}?${query}=${item.slug}`}
-              className="text-center hover:text-primary"
+              className="text-center hover:text-main"
             >
               {item.name}
             </Link>
