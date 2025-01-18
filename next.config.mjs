@@ -27,18 +27,6 @@ const withPWA = withPWAInit({
         },
       },
     },
-    {
-      urlPattern:
-        /^https:\/\/ophim1\.com\/v1\/api\/danh-sach\/phim-moi-cap-nhat\?sort_field=tmdb\.vote_count$/,
-      handler: "NetworkFirst",
-      options: {
-        cacheName: "api-phim-hot",
-        expiration: {
-          maxEntries: 50,
-          maxAgeSeconds: 60 * 60 * 24, // Cache 1 day
-        },
-      },
-    },
   ],
 });
 

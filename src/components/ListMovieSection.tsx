@@ -47,8 +47,6 @@ const ListMovieSection = () => {
   }, [loadMore, loading]);
 
   useEffect(() => {
-    const currentYear = new Date().getFullYear().toString();
-
     const loadMovies = async () => {
       if (loadMore) {
         setLoading(true);
@@ -65,7 +63,7 @@ const ListMovieSection = () => {
             const pathName =
               typesMovie[section.toUpperCase() as TypesMovieKeys].slug;
 
-            const data = await fetchMovies(pathName, { year: currentYear });
+            const data = await fetchMovies(pathName, { sort_field: "year" });
 
             setMoviesData((prev) => ({
               ...prev,

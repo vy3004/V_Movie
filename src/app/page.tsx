@@ -9,11 +9,9 @@ const Banner = dynamic(() => import("@/components/Banner"), { ssr: false });
 import { fetchMovies } from "@/lib/apiClient";
 import { typesMovie } from "@/lib/configs";
 
-const currentYear = new Date().getFullYear().toString();
-
 export async function generateMetadata() {
   const dataNewMovies = await fetchMovies(typesMovie.NEW.slug, {
-    year: currentYear,
+    sort_field: "year",
   });
 
   return {
@@ -31,7 +29,7 @@ export async function generateMetadata() {
 
 export default async function HomePage() {
   const dataNewMovies = await fetchMovies(typesMovie.NEW.slug, {
-    year: currentYear,
+    sort_field: "year",
   });
 
   const isData = dataNewMovies.items.length > 0;

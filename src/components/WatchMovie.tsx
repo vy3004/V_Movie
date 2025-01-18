@@ -44,24 +44,26 @@ const WatchMovie = ({ movie }: WatchMovieProps) => {
 
   return (
     <>
-      {currentServerData && (
-        <VideoPlayer
-          movieSrc={currentServerData.link_embed}
-          movieName={movie.name + " - Tập " + currentServerData.name}
-        />
-      )}
-
       {movie.status === "trailer" && movie.trailer_url !== "" ? (
         <VideoPlayer
           movieSrc={convertToEmbedUrl(movie.trailer_url)}
           movieName={movie.name + " - Trailer"}
         />
       ) : (
-        <EpisodeList
-          servers={movie.episodes}
-          episodeSelected={tap}
-          onSelect={handleChangeServer}
-        />
+        <>
+          {currentServerData && (
+            <VideoPlayer
+              movieSrc={currentServerData.link_embed}
+              movieName={movie.name + " - Tập " + currentServerData.name}
+            />
+          )}
+
+          <EpisodeList
+            servers={movie.episodes}
+            episodeSelected={tap}
+            onSelect={handleChangeServer}
+          />
+        </>
       )}
     </>
   );

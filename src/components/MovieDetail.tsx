@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
-import { PlayIcon, PlusIcon, StarIcon } from "@heroicons/react/24/solid";
+import { PlayIcon, StarIcon } from "@heroicons/react/24/solid";
 
 import { apiConfig } from "@/lib/configs";
 import { Movie } from "@/lib/types";
@@ -133,8 +133,10 @@ export const MovieTags = ({
 
     <div className="space-x-2 flex items-center">
       <BorderedItem className="text-primary font-semibold flex items-center">
-        <StarIcon className="mr-1 size-4" />{" "}
-        {movie.tmdb.vote_average.toFixed(0)}
+        <StarIcon className="size-4 mr-1" />
+        {movie.tmdb.vote_average > 0
+          ? movie.tmdb.vote_average.toFixed(0)
+          : null}
       </BorderedItem>
 
       <BorderedItem>{movie.year}</BorderedItem>
@@ -182,7 +184,7 @@ export const ActionButtons = ({
       : `/phim/${movie.slug}`;
 
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
+    <div className={`flex items-center ${className}`}>
       <Link
         aria-label="Xem phim"
         href={hrefWatchMovie}
@@ -191,9 +193,6 @@ export const ActionButtons = ({
         <PlayIcon className="size-4 md:size-8" />
         <span className="hidden md:block">Xem Phim</span>
       </Link>
-      <button aria-label="Lưu phim" className="bg-foreground rounded p-3">
-        <PlusIcon className="size-4 md:size-8 text-background" />
-      </button>
     </div>
   );
 };
