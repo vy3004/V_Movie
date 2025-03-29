@@ -134,9 +134,8 @@ const MovieList = ({ movies }: { movies: Movie[] }) => {
                   <BorderedItem>{movie.year}</BorderedItem>
                   {movie.chieurap && <BorderedItem>Chiếu rạp</BorderedItem>}
                   {movie.tmdb.season && (
-                    <BorderedItem>Phần {movie.tmdb.season}</BorderedItem>
+                    <BorderedItem>P{movie.tmdb.season}</BorderedItem>
                   )}
-                  <BorderedItem>{movie.time}</BorderedItem>
                   <BorderedItem>{movie.episode_current}</BorderedItem>
                 </div>
               </div>
