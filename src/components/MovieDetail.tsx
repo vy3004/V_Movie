@@ -12,17 +12,18 @@ interface MovieDetailProps {
 const MovieDetail = ({ movie }: MovieDetailProps) => {
   return (
     <div className="grid grid-cols-3 gap-4">
-      <img
-        alt={movie.origin_name}
-        src={`${apiConfig.IMG_URL}${movie.thumb_url}&w=400`}
-        srcSet={`
-          ${apiConfig.IMG_URL}${movie.thumb_url}&w=400 400w, 
-        ${apiConfig.IMG_URL}${movie.poster_url}&w=640 640w
-      `}
-        sizes="(min-width: 640px) 400px, 640px"
-        loading="eager"
-        className="object-cover col-span-3 sm:col-span-1 rounded-lg"
-      />
+      <picture className="col-span-3 sm:col-span-1">
+        <source
+          media="(min-width: 640px)"
+          srcSet={`${apiConfig.IMG_URL}${movie.thumb_url}&w=400`}
+        />
+        <img
+          alt={movie.origin_name}
+          src={`${apiConfig.IMG_URL}${movie.poster_url}&w=640`}
+          className="object-cover rounded-lg"
+          loading="eager"
+        />
+      </picture>
 
       <MovieInfo
         className="col-span-3 sm:col-span-2"

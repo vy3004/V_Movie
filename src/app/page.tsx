@@ -6,13 +6,11 @@ import MovieSection from "@/components/MovieSection";
 import ListMovieSection from "@/components/ListMovieSection";
 const Banner = dynamic(() => import("@/components/Banner"), { ssr: false });
 
-import { fetchMovies } from "@/lib/apiClient";
+import { fetchMoviesWithFallback } from "@/lib/apiClient";
 import { typesMovie } from "@/lib/configs";
 
 export async function generateMetadata() {
-  const dataNewMovies = await fetchMovies(typesMovie.NEW.slug, {
-    sort_field: "year",
-  });
+  const dataNewMovies = await fetchMoviesWithFallback(typesMovie.NEW.slug, 24);
 
   return {
     title: dataNewMovies.seoOnPage.titleHead,
@@ -28,9 +26,7 @@ export async function generateMetadata() {
 }
 
 export default async function HomePage() {
-  const dataNewMovies = await fetchMovies(typesMovie.NEW.slug, {
-    sort_field: "year",
-  });
+  const dataNewMovies = await fetchMoviesWithFallback(typesMovie.NEW.slug, 24);
 
   const isData = dataNewMovies.items.length > 0;
 

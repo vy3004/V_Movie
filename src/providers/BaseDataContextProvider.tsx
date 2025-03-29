@@ -41,7 +41,7 @@ export default function BaseDataContextProvider({
     queryFn: async () =>
       (
         await fetchMovies(typesMovie.NEW.slug, {
-          sort_field: "tmdb.vote_count",
+          sort_field: "view",
         })
       ).items,
   });

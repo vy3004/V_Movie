@@ -64,6 +64,42 @@ export const fetchMovies = async (
   }
 };
 
+export const fetchMoviesWithFallback = async (
+  type: string,
+  limit: number
+): Promise<PageMoviesData> => {
+  const currentYear = new Date().getFullYear().toString();
+  const previousYear = (new Date().getFullYear() - 1).toString();
+
+  const currentYearMovies = await fetchMovies(type, {
+    sort_field: "view",
+    year: currentYear,
+  });
+
+  if (currentYearMovies.items.length >= limit) {
+    return {
+      ...currentYearMovies,
+      items: currentYearMovies.items.slice(0, limit),
+    };
+  }
+
+  const previousYearMovies = await fetchMovies(type, {
+    sort_field: "view",
+    year: previousYear,
+  });
+
+  return {
+    ...currentYearMovies,
+    items: [
+      ...currentYearMovies.items,
+      ...previousYearMovies.items.slice(
+        0,
+        limit - currentYearMovies.items.length
+      ),
+    ],
+  };
+};
+
 export const fetchDetailMovie = async ({
   slug,
 }: {

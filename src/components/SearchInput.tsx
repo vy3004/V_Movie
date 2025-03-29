@@ -40,11 +40,13 @@ const SearchInput = () => {
   };
 
   return (
-    <div className="relative">
-      <div className="flex items-center justify-between gap-1 border rounded-lg px-2 py-1">
+    <div
+      className={`relative bg-gray-500/40 rounded-lg transition-all duration-500`}
+    >
+      <div className="flex items-center justify-between gap-1 px-2 py-1 sm:px-3 sm:py-2">
         <input
-          placeholder="Tìm kiếm..."
-          className="bg-transparent w-24 sm:w-32 outline-none"
+          placeholder="Tìm kiếm phim"
+          className="bg-transparent w-24 sm:w-32 outline-none text-sm"
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

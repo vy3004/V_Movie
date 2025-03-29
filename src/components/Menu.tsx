@@ -19,7 +19,7 @@ const DropdownMenu = ({
   items?: CateCtr[];
 }) => (
   <div className="relative group inline-block">
-    <Button className="group-hover:bg-custom-gradient">{title}</Button>
+    <Button>{title}</Button>
     <div className="absolute left-1/2 -translate-x-1/2 hidden group-hover:block w-max z-10">
       <div className="h-4 opacity-0" />
       <div className="absolute left-1/2 -translate-x-1/2 top-2 border-b-8 border-b-gray-800 border-x-8 border-x-transparent size-0" />
@@ -53,7 +53,9 @@ const Menu = () => {
         .map((item) => (
           <Link key={item.slug} href={`/${item.slug}`}>
             <Button
-              className={pathname === item.slug ? "bg-custom-gradient" : ""}
+              className={
+                pathname === `/${item.slug}` ? "text-main font-semibold" : ""
+              }
             >
               {item.name}
             </Button>
