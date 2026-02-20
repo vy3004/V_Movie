@@ -1,21 +1,21 @@
 import { cache } from "react";
-import dynamic from "next/dynamic";
+import dynamicImport from "next/dynamic";
 
 import Container from "@/components/Container";
 import HeroCarousel from "@/components/HeroCarousel";
 import MovieSection from "@/components/MovieSection";
 import ListMovieSection from "@/components/ListMovieSection";
-const Banner = dynamic(() => import("@/components/Banner"), { ssr: false });
+const Banner = dynamicImport(() => import("@/components/Banner"), { ssr: false });
 
 import { fetchMoviesWithFallback } from "@/lib/apiClient";
 import { typesMovie } from "@/lib/configs";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 3600;
 
 const getNewMovies = cache(async () => {
   return await fetchMoviesWithFallback(typesMovie.NEW.slug, 24);
 });
-
 
 export async function generateMetadata() {
   const dataNewMovies = await getNewMovies();
@@ -39,8 +39,8 @@ export default async function HomePage() {
   const isData = dataNewMovies.items.length > 0;
 
   const shuffledItems = isData
-  ? [...dataNewMovies.items].sort(() => 0.5 - Math.random())
-  : [];
+    ? [...dataNewMovies.items].sort(() => 0.5 - Math.random())
+    : [];
 
   return (
     <main className="col-span-12 select-none">
