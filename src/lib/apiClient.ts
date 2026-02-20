@@ -72,7 +72,7 @@ export const fetchMoviesWithFallback = async (
   const previousYear = (new Date().getFullYear() - 1).toString();
 
   const currentYearMovies = await fetchMovies(type, {
-    sort_field: "view",
+    sort_field: "tmdb.vote_count",
     year: currentYear,
   });
 
@@ -84,7 +84,7 @@ export const fetchMoviesWithFallback = async (
   }
 
   const previousYearMovies = await fetchMovies(type, {
-    sort_field: "view",
+    sort_field: "tmdb.vote_count",
     year: previousYear,
   });
 

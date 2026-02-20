@@ -46,8 +46,8 @@ const MovieSection = ({ title, movies, hrefViewMore }: MovieSectionProps) => {
             </CarouselItem>
           ))}
         </CarouselContent>
-        <CarouselPrevious className="hidden sm:block" />
-        <CarouselNext className="hidden sm:block" />
+        <CarouselPrevious />
+        <CarouselNext />
       </Carousel>
     </div>
   );
