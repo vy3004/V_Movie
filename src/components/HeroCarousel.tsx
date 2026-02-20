@@ -56,8 +56,8 @@ const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
           </CarouselItem>
         ))}
       </CarouselContent>
-      <CarouselPrevious className="left-7 top-1/3 hidden sm:block" />
-      <CarouselNext className="right-7 top-1/3 hidden sm:block" />
+      <CarouselPrevious className="left-7 top-1/3" />
+      <CarouselNext className="right-7 top-1/3" />
       <CarouselDots className="right-5 sm:right-20 bottom-[10%] md:bottom-[20%] xl:bottom-[40%]" />
     </Carousel>
   );

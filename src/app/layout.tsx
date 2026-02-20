@@ -9,7 +9,7 @@ import BaseDataContextProvider from "@/providers/BaseDataContextProvider";
 import Header from "@/components/Header";
 const Footer = dynamic(() => import("@/components/Footer"), { ssr: false });
 
-import { WEB_TITLE } from "@/lib/configs";
+import { WEB_TITLE, apiConfig } from "@/lib/configs";
 
 const roboto = Roboto({
   weight: "400",
@@ -29,6 +29,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi" className="scroll-smooth">
+      <head>
+        <link rel="preconnect" href={apiConfig.SEARCH_URL} crossOrigin="" />
+        <link rel="preconnect" href={apiConfig.IMG_URL} crossOrigin="" />
+      </head>
       <body className={`${roboto.className} antialiased`}>
         <ReactQueryClientProvider>
           <BaseDataContextProvider>
