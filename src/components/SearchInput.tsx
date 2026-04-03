@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -7,8 +9,7 @@ import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import Loading from "@/components/Loading";
 import ImageCustom from "@/components/ImageCustom";
 import { BorderedItem } from "@/components/MovieDetail";
-
-import { fetchMovies } from "@/lib/apiClient";
+import { Movie } from "@/lib/types";
 
 const SearchInput = () => {
   const router = useRouter();
@@ -24,8 +25,11 @@ const SearchInput = () => {
     queryKey: ["searchMovies", debouncedQuery],
     queryFn: async () => {
       if (!debouncedQuery) return [];
-      const result = await fetchMovies("tim-kiem", { keyword: debouncedQuery });
-      return result.items;
+      const response = await fetch(
+        `/api/search?keyword=${encodeURIComponent(debouncedQuery)}`,
+      );
+      if (!response.ok) return [];
+      return response.json();
     },
     enabled: !!debouncedQuery,
   });
@@ -63,7 +67,7 @@ const SearchInput = () => {
             </DropdownResult>
           ) : movies.length > 0 ? (
             <DropdownResult className="max-h-96 max-w-80 sm:max-w-96 w-max overflow-y-scroll space-y-2">
-              {movies.map((movie) => (
+              {movies.map((movie: Movie) => (
                 <Link
                   key={movie._id}
                   href={`/phim/${movie.slug}`}

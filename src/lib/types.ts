@@ -125,3 +125,12 @@ export interface PageMovieData {
   params: { slug: string };
   item: Movie | null;
 }
+
+export interface WatchHistory {
+  movie_slug: string;
+  movie_name: string;
+  movie_poster: string;
+  last_time: number;
+  duration: number;
+  last_episode_slug: string;
+}

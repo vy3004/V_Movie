@@ -8,9 +8,8 @@ const MovieSection = dynamic(() => import("@/components/MovieSection"), {
 });
 const Loading = dynamic(() => import("@/components/Loading"), { ssr: false });
 
-import { fetchMoviesWithFallback } from "@/lib/apiClient";
 import { typesMovie } from "@/lib/configs";
-import { Movie } from "@/lib/types";
+import { Movie, PageMoviesData } from "@/lib/types";
 
 type MoviesData = {
   single: Movie[];
@@ -63,7 +62,10 @@ const ListMovieSection = () => {
             const pathName =
               typesMovie[section.toUpperCase() as TypesMovieKeys].slug;
 
-            const data = await fetchMoviesWithFallback(pathName, 24);
+            const response = await fetch(
+              `/api/movies?slug=${pathName}&limit=24`,
+            );
+            const data: PageMoviesData = await response.json();
 
             setMoviesData((prev) => ({
               ...prev,
