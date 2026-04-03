@@ -1,8 +1,12 @@
-export const BASE_URL = process.env.NEXT_PUBLIC_PORT;
-const BASE_MOVIE_API = process.env.NEXT_PUBLIC_MOVIE_API;
 const BASE_IMG_API = process.env.NEXT_PUBLIC_IMG_API;
 
+export const BASE_MOVIE_API = process.env.NEXT_PUBLIC_MOVIE_API!;
+export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+export const BASE_URL = process.env.NEXT_PUBLIC_PORT!;
 export const WEB_TITLE = "V · Movie";
+
+export const WSRV_PROXY = "https://wsrv.nl/?output=webp&q=75&url=";
+export const MOVIE_IMG_PATH = `${BASE_IMG_API}/uploads/movies/`;
 
 export const apiConfig = {
   SEARCH_URL: `${BASE_MOVIE_API}/`,
@@ -10,7 +14,7 @@ export const apiConfig = {
   MOVIE_URL: `${BASE_MOVIE_API}/phim/`,
   CATEGORIES_URL: `${BASE_MOVIE_API}/the-loai/`,
   COUNTRIES_URL: `${BASE_MOVIE_API}/quoc-gia/`,
-  IMG_URL: `https://wsrv.nl/?output=webp&q=75&url=${BASE_IMG_API}/uploads/movies/`,
+  IMG_URL: `${WSRV_PROXY}${MOVIE_IMG_PATH}`,
 };
 
 export const typesMovie = {

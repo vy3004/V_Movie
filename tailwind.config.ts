@@ -22,7 +22,7 @@ const config: Config = {
         "hero-left":
           "linear-gradient(90deg, rgba(0,0,0,0.95) 15%, rgba(251,251,251,0) 45%)",
         "hero-bottom":
-          "linear-gradient(0deg, #111319 10%, rgba(251,251,251,0) 60%)",
+          "linear-gradient(to top, #0a0a0a 0%, #0a0a0a 25%, rgba(10, 10, 10, 0.8) 50%, rgba(10, 10, 10, 0.1) 75%, transparent 100%)",
         "banner-gradient":
           "linear-gradient(65deg, rgba(0,0,0,0.95) 30%, rgba(210,24,24,0.7) 100%)",
       },
@@ -31,6 +31,6 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [require("tailwindcss-animate")],
 };
 export default config;

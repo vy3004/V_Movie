@@ -9,6 +9,7 @@ import Menu from "@/components/Menu";
 import MenuMobile from "@/components/MenuMobile";
 import SearchInput from "@/components/SearchInput";
 import Logo from "@/components/Logo";
+import UserButton from "@/components/UserButton";
 
 const Header = () => {
   const pathName = usePathname();
@@ -50,7 +51,10 @@ const Header = () => {
           <Menu />
         </div>
 
-        <SearchInput />
+        <div className="flex items-center gap-2">
+          <SearchInput />
+          <UserButton />
+        </div>
       </Container>
     </header>
   );

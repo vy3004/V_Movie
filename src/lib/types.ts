@@ -125,3 +125,32 @@ export interface PageMovieData {
   params: { slug: string };
   item: Movie | null;
 }
+
+export interface EpisodeProgress {
+  ep_last_time: number;
+  ep_duration: number;
+  ep_is_finished: boolean;
+  ep_updated_at: string;
+}
+
+export interface HistoryItem {
+  movie_slug: string;
+  movie_name: string;
+  movie_poster: string;
+  last_episode_slug: string;
+  episodes_progress: Record<string, EpisodeProgress>;
+  is_finished: boolean;
+  updated_at: string;
+  // Virtual field used for comparison (when fetching from API)
+  movie_latest_episode?: string;
+}
+
+export interface HistoryUpdatePayload extends HistoryItem {
+  next_episode_slug?: string;
+}
+
+export interface GooglePromptNotification {
+  isNotDisplayed: () => boolean;
+  isSkippedMoment: () => boolean;
+  getNotDisplayedReason: () => string;
+}

@@ -33,3 +33,59 @@ body {
   background: linear-gradient(#f5515f 0%, #9f041b 100%);
   border-radius: 10px;
 }
+
+@keyframes fillRight {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.vjs-next-overlay-btn {
+  position: absolute !important;
+  bottom: 50px !important;
+  right: 20px !important;
+  background: rgba(199, 199, 199, 0.7) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0 !important;
+  cursor: pointer !important;
+  z-index: 100 !important;
+}
+
+.next-btn-fill-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background: rgb(255 255 255 / 1);
+  z-index: 1;
+}
+
+/* CHỈ CHẠY KHI CÓ CLASS IS-ACTIVE */
+.vjs-next-overlay-btn.is-active .next-btn-fill-bar {
+  animation: fillRight 15s linear forwards;
+}
+
+/* DỪNG ANIMATION KHI VIDEO PAUSE */
+.vjs-vmovie-theme.vjs-paused .vjs-next-overlay-btn .next-btn-fill-bar {
+  animation-play-state: paused !important;
+}
+
+.next-btn-inner-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  color: var(--secondary);
+  text-transform: capitalize;
+  font-size: 14px;
+  white-space: nowrap;
+}
