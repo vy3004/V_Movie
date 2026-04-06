@@ -61,8 +61,10 @@ export const useOAuth = () => {
         };
 
         window.addEventListener("message", handleMessage);
-      } catch (err: any) {
-        onError?.(err.message);
+      } catch (err: unknown) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Đã có lỗi xảy ra";
+        onError?.(errorMessage);
         setIsLoading(false);
       }
     },

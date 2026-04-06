@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import Script from "next/script"; 
+import Script from "next/script";
 import type { Metadata, Viewport } from "next";
 import { Roboto } from "next/font/google";
 import "./globals.css";
@@ -9,20 +9,27 @@ import BaseDataContextProvider from "@/providers/BaseDataContextProvider";
 import AuthModalProvider from "@/providers/AuthModalProvider";
 
 import Header from "@/components/Header";
+import AuthWatcher from "@/components/AuthWatcher";
 const Footer = dynamic(() => import("@/components/Footer"), {
   ssr: false,
   loading: () => <div className="h-20 w-full bg-zinc-950" />, // Tránh nhảy layout khi Footer load
 });
-import AuthModal from "@/components/AuthModal";
-import AuthWatcher from "@/components/AuthWatcher";
+const AuthModal = dynamic(() => import("@/components/AuthModal"), {
+  ssr: false,
+});
 
-import { WEB_TITLE, apiConfig } from "@/lib/configs";
+import {
+  WEB_TITLE,
+  WSRV_PROXY,
+  SUPABASE_URL,
+  BASE_MOVIE_API,
+} from "@/lib/configs";
 
 const roboto = Roboto({
   weight: ["400", "500", "700"],
   subsets: ["latin", "vietnamese"],
   display: "swap",
-  variable: "--font-roboto", // Dùng biến CSS để đồng bộ Tailwind
+  variable: "--font-roboto",
 });
 
 export const metadata: Metadata = {
@@ -34,7 +41,7 @@ export const metadata: Metadata = {
     "Nền tảng xem phim chất lượng cao, cập nhật nhanh chóng các bộ phim mới nhất, phim bộ, phim lẻ và anime vietsub.",
   manifest: "/manifest",
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+    process.env.NEXT_PUBLIC_PORT || "http://localhost:3000",
   ),
   alternates: {
     canonical: "/",
@@ -59,25 +66,9 @@ export default function RootLayout({
   return (
     <html lang="vi" className="scroll-smooth">
       <head>
-        <link
-          rel="preconnect"
-          href={process.env.NEXT_PUBLIC_SUPABASE_URL}
-          crossOrigin="anonymous"
-        />
-        <link rel="dns-prefetch" href={process.env.NEXT_PUBLIC_SUPABASE_URL} />
-
-        {/* Các API và Image server của OPhim */}
-        <link
-          rel="preconnect"
-          href={apiConfig.SEARCH_URL}
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="preconnect"
-          href={apiConfig.IMG_URL}
-          crossOrigin="anonymous"
-        />
-        <link rel="dns-prefetch" href={apiConfig.IMG_URL} />
+        <link rel="preconnect" href={WSRV_PROXY} />
+        <link rel="dns-prefetch" href={SUPABASE_URL} />
+        <link rel="dns-prefetch" href={BASE_MOVIE_API} />
       </head>
       <body
         className={`${roboto.className} antialiased bg-black text-white selection:bg-red-600/30`}

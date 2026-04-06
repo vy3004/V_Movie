@@ -10,8 +10,6 @@ interface PageProps {
   searchParams: Record<string, string | undefined>;
 }
 
-// Next.js tự động tối ưu: Gọi fetchDetailMovie ở đây và ở MoviePage 
-// sẽ chỉ tốn 1 lần request nhờ cơ chế Request Memoization.
 export async function generateMetadata({ params, searchParams }: PageProps) {
   const data = await fetchDetailMovie({ slug: params.slug });
   if (!data?.item) return {};
@@ -34,13 +32,10 @@ export async function generateMetadata({ params, searchParams }: PageProps) {
 }
 
 export default async function MoviePage({ params }: PageProps) {
-  // --- TỐI ƯU 1: CHẠY SONG SONG (PARALLEL DATA FETCHING) ---
-  // Không await từng cái, mà khởi tạo toàn bộ Promise cùng lúc
   const movieDataPromise = fetchDetailMovie({ slug: params.slug });
   const supabase = await createSupabaseServer();
   const userPromise = supabase.auth.getUser();
 
-  // Đợi phim và user nạp xong đồng thời
   const [data, { data: authData }] = await Promise.all([
     movieDataPromise,
     userPromise,
@@ -50,7 +45,7 @@ export default async function MoviePage({ params }: PageProps) {
 
   if (!data?.item) return notFound();
 
-  // --- TỐI ƯU 2: FETCH HISTORY NGAY LẬP TỨC NẾU CÓ USER ---
+  // FETCH HISTORY NGAY LẬP TỨC NẾU CÓ USER
   let history = null;
   if (user) {
     history = await getLatestHistory(user.id, params.slug);
@@ -63,12 +58,13 @@ export default async function MoviePage({ params }: PageProps) {
       <MovieDetail movie={data.item} />
 
       <WatchMovie movie={data.item} history={history} user={user} />
-      
-      {/* TỐI ƯU 3: JSON-LD SEO (Ghi điểm CV mạnh) */}
+
       {data.seoOnPage.seoSchema && (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(data.seoOnPage.seoSchema) }}
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(data.seoOnPage.seoSchema),
+          }}
         />
       )}
     </div>

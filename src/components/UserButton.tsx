@@ -9,9 +9,10 @@ import {
   ArrowLeftEndOnRectangleIcon,
 } from "@heroicons/react/24/solid";
 
+import ImageCustom from "@/components/ImageCustom";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useAuthModal } from "@/providers/AuthModalProvider";
-import { useData } from "@/providers/BaseDataContextProvider"; // Import useData
+import { useData } from "@/providers/BaseDataContextProvider";
 
 export default function UserButton() {
   const supabase = createSupabaseClient();
@@ -36,7 +37,7 @@ export default function UserButton() {
     return (
       <button
         onClick={onOpen}
-        className="flex items-center justify-center size-7 sm:size-9 rounded-full bg-zinc-800 hover:bg-zinc-700 transition-colors group outline-none"
+        className="flex items-center justify-center size-8 sm:size-10 rounded-full bg-zinc-800 hover:bg-zinc-700 transition-colors group outline-none"
         title="Đăng nhập"
       >
         <UserIcon className="w-5 h-5 text-zinc-400 group-hover:text-white transition-colors" />
@@ -50,15 +51,17 @@ export default function UserButton() {
   const initials = fullName.split(" ").pop()?.charAt(0).toUpperCase();
 
   return (
-    <div className="relative group px-2 py-1">
+    <div className="relative group">
       {/* Nút Avatar */}
-      <button className="flex items-center gap-2 hover:opacity-80 transition-all outline-none">
-        <div className="size-7 sm:size-9 rounded-full overflow-hidden flex items-center justify-center bg-purple-600 text-white font-medium border-2 border-transparent group-hover:border-zinc-400 transition-all shadow-lg">
+      <button className="flex items-center gap-1 hover:opacity-80 transition-all outline-none">
+        <div className="size-8 sm:size-10 rounded-full overflow-hidden flex items-center justify-center bg-purple-600 text-white font-medium border-1 border-transparent group-hover:border-zinc-400 transition-all shadow-lg">
           {avatarUrl ? (
-            <img
+            <ImageCustom
               src={avatarUrl}
-              alt="Avatar"
+              alt={fullName}
+              widths={[40, 80]}
               className="w-full h-full object-cover"
+              loading="eager" // Load ngay lập tức vì nằm trên Header
             />
           ) : (
             <span className="text-lg">{initials}</span>

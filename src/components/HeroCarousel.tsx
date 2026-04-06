@@ -46,7 +46,7 @@ const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
             {/* Overlay gradients */}
             <div className="absolute inset-0 bg-hero-top" />
             <div className="absolute inset-0 bg-hero-left" />
-            <div className="absolute inset-0 bg-hero-bottom" />
+            <div className="absolute inset-0 bg-hero-bottom -bottom-[4px]" />
 
             {/* Movie details */}
             <div className="absolute top-[10%] sm:top-1/4 left-10 sm:left-24 w-[85%] lg:!w-1/2 select-none space-y-4 md:space-y-12">

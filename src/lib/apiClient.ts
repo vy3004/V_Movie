@@ -1,6 +1,11 @@
 import axios from "axios";
 import { apiConfig, WEB_TITLE } from "@/lib/configs";
-import { PageMovieData, PageMoviesData, CateCtr } from "@/lib/types";
+import {
+  PageMovieData,
+  PageMoviesData,
+  CateCtr,
+  HistoryItem,
+} from "@/lib/types";
 import { redis } from "@/lib/redis";
 import { createSupabaseServer } from "@/lib/supabase/server";
 
@@ -195,9 +200,13 @@ export const fetchCountries = async (): Promise<CateCtr[]> => {
 };
 
 /**
- * 5. Lấy lịch sử xem phim (CHIẾN THUẬT: Redis -> Supabase -> Backfill)
+ * 5. Lấy lịch sử xem phim (Redis -> Supabase -> Backfill)
  */
-export const getLatestHistory = async (userId: string, movieSlug: string) => {
+export const getLatestHistory = async (
+  userId: string,
+  movieSlug: string,
+): Promise<HistoryItem | null> => {
+  // Định nghĩa kiểu trả về rõ ràng
   const cacheKey = `user_history:${userId}:${movieSlug}`;
 
   try {
@@ -206,33 +215,44 @@ export const getLatestHistory = async (userId: string, movieSlug: string) => {
       const cached = await redis.get(cacheKey);
       if (cached) {
         console.log(`✅ [History Hit] Redis: ${movieSlug}`);
-        return cached as any;
+
+        const parsedData =
+          typeof cached === "string"
+            ? (JSON.parse(cached) as HistoryItem)
+            : (cached as HistoryItem);
+
+        return parsedData;
       }
     }
 
     // BƯỚC 2: Check Supabase
     const supabase = await createSupabaseServer();
+
     const { data, error } = await supabase
       .from("watch_history")
       .select("*")
       .eq("user_id", userId)
       .eq("movie_slug", movieSlug)
-      .maybeSingle();
+      .maybeSingle<HistoryItem>();
 
     if (error) {
       console.error("❌ Supabase History Error:", error.message);
       return null;
     }
 
-    // BƯỚC 3: Backfill vào Redis nếu tìm thấy ở DB
+    // Nếu có dữ liệu từ DB nhưng Redis chưa có, ta thực hiện "Backfill" (Ghi ngược lại Cache)
     if (data && redis) {
-      console.log(`📡 [History Sync] DB -> Redis: ${movieSlug}`);
-      await redis.set(cacheKey, data, { ex: 604800 });
+      await redis.set(cacheKey, JSON.stringify(data), { ex: 86400 }); // Cache 1 ngày
     }
 
     return data;
-  } catch (error) {
-    console.error("❌ getLatestHistory Error:", error);
+  } catch (err: unknown) {
+    const errorMessage =
+      err instanceof Error ? err.message : "Lỗi không xác định";
+    console.error(
+      `❌ Global History Fetch Error [${movieSlug}]:`,
+      errorMessage,
+    );
     return null;
   }
 };
