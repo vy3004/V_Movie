@@ -37,6 +37,8 @@ const WatchMovie = ({ movie, history, user }: WatchMovieProps) => {
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
   const lastSavedTimeRef = useRef(0);
+  const lastDbSyncRef = useRef(0);
+  const DB_SYNC_INTERVAL = 5 * 60 * 1000; // 5 phút
 
   const allEpisodes = useMemo(
     () => movie.episodes.flatMap((ep) => ep.server_data),
@@ -63,8 +65,12 @@ const WatchMovie = ({ movie, history, user }: WatchMovieProps) => {
 
   // 2. HÀM ĐỒNG BỘ (Bao gồm Next Episode Prediction)
   const syncHistory = useCallback(
-    async (forcedIsFinished: boolean = false) => {
+    async (forcedIsFinished: boolean = false, isExitSave: boolean = false) => {
       if (!tap || currentTimeRef.current < 1) return;
+
+      // Batching: chỉ ghi DB khi thoát hoặc sau mỗi DB_SYNC_INTERVAL
+      const shouldWriteDb =
+        isExitSave || Date.now() - lastDbSyncRef.current > DB_SYNC_INTERVAL;
 
       const payload = {
         movieSlug: movie.slug,
@@ -77,8 +83,11 @@ const WatchMovie = ({ movie, history, user }: WatchMovieProps) => {
         isFinished:
           forcedIsFinished ||
           (durationRef.current > 0 &&
-            currentTimeRef.current / durationRef.current > 0.95),
+            currentTimeRef.current / durationRef.current > 0.9),
+        shouldWriteDb,
       };
+
+      if (shouldWriteDb) lastDbSyncRef.current = Date.now();
 
       if (user) {
         fetch("/api/history", {
@@ -121,15 +130,15 @@ const WatchMovie = ({ movie, history, user }: WatchMovieProps) => {
     }
   }, [tap, allEpisodes, syncHistory]);
 
-  // 5. EVENT: LƯU KHI THOÁT TRANG
+  // 5. EVENT: LƯU KHI THOÁT TRANG (isExitSave=true → ghi DB ngay)
   useEffect(() => {
     const handleExit = () => {
-      if (document.visibilityState === "hidden") syncHistory();
+      if (document.visibilityState === "hidden") syncHistory(false, true);
     };
     window.addEventListener("visibilitychange", handleExit);
     return () => {
       window.removeEventListener("visibilitychange", handleExit);
-      syncHistory();
+      syncHistory(false, true);
     };
   }, [syncHistory]);
 
