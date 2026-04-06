@@ -79,7 +79,7 @@ const WatchMovie = ({ movie, history, user }: WatchMovieProps) => {
           (durationRef.current > 0 &&
             currentTimeRef.current / durationRef.current > 0.95),
       };
-      //
+
       if (user) {
         fetch("/api/history", {
           method: "POST",
