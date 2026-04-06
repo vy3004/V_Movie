@@ -1,3 +1,5 @@
+import { HistoryItem, EpisodeProgress } from "@/lib/types";
+
 export const convertToEmbedUrl = (url: string): string => {
   const videoId = extractYouTubeVideoId(url);
 
@@ -28,54 +30,51 @@ export const formatUrl = (path: string | undefined): string => {
   return path;
 };
 
-export const GUEST_HISTORY_KEY = "v_movie_guest_history";
+const GUEST_HISTORY_KEY = "v_movie_guest_history";
 
-export const saveLocalHistory = (item: any) => {
+export const saveLocalHistory = (item: HistoryItem) => {
   if (typeof window === "undefined") return;
-  const GUEST_KEY = "v_movie_guest_history";
-  const history = JSON.parse(localStorage.getItem(GUEST_KEY) || "[]");
 
-  const movieIndex = history.findIndex(
-    (h: any) => h.movieSlug === item.movieSlug,
-  );
-  let movieData =
-    movieIndex > -1
-      ? history[movieIndex]
-      : {
-          movieSlug: item.movieSlug,
-          movieName: item.movieName,
-          moviePoster: item.moviePoster,
-          episodes_progress: {},
-        };
+  try {
+    const history = getLocalHistory();
 
-  const isFinishedCurrent = item.lastTime > item.duration * 0.95;
+    // Lọc bỏ record cũ của phim hiện tại
+    const filteredHistory = history.filter(
+      (h) => h.movie_slug !== item.movie_slug,
+    );
 
-  // Cập nhật tiến trình tập hiện tại
-  movieData.episodes_progress[item.episodeSlug] = {
-    lastTime: item.lastTime,
-    duration: item.duration,
-    isFinished: isFinishedCurrent,
-    updated_at: new Date().toISOString(),
-  };
+    // Thêm bản ghi mới lên đầu mảng
+    const newHistory = [item, ...filteredHistory].slice(0, 20);
 
-  // Dự đoán tập tiếp theo cho Local
-  movieData.last_episode_slug =
-    isFinishedCurrent && item.nextEpisodeSlug
-      ? item.nextEpisodeSlug
-      : item.episodeSlug;
+    localStorage.setItem(GUEST_HISTORY_KEY, JSON.stringify(newHistory));
 
-  movieData.is_finished = isFinishedCurrent && !item.nextEpisodeSlug;
-  movieData.updated_at = new Date().toISOString();
-
-  if (movieIndex > -1) history.splice(movieIndex, 1);
-  const newHistory = [movieData, ...history].slice(0, 20);
-  localStorage.setItem(GUEST_KEY, JSON.stringify(newHistory));
-  window.dispatchEvent(new Event("local-history-updated"));
+    // Dispatch event mượt mà cho UI khác (Navbar, trang chủ) cập nhật ngay lập tức
+    window.dispatchEvent(
+      new CustomEvent("local-history-updated", { detail: item }),
+    );
+  } catch (error) {
+    console.error("[LocalStorage] Error saving history:", error);
+  }
 };
 
-export const getLocalHistory = () => {
+export const getLocalHistory = (): HistoryItem[] => {
   if (typeof window === "undefined") return [];
-  return JSON.parse(localStorage.getItem("v_movie_guest_history") || "[]");
+
+  try {
+    const data = localStorage.getItem(GUEST_HISTORY_KEY);
+    if (!data) return [];
+
+    const parsed = JSON.parse(data);
+    if (Array.isArray(parsed)) {
+      return parsed.filter(
+        (item) => item && typeof item === "object" && item.movie_slug,
+      );
+    }
+    return [];
+  } catch (error) {
+    console.error("[LocalStorage] Error reading history:", error);
+    return [];
+  }
 };
 
 export const formatDuration = (seconds: number) => {

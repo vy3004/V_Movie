@@ -2,7 +2,6 @@
 
 import React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   HeartIcon,
   ClockIcon,
@@ -16,16 +15,13 @@ import { useData } from "@/providers/BaseDataContextProvider"; // Import useData
 
 export default function UserButton() {
   const supabase = createSupabaseClient();
-  const router = useRouter();
   const { onOpen } = useAuthModal();
 
-  // TẬN DỤNG DỮ LIỆU TỪ PROVIDER (Đã được React Query cache)
   const { user, authLoading } = useData()!;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     // Sau khi sign out, BaseDataContextProvider sẽ tự động cập nhật lại user = null
-    router.refresh();
   };
 
   // 1. Trạng thái đang nạp Auth (Loading)

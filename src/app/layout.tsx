@@ -1,4 +1,5 @@
 import dynamic from "next/dynamic";
+import Script from "next/script"; 
 import type { Metadata, Viewport } from "next";
 import { Roboto } from "next/font/google";
 import "./globals.css";
@@ -95,6 +96,10 @@ export default function RootLayout({
             </AuthModalProvider>
           </BaseDataContextProvider>
         </ReactQueryClientProvider>
+        <Script
+          src="https://accounts.google.com/gsi/client"
+          strategy="beforeInteractive"
+        />
       </body>
     </html>
   );

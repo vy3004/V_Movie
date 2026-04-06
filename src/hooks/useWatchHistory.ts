@@ -1,4 +1,5 @@
 "use client";
+
 import { useRef } from "react";
 
 export function useWatchHistory(user: any, movie: any) {

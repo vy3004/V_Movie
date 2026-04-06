@@ -1,13 +1,21 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
+import { useRouter } from "next/navigation";
+import { User } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CateCtr, Movie } from "@/lib/types";
 import { getLocalHistory } from "@/lib/utils";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
 interface BaseDataContextType {
-  user: any;
+  user: User | null | undefined;
   authLoading: boolean;
   categories: CateCtr[] | undefined;
   countries: CateCtr[] | undefined;
@@ -29,22 +37,24 @@ export default function BaseDataContextProvider({
 }) {
   const supabase = createSupabaseClient();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const lastEventTime = useRef<number>(0);
 
-  // 1. TỐI ƯU AUTH: Dùng getSession để triệt tiêu request mạng dư thừa
-  const { data: user, isLoading: authLoading } = useQuery({
+  // 1. Auth User: Cache vô hạn vì sẽ cập nhật chủ động qua onAuthStateChange
+  const { data: user, isLoading: authLoading } = useQuery<
+    User | null | undefined
+  >({
     queryKey: ["auth-user"],
     queryFn: async () => {
-      // getSession() lấy từ bộ nhớ cục bộ, không gửi request tới Supabase Auth Server
       const {
         data: { session },
       } = await supabase.auth.getSession();
       return session?.user ?? null;
     },
     staleTime: Infinity,
-    gcTime: Infinity,
   });
 
-  // 2. Fetch Metadata
+  // 2. Metadata (Categories/Countries): Backend đã có Cache-Control 1h
   const { data: metadata } = useQuery({
     queryKey: ["metadata"],
     queryFn: () => fetch("/api/metadata").then((res) => res.json()),
@@ -52,14 +62,14 @@ export default function BaseDataContextProvider({
     gcTime: Infinity,
   });
 
-  // 3. Fetch Top Movies (Cache 10 phút)
+  // 3. Top Movies: Backend có Redis cache 10p
   const { data: dataTopMovies } = useQuery<Movie[]>({
     queryKey: ["topMovies"],
     queryFn: () => fetch("/api/movies/top").then((res) => res.json()),
-    staleTime: 1000 * 60 * 10,
+    staleTime: 1000 * 60 * 10, // 10p khớp với Redis
   });
 
-  // 4. ĐỒNG BỘ LỊCH SỬ (Chỉ chạy khi User thực sự tồn tại)
+  // 4. Đồng bộ lịch sử (Optimized for Redis)
   useEffect(() => {
     if (!user) return;
 
@@ -77,10 +87,15 @@ export default function BaseDataContextProvider({
         if (res.ok) {
           localStorage.removeItem("v_movie_guest_history");
           window.dispatchEvent(new Event("history-synced"));
+
+          // Sau khi sync, Backend đã xóa Key Redis history_list:${user.id}
+          // Ta invalidate để React Query fetch lại bản mới nhất từ DB
           queryClient.invalidateQueries({
             queryKey: ["movie-history", user.id],
           });
-          console.log("🚀 [Sync] Đồng bộ thành công!");
+          console.log(
+            "🚀 [Redis-Sync] Lịch sử đã được đồng bộ và làm mới cache.",
+          );
         }
       } catch (error) {
         console.error("❌ [Sync Error]", error);
@@ -90,32 +105,58 @@ export default function BaseDataContextProvider({
     handleSync();
   }, [user, queryClient]);
 
-  // 5. Lắng nghe Auth State để cập nhật Cache
+  // 5. Auth Listener (Tối ưu tránh Duplicate & Flash UI)
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
-          // Cập nhật trực tiếp dữ liệu vào cache thay vì fetch lại
-          queryClient.setQueryData(["auth-user"], session?.user ?? null);
+      async (event, session) => {
+        const now = Date.now();
+        if (now - lastEventTime.current < 500) return;
+        lastEventTime.current = now;
+
+        console.log("🚀 Auth State:", event);
+
+        if (
+          event === "SIGNED_IN" ||
+          event === "USER_UPDATED" ||
+          event === "TOKEN_REFRESHED"
+        ) {
+          const currentUser = session?.user ?? null;
+
+          // Cập nhật UI ngay lập tức
+          queryClient.setQueryData(["auth-user"], currentUser);
+
+          if (event === "SIGNED_IN") {
+            // Khi login, ta cần refresh server components (Header)
+            // và chuẩn bị cho việc fetch history mới
+            router.refresh();
+          }
+        }
+
+        if (event === "SIGNED_OUT") {
+          queryClient.setQueryData(["auth-user"], null);
+          // Xóa sạch cache của user cũ để bảo mật
+          queryClient.removeQueries({ queryKey: ["movie-history"] });
+          queryClient.removeQueries({ queryKey: ["watch-history"] });
+          router.refresh();
         }
       },
     );
     return () => authListener.subscription.unsubscribe();
-  }, [supabase, queryClient]);
+  }, [supabase, queryClient, router]);
 
-  // 6. TỐI ƯU RENDERING: Memoize dữ liệu đã xử lý
+  // 6. Xử lý dữ liệu thô (Memoized)
   const processedData = useMemo(() => {
     const cats = metadata?.categories ? [...metadata.categories] : undefined;
     const ctrs = metadata?.countries ? [...metadata.countries] : undefined;
 
     if (cats) {
-      cats.pop();
       cats.sort((a, b) => a.name.localeCompare(b.name));
     }
     if (ctrs) {
       ctrs.sort((a, b) => a.name.localeCompare(b.name));
     }
 
+    // Top Movies Logic
     const year = dataTopMovies?.slice(0, 10) || [];
     const month =
       dataTopMovies
@@ -128,7 +169,7 @@ export default function BaseDataContextProvider({
     return { cats, ctrs, year, month, day };
   }, [metadata, dataTopMovies]);
 
-  // 7. Memoize Context Value để tránh re-render rác cho cả App
+  // 7. Context Value (Memoized)
   const contextValue = useMemo(
     () => ({
       user,

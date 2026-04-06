@@ -140,7 +140,7 @@ export const fetchDetailMovie = async ({
     if (redis && result.item) {
       await redis.set(cacheKey, result, { ex: 86400 });
     }
-
+    console.log(`✅ [API Fetch] Detail: ${result}`);
     return result;
   } catch (error) {
     console.error("❌ Error fetching detail movie:", error);

@@ -9,6 +9,8 @@ export async function GET() {
     ]);
     return NextResponse.json({ categories, countries });
   } catch (error) {
+    console.error("[METADATA_API_ERROR]:", error);
+
     return NextResponse.json(
       { error: "Failed to fetch metadata" },
       { status: 500 },

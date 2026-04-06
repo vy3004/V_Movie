@@ -3,22 +3,23 @@
 import Link from "next/link";
 import ImageCustom from "@/components/ImageCustom";
 import { formatDuration } from "@/lib/utils";
+import { HistoryItem } from "@/lib/types";
 
 interface HistoryCardProps {
-  item: any;
+  item: HistoryItem;
   type: "watching" | "finished";
 }
 
 export default function HistoryCard({ item, type }: HistoryCardProps) {
-  const movieSlug = item.movie_slug || item.movieSlug;
-  const movieName = item.movie_name || item.movieName;
-  const moviePoster = item.movie_poster || item.moviePoster;
-  const lastTapSlug = item.last_episode_slug || item.episodeSlug;
+  const movieSlug = item.movie_slug || item.movie_slug;
+  const movieName = item.movie_name || item.movie_name;
+  const moviePoster = item.movie_poster || item.movie_poster;
+  const lastTapSlug = item.last_episode_slug || item.last_episode_slug;
 
   // Lấy tiến trình của tập hiện tại từ object JSONB
   const progressData = item.episodes_progress?.[lastTapSlug] || {};
-  const lastTime = progressData.lastTime || 0;
-  const duration = progressData.duration || 1; // Tránh chia cho 0
+  const lastTime = progressData.ep_last_time || 0;
+  const duration = progressData.ep_duration || 1; // Tránh chia cho 0
   const progressPercent = Math.min((lastTime / duration) * 100, 100);
 
   return (
