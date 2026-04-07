@@ -52,6 +52,7 @@ export default function BaseDataContextProvider({
       return session?.user ?? null;
     },
     staleTime: Infinity,
+    gcTime: Infinity,
   });
 
   // 2. Metadata (Categories/Countries): Backend đã có Cache-Control 1h
@@ -78,17 +79,16 @@ export default function BaseDataContextProvider({
       if (localData.length === 0) return;
 
       try {
-        const res = await fetch("/api/history", {
+        const res = await fetch("/api/history/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isSync: true, localHistory: localData }),
+          body: JSON.stringify({ localHistory: localData }),
         });
 
         if (res.ok) {
           localStorage.removeItem("v_movie_guest_history");
           window.dispatchEvent(new Event("history-synced"));
 
-          // Sau khi sync, Backend đã xóa Key Redis history_list:${user.id}
           // Ta invalidate để React Query fetch lại bản mới nhất từ DB
           queryClient.invalidateQueries({
             queryKey: ["movie-history", user.id],
@@ -113,31 +113,27 @@ export default function BaseDataContextProvider({
         if (now - lastEventTime.current < 500) return;
         lastEventTime.current = now;
 
-        console.log("🚀 Auth State:", event);
+        const currentUser = session?.user ?? null;
+        const previousUser = queryClient.getQueryData(["auth-user"]);
 
-        if (
-          event === "SIGNED_IN" ||
-          event === "USER_UPDATED" ||
-          event === "TOKEN_REFRESHED"
-        ) {
-          const currentUser = session?.user ?? null;
-
-          // Cập nhật UI ngay lập tức
+        if (event === "SIGNED_IN") {
           queryClient.setQueryData(["auth-user"], currentUser);
-
-          if (event === "SIGNED_IN") {
-            // Khi login, ta cần refresh server components (Header)
-            // và chuẩn bị cho việc fetch history mới
+          if (!previousUser) {
             router.refresh();
           }
         }
 
         if (event === "SIGNED_OUT") {
           queryClient.setQueryData(["auth-user"], null);
-          // Xóa sạch cache của user cũ để bảo mật
           queryClient.removeQueries({ queryKey: ["movie-history"] });
-          queryClient.removeQueries({ queryKey: ["watch-history"] });
-          router.refresh();
+          if (previousUser) {
+            router.refresh();
+          }
+        }
+
+        // TOKEN_REFRESHED và USER_UPDATED:
+        if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+          queryClient.setQueryData(["auth-user"], currentUser);
         }
       },
     );

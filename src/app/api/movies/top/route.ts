@@ -3,6 +3,8 @@ import { fetchMovies } from "@/lib/apiClient";
 import { typesMovie } from "@/lib/configs";
 import { redis } from "@/lib/redis";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const cacheKey = "top_movies_list";
   const CACHE_TTL = 3600; // Cache 1h

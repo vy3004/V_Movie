@@ -1,52 +1,85 @@
 import { NextResponse } from "next/server";
+import { getHistoryCache,getHistoryCacheKey } from "@/lib/utils"; // Giả sử bạn export getHistoryCacheKey từ đây
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { HistoryItem } from "@/lib/types";
 import { redis } from "@/lib/redis";
 
-export async function GET() {
+export const runtime = "edge";
+
+export async function GET(request: Request) {
   try {
-    const supabase = await createSupabaseServer();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId") || undefined;
+    const deviceId = searchParams.get("deviceId") || undefined;
 
-    if (!user) return NextResponse.json([], { status: 401 }); // 401 Unauthorized rõ ràng
+    if (!userId && !deviceId) {
+      return NextResponse.json({ error: "Missing identity" }, { status: 400 });
+    }
 
-    const cacheKey = `history_list:${user.id}`;
+    let historyList: HistoryItem[] = [];
 
     // 1. Thử lấy từ Redis
-    if (redis) {
-      try {
-        const cached = await redis.get(cacheKey);
-        if (cached) return NextResponse.json(cached);
-      } catch (redisError) {
-        console.warn("[REDIS_READ_ERROR]:", redisError);
-        // Không return ở đây, để nó fall-back xuống database bên dưới
+    const cachedData = await getHistoryCache(userId, deviceId);
+
+    if (cachedData) {
+      historyList = Object.values(cachedData);
+    } else {
+      // 2. Cache Miss: Truy vấn từ Supabase
+      const supabase = await createSupabaseServer();
+      let query = supabase
+        .from("watch_history")
+        .select("*")
+        .order("updated_at", { ascending: false });
+
+      if (userId) query = query.eq("user_id", userId);
+      else if (deviceId) query = query.eq("device_id", deviceId);
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      if (data) {
+        historyList = data.map((item) => ({
+          id: item.id,
+          user_id: item.user_id,
+          device_id: item.device_id,
+          movie_slug: item.movie_slug,
+          movie_name: item.movie_name,
+          movie_poster: item.movie_poster,
+          last_episode_slug: item.last_episode_slug,
+          // Đảm bảo trường này luôn có (sau khi bạn đã backfill DB)
+          last_episode_of_movie_slug: item.last_episode_of_movie_slug || "", 
+          episodes_progress: item.episodes_progress || {},
+          // is_finished này đã được tính toán chuẩn ở hàm POST/Sync
+          is_finished: item.is_finished || false,
+          updated_at: item.updated_at,
+        }));
+
+        // 3. Backfill vào Redis
+        const key = getHistoryCacheKey(userId, deviceId);
+        if (redis && key && historyList.length > 0) {
+          const redisMap = historyList.reduce((acc, item) => {
+            acc[item.movie_slug] = JSON.stringify(item);
+            return acc;
+          }, {} as Record<string, string>);
+
+          await redis.hset(key, redisMap);
+          await redis.expire(key, 60 * 60 * 24 * 7); // 7 ngày
+        }
       }
     }
 
-    // 2. Lấy từ Database
-    const { data, error: dbError } = await supabase
-      .from("watch_history")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false });
+    // 4. Sắp xếp lại lần cuối theo thời gian mới nhất
+    historyList.sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
 
-    if (dbError) throw dbError;
-
-    // 3. Set Cache thầm lặng
-    if (redis && data) {
-      redis
-        .set(cacheKey, data, { ex: 3600 })
-        .catch((e) => console.error("Redis set error", e));
-    }
-
-    return NextResponse.json(data || []);
+    return NextResponse.json(historyList);
   } catch (error) {
-    console.error("[FETCH_LIST_HISTORY_FAILURE]:", error);
-
+    console.error("[GET_HISTORY_ERROR]:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

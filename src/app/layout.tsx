@@ -24,6 +24,7 @@ import {
   SUPABASE_URL,
   BASE_MOVIE_API,
 } from "@/lib/configs";
+import { Suspense } from "react";
 
 const roboto = Roboto({
   weight: ["400", "500", "700"],
@@ -39,7 +40,6 @@ export const metadata: Metadata = {
   },
   description:
     "Nền tảng xem phim chất lượng cao, cập nhật nhanh chóng các bộ phim mới nhất, phim bộ, phim lẻ và anime vietsub.",
-  manifest: "/manifest",
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_PORT || "http://localhost:3000",
   ),
@@ -49,6 +49,10 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
+  },
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/icons/icon-192x192.png",
   },
 };
 
@@ -83,7 +87,9 @@ export default function RootLayout({
                 <Footer />
               </div>
               <AuthModal />
-              <AuthWatcher />
+              <Suspense fallback={null}>
+                <AuthWatcher />
+              </Suspense>
             </AuthModalProvider>
           </BaseDataContextProvider>
         </ReactQueryClientProvider>

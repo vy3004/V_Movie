@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
+  // eslint-disable-next-line prefer-const
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -16,7 +17,9 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
-          supabaseResponse = NextResponse.next({ request });
+          supabaseResponse = NextResponse.next({
+            request,
+          });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           );
@@ -26,12 +29,18 @@ export async function updateSession(request: NextRequest) {
   );
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const user = session?.user;
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+  // Nếu có lỗi khi xác thực, cho phép request tiếp tục
+  // hoặc có thể redirect về trang login tùy theo yêu cầu
+  if (error) {
+    console.error("Auth error:", error.message);
+  }
 
-  const pathname = request.nextUrl.pathname;
-  const isProtectedRoute = ["/profile", "/watchlist", "/history"].some((path) =>
+  // Logic bảo vệ route
+  const { pathname } = request.nextUrl;
+  const isProtectedRoute = ["/profile"].some((path) =>
     pathname.startsWith(path),
   );
 

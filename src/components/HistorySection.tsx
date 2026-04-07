@@ -13,6 +13,7 @@ import HistoryCard from "@/components/HistoryCard";
 import { getLocalHistory } from "@/lib/utils";
 import { useData } from "@/providers/BaseDataContextProvider";
 import { HistoryItem, EpisodeProgress } from "@/lib/types";
+
 interface HistorySectionProps {
   title: string;
   type: "watching" | "finished";
@@ -26,7 +27,7 @@ export default function HistorySection({ title, type }: HistorySectionProps) {
     queryKey: ["movie-history", user?.id],
     queryFn: async () => {
       if (user) {
-        const res = await fetch("/api/history/list");
+        const res = await fetch(`/api/history/list?userId=${user.id}`);
         if (!res.ok) throw new Error("Network error");
         const data = await res.json();
         return data as HistoryItem[];
@@ -34,7 +35,8 @@ export default function HistorySection({ title, type }: HistorySectionProps) {
       return getLocalHistory();
     },
     enabled: !authLoading,
-    staleTime: 1000 * 60 * 5, // Cache 5 phút để tránh duplicate request giữa 2 section
+    staleTime: 1000 * 30, // Cache 30 giây
+    refetchOnMount: true, // Luôn refetch khi component mount (user navigate về trang chủ)
   });
 
   const filteredList = useMemo(() => {
@@ -116,7 +118,7 @@ export default function HistorySection({ title, type }: HistorySectionProps) {
               : "bg-primary shadow-[0_0_10px_rgba(225,29,72,0.5)]"
           }`}
         />
-        <h2 className="text-xl sm:text-2xl text-white tracking-tight italic uppercase">
+        <h2 className="text-xl sm:text-2xl text-white tracking-tight">
           {title}
         </h2>
       </div>
