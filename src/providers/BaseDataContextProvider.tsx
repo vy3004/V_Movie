@@ -78,10 +78,10 @@ export default function BaseDataContextProvider({
       if (localData.length === 0) return;
 
       try {
-        const res = await fetch("/api/history", {
+        const res = await fetch("/api/history/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isSync: true, localHistory: localData }),
+          body: JSON.stringify({ localHistory: localData }),
         });
 
         if (res.ok) {

@@ -12,7 +12,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { User } from "@supabase/supabase-js";
 import { Movie, HistoryItem, EpisodeProgress } from "@/lib/types";
 import { saveLocalHistory, getLocalHistory } from "@/lib/utils";
-import EpisodeList from "@/components/EpisodeList";
+import EpisodeSelector from "@/components/EpisodeSelector";
 
 const VideoPlayer = dynamic(() => import("@/components/VideoPlayer"), {
   ssr: false,
@@ -23,8 +23,11 @@ const VideoPlayer = dynamic(() => import("@/components/VideoPlayer"), {
 
 interface Props {
   movie: Movie;
-  history: HistoryItem | null;
-  user: User | null;
+  history?: HistoryItem | null;
+  user?: User | null;
+  handleTimeUpdate: (currentTime: number, duration: number) => void;
+  handlePause?: () => void;
+  autoNextEnabled?: boolean;
 }
 
 const CONSTANTS = {
@@ -32,7 +35,14 @@ const CONSTANTS = {
   COMPLETED_THRESHOLD: 0.95, // Xem 95% coi như xong tập
 };
 
-export default function WatchMovie({ movie, history, user }: Props) {
+export default function WatchMovie({
+  movie,
+  history,
+  user,
+  handleTimeUpdate,
+  handlePause,
+  autoNextEnabled = true,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tap = searchParams.get("tap");
@@ -45,20 +55,25 @@ export default function WatchMovie({ movie, history, user }: Props) {
   const playbackRef = useRef({
     currentTime: 0,
     duration: 0,
-    lastSavedTime: 0,
   });
 
   const allEpisodes = useMemo(
-    () => movie.episodes.flatMap((ep) => ep.server_data),
+    () => movie.episodes.flatMap((ep: any) => ep.server_data),
     [movie.episodes],
   );
 
-  // Nghiệp vụ: Xác định tập tiếp theo
-  const nextEpSlug = useMemo(() => {
-    const idx = allEpisodes.findIndex((s) => String(s.slug) === String(tap));
-    return idx !== -1 && idx < allEpisodes.length - 1
-      ? allEpisodes[idx + 1].slug
-      : null;
+  // Nghiệp vụ: Xác định tập tiếp theo và tập trước
+  const { nextEpSlug, prevEpSlug } = useMemo(() => {
+    const idx = allEpisodes.findIndex(
+      (s: any) => String(s.slug) === String(tap),
+    );
+    return {
+      nextEpSlug:
+        idx !== -1 && idx < allEpisodes.length - 1
+          ? allEpisodes[idx + 1].slug
+          : null,
+      prevEpSlug: idx > 0 ? allEpisodes[idx - 1].slug : null,
+    };
   }, [tap, allEpisodes]);
 
   // 1. Khởi tạo dữ liệu lần đầu cực êm (tránh flash UI)
@@ -98,11 +113,19 @@ export default function WatchMovie({ movie, history, user }: Props) {
     if (!tap || isInitializing) return 0;
     const epData = sessionProgress[tap];
     if (!epData) return 0;
+    // Nếu ep_last_time quá gần ep_duration (> 98%), bắt đầu lại từ đầu
+    if (
+      epData.ep_duration > 0 &&
+      epData.ep_last_time / epData.ep_duration > 0.98
+    ) {
+      return 0;
+    }
     return epData.ep_is_finished ? 0 : Number(epData.ep_last_time || 0);
   }, [tap, sessionProgress, isInitializing]);
 
-  // 3. Hàm đồng bộ Core
-  const syncHistory = useCallback(() => {
+  // 3. Lưu local progress cho UI (không gọi API trực tiếp)
+  // Tracking và sync lên Supabase đã được xử lý bởi useWatchHistory hook
+  const saveLocalProgress = useCallback(() => {
     if (!tap || playbackRef.current.currentTime < 2) return;
 
     const { currentTime, duration } = playbackRef.current;
@@ -122,58 +145,64 @@ export default function WatchMovie({ movie, history, user }: Props) {
 
       const updatedMap = { ...prev, [tap]: newEpProgress };
 
-      // Nghiệp vụ: Chuyển Card "Đang xem" mượt mà
-      // - Nếu xem xong tập hiện tại và CÒN tập tiếp theo -> last_episode = tập tiếp theo, is_finished (movie) = false.
-      // - Nếu xem xong tập cuối -> last_episode = tập cuối, is_finished (movie) = true.
-      const targetLastEpSlug = isFinishingEp && nextEpSlug ? nextEpSlug : tap;
-      const isMovieCompletelyFinished = isFinishingEp && !nextEpSlug;
+      // Với guest user, lưu vào LocalStorage để UI cập nhật ngay
+      if (!user) {
+        const targetLastEpSlug = isFinishingEp && nextEpSlug ? nextEpSlug : tap;
+        const isMovieCompletelyFinished = isFinishingEp && !nextEpSlug;
 
-      const updatedItem: HistoryItem = {
-        movie_slug: movie.slug,
-        movie_name: movie.name,
-        movie_poster: movie.poster_url,
-        episodes_progress: updatedMap,
-        last_episode_slug: targetLastEpSlug,
-        is_finished: isMovieCompletelyFinished,
-        updated_at: now,
-      };
-      //
-      if (user) {
-        // Dùng keepalive: true là chuẩn bài để request ko bị trình duyệt huỷ khi người dùng tắt tab
-        fetch("/api/history", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updatedItem),
-          keepalive: true,
-        }).catch(console.error);
-      } else {
+        // Lấy existing history để merge episodes_progress
+        const existingLocalHistory = getLocalHistory();
+        const existingMovie = existingLocalHistory.find(
+          (h) => h.movie_slug === movie.slug,
+        );
+        const existingProgress = existingMovie?.episodes_progress || {};
+
+        // Merge với existing progress (giữ lại tất cả tập đã xem)
+        const mergedProgress = {
+          ...existingProgress,
+          ...updatedMap,
+        };
+
+        const updatedItem: HistoryItem = {
+          movie_slug: movie.slug,
+          movie_name: movie.name,
+          movie_poster: movie.poster_url,
+          episodes_progress: mergedProgress,
+          last_episode_slug: targetLastEpSlug,
+          is_finished: isMovieCompletelyFinished,
+          updated_at: now,
+        };
         saveLocalHistory(updatedItem);
       }
+
       return updatedMap;
     });
-
-    playbackRef.current.lastSavedTime = currentTime;
   }, [movie, tap, user, nextEpSlug]);
 
-  // 4. Xử lý lưu khi người dùng tắt Tab / Đổi Tab
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") syncHistory();
-    };
-    window.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      window.removeEventListener("visibilitychange", handleVisibilityChange);
-      syncHistory(); // Lưu phát cuối khi Unmount
-    };
-  }, [syncHistory]);
+  // Callback ổn định cho onProgress (tránh re-render VideoPlayer)
+  const handleProgress = useCallback(
+    (currentTime: number, duration: number) => {
+      playbackRef.current.currentTime = currentTime;
+      playbackRef.current.duration = duration;
+      handleTimeUpdate(currentTime, duration);
+    },
+    [handleTimeUpdate],
+  );
+
+  // Callback ổn định cho onAutoNext (tránh re-render VideoPlayer)
+  const handleAutoNext = useCallback(() => {
+    saveLocalProgress();
+    if (nextEpSlug) router.push(`?tap=${nextEpSlug}#video`, { scroll: false });
+  }, [saveLocalProgress, nextEpSlug, router]);
 
   // Cập nhật ref khi đổi tập
   useEffect(() => {
     playbackRef.current.currentTime = resumeTime;
-    playbackRef.current.lastSavedTime = resumeTime;
   }, [tap, resumeTime]);
 
-  const activeEpisode = allEpisodes.find((e) => String(e.slug) === String(tap));
+  const activeEpisode = allEpisodes.find(
+    (e: any) => String(e.slug) === String(tap),
+  );
 
   if (isInitializing || !tap)
     return (
@@ -192,37 +221,27 @@ export default function WatchMovie({ movie, history, user }: Props) {
             movieSrc={activeEpisode.link_m3u8}
             movieName={`${movie.name} - Tập ${activeEpisode.name}`}
             nextEpisodeSlug={nextEpSlug}
+            prevEpisodeSlug={prevEpSlug}
             initialTime={resumeTime}
-            onProgress={(c, d) => {
-              playbackRef.current.currentTime = c;
-              playbackRef.current.duration = d;
-              // Tối ưu: Chỉ gọi API save mỗi 15s
-              if (
-                Math.abs(c - playbackRef.current.lastSavedTime) >=
-                CONSTANTS.SAVE_INTERVAL_SEC
-              ) {
-                syncHistory();
-              }
-            }}
-            onAutoNext={() => {
-              syncHistory(); // Lưu nốt trước khi nhảy
-              if (nextEpSlug)
-                router.push(`?tap=${nextEpSlug}#video`, { scroll: false });
-            }}
+            onProgress={handleProgress}
+            onAutoNext={handleAutoNext}
+            onPause={handlePause}
+            autoNextEnabled={autoNextEnabled}
           />
         )}
       </div>
 
-      <div className="bg-zinc-900/40 p-6 rounded-3xl border border-zinc-800 shadow-xl backdrop-blur-md">
+      <div className="bg-background p-6 rounded-xl border border-zinc-800">
         <h3 className="text-lg font-bold text-white mb-4 uppercase tracking-wider">
           Danh sách tập
         </h3>
-        <EpisodeList
+        <EpisodeSelector
           servers={movie.episodes}
           episodeSelected={tap}
-          onSelect={(sv) =>
+          onSelect={(sv: any) =>
             router.push(`?tap=${sv.slug}#video`, { scroll: false })
           }
+          episodesProgress={sessionProgress}
         />
       </div>
     </div>

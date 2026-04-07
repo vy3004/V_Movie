@@ -21,13 +21,47 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // UPSERT 
+    // Step 1: Fetch existing data to merge episodes_progress
+    const { data: existing } = await supabase
+      .from("watch_history")
+      .select("episodes_progress, last_episode_slug")
+      .eq("user_id", user.id)
+      .eq("movie_slug", historyItem.movie_slug)
+      .maybeSingle();
+
+    // Step 2: Merge episodes_progress (keep existing episodes, add/update new ones)
+    const existingProgress = existing?.episodes_progress || {};
+    const newProgress = historyItem.episodes_progress || {};
+    const mergedProgress = { ...existingProgress, ...newProgress };
+
+    // Step 3: Determine the correct last_episode_slug based on most recently updated episode
+    let correctLastEpSlug = historyItem.last_episode_slug;
+    let latestEpTime = 0;
+    for (const epSlug in mergedProgress) {
+      const ep = mergedProgress[epSlug];
+      if (ep?.ep_updated_at) {
+        const epTime = new Date(ep.ep_updated_at).getTime();
+        if (epTime > latestEpTime) {
+          latestEpTime = epTime;
+          correctLastEpSlug = epSlug;
+        }
+      }
+    }
+
+    // Step 4: UPSERT with merged data and correct last_episode_slug
     const { error } = await supabase.from("watch_history").upsert(
       {
         user_id: user.id,
-        ...historyItem,
+        device_id: historyItem.device_id || null,
+        movie_slug: historyItem.movie_slug,
+        movie_name: historyItem.movie_name,
+        movie_poster: historyItem.movie_poster,
+        last_episode_slug: correctLastEpSlug,
+        episodes_progress: mergedProgress,
+        is_finished: historyItem.is_finished,
+        updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id, movie_slug" },
+      { onConflict: "user_id,device_id,movie_slug" },
     );
 
     if (error) throw error;

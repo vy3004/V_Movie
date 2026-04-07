@@ -1,4 +1,30 @@
-import { HistoryItem, EpisodeProgress } from "@/lib/types";
+import { HistoryItem, EpisodeProgress, HistoryUpdatePayload } from "@/lib/types";
+import { redis } from "@/lib/redis";
+
+// Device ID helper for guest users
+const DEVICE_ID_KEY = "v_movie_device_id";
+
+export const getDeviceId = (): string => {
+  if (typeof window === "undefined") return "";
+
+  try {
+    let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+    if (!deviceId) {
+      // Generate a UUID-like string
+      deviceId = crypto.randomUUID ? crypto.randomUUID() : 
+        'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === 'x' ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+      localStorage.setItem(DEVICE_ID_KEY, deviceId);
+    }
+    return deviceId;
+  } catch (error) {
+    console.error("[LocalStorage] Error getting device ID:", error);
+    return "";
+  }
+};
 
 export const convertToEmbedUrl = (url: string): string => {
   const videoId = extractYouTubeVideoId(url);
@@ -84,4 +110,109 @@ export const formatDuration = (seconds: number) => {
 
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
+};
+
+// Redis Cache Helpers
+const HISTORY_CACHE_PREFIX = "history";
+const HISTORY_CACHE_TTL = 60 * 60 * 24 * 7; // 7 days
+
+const getHistoryCacheKey = (userId?: string, deviceId?: string) => {
+  if (!userId && !deviceId) {
+    return null;
+  }
+  if (userId) {
+    return `${HISTORY_CACHE_PREFIX}:user:${userId}`;
+  }
+  return `${HISTORY_CACHE_PREFIX}:device:${deviceId}`;
+};
+
+export const updateHistoryCache = async (
+  userId: string | undefined,
+  deviceId: string | undefined,
+  payload: HistoryUpdatePayload,
+) => {
+  if (!userId && !deviceId) {
+    console.warn("Missing userId and deviceId. Cannot update history cache.");
+    return;
+  }
+
+  const key = getHistoryCacheKey(userId, deviceId);
+
+  try {
+    if (!key || !redis) return;
+
+    let existingHistoryItem: HistoryItem | null = null;
+    const existingHistory = await getHistoryCache(userId, deviceId);
+    if (existingHistory && existingHistory[payload.movie_slug]) {
+      existingHistoryItem = existingHistory[payload.movie_slug];
+    }
+
+    const ep_is_finished = (payload.current_time / payload.duration) > 0.9;
+
+    const newEpisodeProgress: EpisodeProgress = {
+      ep_last_time: payload.current_time,
+      ep_duration: payload.duration,
+      ep_is_finished: ep_is_finished,
+      ep_updated_at: new Date().toISOString(),
+    };
+
+    const updatedEpisodesProgress = {
+      ...(existingHistoryItem?.episodes_progress || {}),
+      [payload.last_episode_slug]: newEpisodeProgress,
+    };
+
+    const updatedHistoryItem: HistoryItem = {
+      movie_slug: payload.movie_slug,
+      movie_name: payload.movie_name || existingHistoryItem?.movie_name || "Unknown",
+      movie_poster: payload.movie_poster || existingHistoryItem?.movie_poster || "",
+      last_episode_slug: payload.last_episode_slug,
+      episodes_progress: updatedEpisodesProgress,
+      is_finished: ep_is_finished,
+      updated_at: new Date().toISOString(),
+    };
+
+    const historyItemString = JSON.stringify(updatedHistoryItem);
+
+    await redis.hset(key, { [payload.movie_slug]: historyItemString });
+    await redis.expire(key, HISTORY_CACHE_TTL);
+  } catch (error) {
+    console.error("Error updating history cache:", error);
+  }
+};
+
+export const getHistoryCache = async (userId?: string, deviceId?: string) => {
+  if (!userId && !deviceId) {
+    console.warn("Missing userId and deviceId. Cannot get history cache.");
+    return null;
+  }
+
+  const key = getHistoryCacheKey(userId, deviceId);
+
+  try {
+    if (!key) return null;
+    const history = await redis.hgetall(key);
+    if (!history) return null;
+
+    const parsedHistory: Record<string, HistoryItem> = {};
+    for (const movieSlug in history) {
+      try {
+        const value = history[movieSlug];
+        // Handle both string (need to parse) and already-parsed object values
+        if (typeof value === "string") {
+          parsedHistory[movieSlug] = JSON.parse(value);
+        } else if (typeof value === "object" && value !== null) {
+          parsedHistory[movieSlug] = value as HistoryItem;
+        }
+      } catch (error) {
+        console.error(
+          `Error parsing history item for slug ${movieSlug}:`,
+          error,
+        );
+      }
+    }
+    return parsedHistory;
+  } catch (error) {
+    console.error("Error getting history cache:", error);
+    return null;
+  }
 };

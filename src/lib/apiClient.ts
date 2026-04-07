@@ -201,25 +201,25 @@ export const fetchCountries = async (): Promise<CateCtr[]> => {
 
 /**
  * 5. Lấy lịch sử xem phim (Redis -> Supabase -> Backfill)
+ * Redis stores as HASH: history:user:{userId} with movie_slug as field
  */
 export const getLatestHistory = async (
   userId: string,
   movieSlug: string,
 ): Promise<HistoryItem | null> => {
-  // Định nghĩa kiểu trả về rõ ràng
-  const cacheKey = `user_history:${userId}:${movieSlug}`;
+  const hashKey = `history:user:${userId}`;
 
   try {
     // BƯỚC 1: Check Redis (Nhanh nhất)
     if (redis) {
-      const cached = await redis.get(cacheKey);
-      if (cached) {
+      const movieData = await redis.hget(hashKey, movieSlug);
+      if (movieData) {
         console.log(`✅ [History Hit] Redis: ${movieSlug}`);
 
         const parsedData =
-          typeof cached === "string"
-            ? (JSON.parse(cached) as HistoryItem)
-            : (cached as HistoryItem);
+          typeof movieData === "string"
+            ? (JSON.parse(movieData) as HistoryItem)
+            : (movieData as HistoryItem);
 
         return parsedData;
       }
@@ -242,7 +242,8 @@ export const getLatestHistory = async (
 
     // Nếu có dữ liệu từ DB nhưng Redis chưa có, ta thực hiện "Backfill" (Ghi ngược lại Cache)
     if (data && redis) {
-      await redis.set(cacheKey, JSON.stringify(data), { ex: 86400 }); // Cache 1 ngày
+      await redis.hset(hashKey, { [movieSlug]: JSON.stringify(data) });
+      await redis.expire(hashKey, 86400); // Cache 1 ngày
     }
 
     return data;

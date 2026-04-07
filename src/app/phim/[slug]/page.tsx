@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
-import BreadCrumb from "@/components/BreadCrumb";
-import MovieDetail from "@/components/MovieDetail";
-import WatchMovie from "@/components/WatchMovie";
 import { fetchDetailMovie, getLatestHistory } from "@/lib/apiClient";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import BreadCrumb from "@/components/BreadCrumb";
+import MovieDetail from "@/components/MovieDetail";
+import WatchMovieWithHistory from "@/components/WatchMovieWithHistory";
 
 interface PageProps {
   params: { slug: string };
@@ -31,7 +31,7 @@ export async function generateMetadata({ params, searchParams }: PageProps) {
   };
 }
 
-export default async function MoviePage({ params }: PageProps) {
+export default async function MoviePage({ params, searchParams }: PageProps) {
   const movieDataPromise = fetchDetailMovie({ slug: params.slug });
   const supabase = await createSupabaseServer();
   const userPromise = supabase.auth.getUser();
@@ -42,22 +42,42 @@ export default async function MoviePage({ params }: PageProps) {
   ]);
 
   const user = authData?.user;
+  const movie = data?.item;
+  if (!movie) return notFound();
 
-  if (!data?.item) return notFound();
-
-  // FETCH HISTORY NGAY LẬP TỨC NẾU CÓ USER
-  let history = null;
+  // Fetch user preferences for auto_next_episode
+  let autoNextEnabled = true; // Default value
   if (user) {
-    history = await getLatestHistory(user.id, params.slug);
+    try {
+      const { data: preferences } = await supabase
+        .from("user_preferences")
+        .select("auto_next_episode")
+        .eq("user_id", user.id)
+        .single();
+
+      if (preferences) {
+        autoNextEnabled = preferences.auto_next_episode ?? true;
+      }
+    } catch (error) {
+      console.error("Error fetching user preferences:", error);
+    }
   }
+
+  // Fetch history for the current movie
+  const history = user ? await getLatestHistory(user.id, movie.slug) : null;
 
   return (
     <div className="col-span-12 xl:col-span-8 py-4 space-y-4 sm:space-y-8 animate-in fade-in duration-500">
       <BreadCrumb breadCrumb={data.breadCrumb} />
 
-      <MovieDetail movie={data.item} />
+      <MovieDetail movie={movie} />
 
-      <WatchMovie movie={data.item} history={history} user={user} />
+      <WatchMovieWithHistory 
+        movie={movie} 
+        history={history}
+        user={user}
+        autoNextEnabled={autoNextEnabled}
+      />
 
       {data.seoOnPage.seoSchema && (
         <script
