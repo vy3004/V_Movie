@@ -41,6 +41,7 @@ const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
               widths={[1280, 1024, 768, 640, 432]}
               sizes="100vw"
               loading={i === 0 ? "eager" : "lazy"}
+              fetchPriority={i === 0 ? "high" : undefined}
               className="absolute inset-0 size-full object-cover"
             />
             {/* Overlay gradients */}

@@ -1,119 +1,103 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { updateHistoryCache } from "@/lib/utils";
-import { HistoryItem } from "@/lib/types";
+import { HistoryItem, EpisodeProgress } from "@/lib/types";
 
 export const runtime = "edge";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { deviceId, localHistory } = body;
+    const { deviceId, localHistory }: { deviceId?: string; localHistory: HistoryItem[] } = body;
 
     const supabase = await createSupabaseServer();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Khi Login thành công, Client gửi device_id lên. API sẽ tìm tất cả bản ghi có device_id này trong DB, cập nhật cột user_id thành ID của user hiện tại, set device_id = null.
+    // 1. Sync ownership: Chuyển bản ghi từ device_id sang user_id
     if (deviceId) {
-      const { error: syncError } = await supabase
+      await supabase
         .from("watch_history")
         .update({ user_id: user.id, device_id: null })
         .eq("device_id", deviceId);
-
-      if (syncError) {
-        console.error("Sync error:", syncError);
-      }
     }
 
-    // Hợp nhất lịch sử xem từ LocalStorage với Supabase
+    // 2. Hợp nhất lịch sử
     if (localHistory && Array.isArray(localHistory)) {
-      for (const item of localHistory as HistoryItem[]) {
-        // Kiểm tra xem phim đã có trong Supabase chưa
+      for (const item of localHistory) {
         const { data: existingData } = await supabase
           .from("watch_history")
           .select("*")
           .eq("user_id", user.id)
           .eq("movie_slug", item.movie_slug)
-          .single();
+          .maybeSingle();
 
-        if (existingData) {
-          // Hợp nhất episodes_progress
-          const existingProgress = existingData.episodes_progress || {};
-          const mergedProgress = { ...existingProgress };
+        const existingProgress = (existingData?.episodes_progress as Record<string, EpisodeProgress>) || {};
+        const mergedProgress = { ...existingProgress };
 
-          for (const epSlug in item.episodes_progress) {
-            const existingEp = existingProgress[epSlug];
-            const newEp = item.episodes_progress[epSlug];
+        // Hợp nhất tiến độ tập
+        for (const epSlug in item.episodes_progress) {
+          const newEp = item.episodes_progress[epSlug];
+          const oldEp = existingProgress[epSlug];
 
-            // Giữ lại tiến độ cao nhất cho từng tập
-            if (!existingEp || newEp.ep_last_time > existingEp.ep_last_time) {
-              mergedProgress[epSlug] = newEp;
-            }
-          }
-
-          // Tìm tập có ep_updated_at mới nhất để làm last_episode_slug
-          let latestEpSlug = existingData.last_episode_slug || item.last_episode_slug;
-          let latestTime = 0;
-          for (const epSlug in mergedProgress) {
-            const ep = mergedProgress[epSlug];
-            const epTime = new Date(ep.ep_updated_at).getTime();
-            if (epTime > latestTime) {
-              latestTime = epTime;
-              latestEpSlug = epSlug;
-            }
-          }
-
-          // Cập nhật Supabase
-          await supabase
-            .from("watch_history")
-            .update({
-              episodes_progress: mergedProgress,
-              last_episode_slug: latestEpSlug,
-              is_finished: item.is_finished,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", existingData.id);
-        } else {
-          // Thêm mới vào Supabase
-          await supabase.from("watch_history").insert({
-            user_id: user.id,
-            movie_slug: item.movie_slug,
-            movie_name: item.movie_name,
-            movie_poster: item.movie_poster,
-            last_episode_slug: item.last_episode_slug,
-            episodes_progress: item.episodes_progress,
-            is_finished: item.is_finished,
-            updated_at: new Date().toISOString(),
-          });
+          mergedProgress[epSlug] = {
+            ep_last_time: newEp.ep_last_time,
+            ep_duration: newEp.ep_duration,
+            // LOGIC VĨNH VIỄN: Nếu đã từng xong (true), thì mãi là true
+            ep_is_finished: oldEp?.ep_is_finished || newEp.ep_is_finished,
+            ep_updated_at: newEp.ep_updated_at,
+          };
         }
 
-        // Cập nhật Redis cache
+        // Tính tập cuối mới nhất
+        let latestEpSlug = item.last_episode_slug;
+        let latestTime = 0;
+        for (const epSlug in mergedProgress) {
+          const epTime = new Date(mergedProgress[epSlug].ep_updated_at).getTime();
+          if (epTime > latestTime) {
+            latestTime = epTime;
+            latestEpSlug = epSlug;
+          }
+        }
+
+        // LOGIC PHIM XONG: Sử dụng field đã được định nghĩa trong HistoryItem
+        const lastEpSlug = item.last_episode_of_movie_slug;
+        const isMovieCompletelyFinished = mergedProgress[lastEpSlug]?.ep_is_finished === true;
+
+        const updatePayload = {
+          user_id: user.id,
+          movie_slug: item.movie_slug,
+          movie_name: item.movie_name,
+          movie_poster: item.movie_poster,
+          last_episode_slug: latestEpSlug,
+          episodes_progress: mergedProgress,
+          is_finished: isMovieCompletelyFinished,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (existingData) {
+          await supabase.from("watch_history").update(updatePayload).eq("id", existingData.id);
+        } else {
+          await supabase.from("watch_history").insert(updatePayload);
+        }
+
+        // Cập nhật Redis Cache
         await updateHistoryCache(user.id, undefined, {
           movie_slug: item.movie_slug,
           movie_name: item.movie_name,
           movie_poster: item.movie_poster,
-          last_episode_slug: item.last_episode_slug,
-          current_time: item.episodes_progress[item.last_episode_slug]?.ep_last_time || 0,
-          duration: item.episodes_progress[item.last_episode_slug]?.ep_duration || 0,
+          last_episode_slug: latestEpSlug,
+          last_episode_of_movie_slug: lastEpSlug,
+          current_time: mergedProgress[latestEpSlug]?.ep_last_time || 0,
+          duration: mergedProgress[latestEpSlug]?.ep_duration || 0,
         });
       }
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    console.error("[SYNC_HISTORY_ERROR]:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

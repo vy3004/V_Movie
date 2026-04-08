@@ -141,11 +141,10 @@ export interface HistoryItem {
   movie_name: string;
   movie_poster: string;
   last_episode_slug: string;
+  last_episode_of_movie_slug: string;
   episodes_progress: Record<string, EpisodeProgress>;
   is_finished: boolean;
   updated_at: string;
-  // Virtual field used for comparison (when fetching from API)
-  movie_latest_episode?: string;
 }
 
 export interface HistoryUpdatePayload {
@@ -155,6 +154,7 @@ export interface HistoryUpdatePayload {
   movie_name?: string;
   movie_poster?: string;
   last_episode_slug: string;
+  last_episode_of_movie_slug: string;
   current_time: number;
   duration: number;
 }

@@ -7,7 +7,7 @@ export const runtime = "edge";
 const PREFERENCES_CACHE_KEY = "user:preferences:";
 const PREFERENCES_CACHE_TTL = 60 * 60 * 24 * 7; // 7 days
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const supabase = await createSupabaseServer();
     const {
@@ -15,10 +15,7 @@ export async function GET(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Try Redis cache first
@@ -41,7 +38,7 @@ export async function GET(request: Request) {
       console.error("Supabase error:", error.message);
       return NextResponse.json(
         { error: "Failed to fetch preferences" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -68,7 +65,7 @@ export async function GET(request: Request) {
     console.error("Error fetching preferences:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -81,10 +78,7 @@ export async function PUT(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
@@ -104,7 +98,7 @@ export async function PUT(request: Request) {
           directors: directors ?? [],
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "user_id" }
+        { onConflict: "user_id" },
       )
       .select()
       .single();
@@ -113,7 +107,7 @@ export async function PUT(request: Request) {
       console.error("Supabase error:", error.message);
       return NextResponse.json(
         { error: "Failed to update preferences" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -129,7 +123,7 @@ export async function PUT(request: Request) {
     console.error("Error updating preferences:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

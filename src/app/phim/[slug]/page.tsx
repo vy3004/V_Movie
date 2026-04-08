@@ -31,7 +31,7 @@ export async function generateMetadata({ params, searchParams }: PageProps) {
   };
 }
 
-export default async function MoviePage({ params, searchParams }: PageProps) {
+export default async function MoviePage({ params }: PageProps) {
   const movieDataPromise = fetchDetailMovie({ slug: params.slug });
   const supabase = await createSupabaseServer();
   const userPromise = supabase.auth.getUser();
@@ -44,24 +44,6 @@ export default async function MoviePage({ params, searchParams }: PageProps) {
   const user = authData?.user;
   const movie = data?.item;
   if (!movie) return notFound();
-
-  // Fetch user preferences for auto_next_episode
-  let autoNextEnabled = true; // Default value
-  if (user) {
-    try {
-      const { data: preferences } = await supabase
-        .from("user_preferences")
-        .select("auto_next_episode")
-        .eq("user_id", user.id)
-        .single();
-
-      if (preferences) {
-        autoNextEnabled = preferences.auto_next_episode ?? true;
-      }
-    } catch (error) {
-      console.error("Error fetching user preferences:", error);
-    }
-  }
 
   // Fetch history for the current movie
   const history = user ? await getLatestHistory(user.id, movie.slug) : null;
@@ -76,7 +58,6 @@ export default async function MoviePage({ params, searchParams }: PageProps) {
         movie={movie} 
         history={history}
         user={user}
-        autoNextEnabled={autoNextEnabled}
       />
 
       {data.seoOnPage.seoSchema && (

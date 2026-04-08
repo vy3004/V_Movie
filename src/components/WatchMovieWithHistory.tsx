@@ -11,14 +11,12 @@ interface WatchMovieWithHistoryProps {
   movie: Movie;
   history?: HistoryItem | null;
   user: User | null | undefined;
-  autoNextEnabled?: boolean;
 }
 
 export default function WatchMovieWithHistory({
   movie,
   history,
   user,
-  autoNextEnabled = true,
 }: WatchMovieWithHistoryProps) {
   // Get the episode slug from URL params using Next.js hook
   const searchParams = useSearchParams();
@@ -39,7 +37,6 @@ export default function WatchMovieWithHistory({
       user={user as User | null}
       handleTimeUpdate={handleTimeUpdate}
       handlePause={handlePause}
-      autoNextEnabled={autoNextEnabled}
     />
   );
 }

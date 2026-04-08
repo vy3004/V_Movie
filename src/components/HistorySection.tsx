@@ -13,6 +13,7 @@ import HistoryCard from "@/components/HistoryCard";
 import { getLocalHistory } from "@/lib/utils";
 import { useData } from "@/providers/BaseDataContextProvider";
 import { HistoryItem, EpisodeProgress } from "@/lib/types";
+
 interface HistorySectionProps {
   title: string;
   type: "watching" | "finished";
@@ -117,7 +118,7 @@ export default function HistorySection({ title, type }: HistorySectionProps) {
               : "bg-primary shadow-[0_0_10px_rgba(225,29,72,0.5)]"
           }`}
         />
-        <h2 className="text-xl sm:text-2xl text-white tracking-tight italic uppercase">
+        <h2 className="text-xl sm:text-2xl text-white tracking-tight">
           {title}
         </h2>
       </div>

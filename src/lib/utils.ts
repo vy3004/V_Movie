@@ -1,4 +1,8 @@
-import { HistoryItem, EpisodeProgress, HistoryUpdatePayload } from "@/lib/types";
+import {
+  HistoryItem,
+  EpisodeProgress,
+  HistoryUpdatePayload,
+} from "@/lib/types";
 import { redis } from "@/lib/redis";
 
 // Device ID helper for guest users
@@ -11,12 +15,13 @@ export const getDeviceId = (): string => {
     let deviceId = localStorage.getItem(DEVICE_ID_KEY);
     if (!deviceId) {
       // Generate a UUID-like string
-      deviceId = crypto.randomUUID ? crypto.randomUUID() : 
-        'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-          const r = (Math.random() * 16) | 0;
-          const v = c === 'x' ? r : (r & 0x3) | 0x8;
-          return v.toString(16);
-        });
+      deviceId = crypto.randomUUID
+        ? crypto.randomUUID()
+        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+            const r = (Math.random() * 16) | 0;
+            const v = c === "x" ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          });
       localStorage.setItem(DEVICE_ID_KEY, deviceId);
     }
     return deviceId;
@@ -114,16 +119,16 @@ export const formatDuration = (seconds: number) => {
 
 // Redis Cache Helpers
 const HISTORY_CACHE_PREFIX = "history";
-const HISTORY_CACHE_TTL = 60 * 60 * 24 * 7; // 7 days
+const HISTORY_CACHE_TTL = 60 * 60 * 24 * 7;
 
-const getHistoryCacheKey = (userId?: string, deviceId?: string) => {
-  if (!userId && !deviceId) {
-    return null;
-  }
+const getHistoryCacheKey = (userId?: string, deviceId?: string): string | null => {
   if (userId) {
     return `${HISTORY_CACHE_PREFIX}:user:${userId}`;
   }
-  return `${HISTORY_CACHE_PREFIX}:device:${deviceId}`;
+  if (deviceId) {
+    return `${HISTORY_CACHE_PREFIX}:device:${deviceId}`;
+  }
+  return null;
 };
 
 export const updateHistoryCache = async (
@@ -131,28 +136,29 @@ export const updateHistoryCache = async (
   deviceId: string | undefined,
   payload: HistoryUpdatePayload,
 ) => {
-  if (!userId && !deviceId) {
-    console.warn("Missing userId and deviceId. Cannot update history cache.");
+  const key = getHistoryCacheKey(userId, deviceId);
+
+  if (!key || !redis) {
+    console.warn("Missing credentials or Redis not initialized. Cannot update cache.");
     return;
   }
 
-  const key = getHistoryCacheKey(userId, deviceId);
-
   try {
-    if (!key || !redis) return;
-
-    let existingHistoryItem: HistoryItem | null = null;
+    // Lấy dữ liệu cũ (truyền tham số an toàn)
     const existingHistory = await getHistoryCache(userId, deviceId);
-    if (existingHistory && existingHistory[payload.movie_slug]) {
-      existingHistoryItem = existingHistory[payload.movie_slug];
-    }
+    const existingHistoryItem = existingHistory?.[payload.movie_slug];
 
-    const ep_is_finished = (payload.current_time / payload.duration) > 0.9;
+    // Tính toán tiến độ tập hiện tại
+    const isFinished = payload.current_time / payload.duration > 0.9;
+    const existingEp = existingHistoryItem?.episodes_progress?.[payload.last_episode_slug];
+
+    // LOGIC: Nếu đã từng xong (true), thì giữ nguyên true (vĩnh viễn)
+    const isEpFinished = existingEp?.ep_is_finished || isFinished;
 
     const newEpisodeProgress: EpisodeProgress = {
       ep_last_time: payload.current_time,
       ep_duration: payload.duration,
-      ep_is_finished: ep_is_finished,
+      ep_is_finished: isEpFinished,
       ep_updated_at: new Date().toISOString(),
     };
 
@@ -161,19 +167,24 @@ export const updateHistoryCache = async (
       [payload.last_episode_slug]: newEpisodeProgress,
     };
 
+    // LOGIC: Phim chỉ xong khi tập cuối (last_episode_of_movie_slug) đã xong
+    const isMovieCompletelyFinished =
+      updatedEpisodesProgress[payload.last_episode_of_movie_slug]?.ep_is_finished === true;
+
     const updatedHistoryItem: HistoryItem = {
       movie_slug: payload.movie_slug,
       movie_name: payload.movie_name || existingHistoryItem?.movie_name || "Unknown",
       movie_poster: payload.movie_poster || existingHistoryItem?.movie_poster || "",
       last_episode_slug: payload.last_episode_slug,
+      last_episode_of_movie_slug: payload.last_episode_of_movie_slug,
       episodes_progress: updatedEpisodesProgress,
-      is_finished: ep_is_finished,
+      is_finished: isMovieCompletelyFinished,
       updated_at: new Date().toISOString(),
     };
 
-    const historyItemString = JSON.stringify(updatedHistoryItem);
-
-    await redis.hset(key, { [payload.movie_slug]: historyItemString });
+    await redis.hset(key, {
+      [payload.movie_slug]: JSON.stringify(updatedHistoryItem),
+    });
     await redis.expire(key, HISTORY_CACHE_TTL);
   } catch (error) {
     console.error("Error updating history cache:", error);
@@ -181,33 +192,22 @@ export const updateHistoryCache = async (
 };
 
 export const getHistoryCache = async (userId?: string, deviceId?: string) => {
-  if (!userId && !deviceId) {
-    console.warn("Missing userId and deviceId. Cannot get history cache.");
-    return null;
-  }
-
   const key = getHistoryCacheKey(userId, deviceId);
+  if (!key) return null;
 
   try {
-    if (!key) return null;
     const history = await redis.hgetall(key);
     if (!history) return null;
 
     const parsedHistory: Record<string, HistoryItem> = {};
     for (const movieSlug in history) {
       try {
-        const value = history[movieSlug];
-        // Handle both string (need to parse) and already-parsed object values
-        if (typeof value === "string") {
-          parsedHistory[movieSlug] = JSON.parse(value);
-        } else if (typeof value === "object" && value !== null) {
-          parsedHistory[movieSlug] = value as HistoryItem;
-        }
-      } catch (error) {
-        console.error(
-          `Error parsing history item for slug ${movieSlug}:`,
-          error,
-        );
+        const val = history[movieSlug];
+        parsedHistory[movieSlug] = typeof val === "string" 
+          ? JSON.parse(val) 
+          : (val as unknown as HistoryItem);
+      } catch (e) {
+        console.error(`Error parsing: ${movieSlug}`, e);
       }
     }
     return parsedHistory;

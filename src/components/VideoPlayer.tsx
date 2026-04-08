@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import videojs from "video.js";
 import Player from "video.js/dist/types/player";
+import Component from "video.js/dist/types/component";
 import "video.js/dist/video-js.css";
 import "@videojs/themes/dist/city/index.css";
 import "videojs-hotkeys";
@@ -19,12 +20,17 @@ interface Props {
   onProgress: (currentTime: number, duration: number) => void;
   onAutoNext: () => void;
   onPause?: () => void;
-  autoNextEnabled?: boolean; // User preference for auto next episode
+}
+
+interface NextEpisodeOptions {
+  className?: string;
+  children?: unknown[];
+  onAutoNext?: () => void;
 }
 
 const Button = videojs.getComponent("Button");
 class NextEpisodeButton extends Button {
-  constructor(player: any, options: any) {
+  constructor(player: Player, options: NextEpisodeOptions) {
     super(player, options);
     this.addClass("vjs-next-overlay-btn");
 
@@ -39,15 +45,20 @@ class NextEpisodeButton extends Button {
     `;
   }
 
-  handleClick(event: any) {
+  handleClick(event: Event) {
     if (event) event.stopPropagation();
-    const cb = (this as any).options_.onAutoNext;
+    const options = (this as unknown as { options_: NextEpisodeOptions })
+      .options_;
+    const cb = options?.onAutoNext;
     if (cb) cb();
   }
 }
 
 if (!videojs.getComponent("NextEpisodeButton")) {
-  videojs.registerComponent("NextEpisodeButton", NextEpisodeButton as any);
+  videojs.registerComponent(
+    "NextEpisodeButton",
+    NextEpisodeButton as unknown as typeof Component,
+  );
 }
 
 export default function VideoPlayer({
@@ -58,36 +69,34 @@ export default function VideoPlayer({
   onProgress,
   onAutoNext,
   onPause,
-  autoNextEnabled = true,
   prevEpisodeSlug,
 }: Props) {
   const videoRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<Player | null>(null);
   const isInitialSeekDone = useRef(false);
-  const mountTime = useRef(0); // Track when component was mounted
+  const isSeekingRef = useRef(false); 
+  const mountTime = useRef(0);
   const [isLightsOff, setIsLightsOff] = useState(false);
+
   const router = useRouter();
 
-  // Load autoNext preference from localStorage, default to true
+  // Load autoNext preference
   const [isAutoNext, setIsAutoNext] = useState(() => {
     if (typeof window === "undefined") return true;
     const saved = localStorage.getItem("v_movie_auto_next");
     return saved !== null ? saved === "true" : true;
   });
 
-  // Dùng ref để event handlers luôn lấy giá trị mới nhất của isAutoNext
   const isAutoNextRef = useRef(isAutoNext);
   isAutoNextRef.current = isAutoNext;
 
-  // Save autoNext preference to localStorage whenever it changes
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem("v_movie_auto_next", String(isAutoNext));
     }
   }, [isAutoNext]);
 
-  // Chỉ khởi tạo player 1 lần, KHÔNG recreate khi callbacks thay đổi
-  // Dùng ref để lưu callbacks mới nhất
+  // Sync callbacks via refs to avoid re-initializing player
   const onProgressRef = useRef(onProgress);
   const onAutoNextRef = useRef(onAutoNext);
   const onPauseRef = useRef(onPause);
@@ -97,14 +106,10 @@ export default function VideoPlayer({
 
   useEffect(() => {
     if (!videoRef.current || !movieSrc) return;
-
-    // Record mount time for StrictMode detection
     mountTime.current = Date.now();
 
-    // Nếu player CHƯA tồn tại -> khởi tạo lần đầu
     if (!playerRef.current) {
       isInitialSeekDone.current = false;
-
       const videoElement = document.createElement("video");
       videoElement.className =
         "video-js vjs-big-play-centered vjs-vmovie-theme";
@@ -119,7 +124,6 @@ export default function VideoPlayer({
         sources: [{ src: movieSrc, type: "application/x-mpegURL" }],
       }));
 
-      // Thêm nút và truyền callback qua ref
       const nextBtn = player.addChild("NextEpisodeButton", {
         onAutoNext: () => onAutoNextRef.current(),
       });
@@ -135,7 +139,6 @@ export default function VideoPlayer({
       const savedVol = localStorage.getItem("v_movie_volume");
       if (savedVol) player.volume(Number(savedVol));
 
-      // Dùng ref callbacks để tránh recreate player
       player.on("loadedmetadata", () => {
         if (initialTime > 0 && !isInitialSeekDone.current) {
           player.currentTime(initialTime);
@@ -143,11 +146,22 @@ export default function VideoPlayer({
         }
       });
 
+      // LOGIC CHỐNG SPAM: Theo dõi trạng thái tua
+      player.on("seeking", () => {
+        isSeekingRef.current = true;
+      });
+      player.on("seeked", () => {
+        isSeekingRef.current = false;
+      });
+
       player.on("timeupdate", () => {
         const curr = player.currentTime() ?? 0;
         const dur = player.duration() ?? 0;
-        if (Math.floor(curr) % 10 === 0 && curr > 0)
+
+        // Chỉ gửi progress mỗi khi giây thay đổi đáng kể (tránh spam)
+        if (Math.floor(curr) % 5 === 0 && curr > 0) {
           onProgressRef.current(curr, dur);
+        }
 
         if (nextEpisodeSlug && dur > 0 && isAutoNextRef.current) {
           const timeLeft = dur - curr;
@@ -168,19 +182,18 @@ export default function VideoPlayer({
       });
 
       player.on("pause", () => {
-        onPauseRef.current?.();
+        // QUAN TRỌNG: Chỉ trigger pause sync khi KHÔNG phải đang tua
+        if (!isSeekingRef.current) {
+          onPauseRef.current?.();
+        }
       });
 
-      // Save volume when it changes
       player.on("volumechange", () => {
-        const currentVol = player.volume();
-        localStorage.setItem("v_movie_volume", String(currentVol));
+        localStorage.setItem("v_movie_volume", String(player.volume()));
       });
     } else {
-      // Player đã tồn tại, chỉ cập nhật source nếu khác
-      const player = playerRef.current as any;
-      const currentSrc = player.currentSource?.();
-      if (!currentSrc || currentSrc.src !== movieSrc) {
+      const player = playerRef.current;
+      if (player.currentSrc() !== movieSrc) {
         isInitialSeekDone.current = false;
         player.src({ src: movieSrc, type: "application/x-mpegURL" });
         player.load();
@@ -189,57 +202,15 @@ export default function VideoPlayer({
         isInitialSeekDone.current = true;
       }
     }
+  }, [movieSrc, initialTime, nextEpisodeSlug]);
 
-    // NO cleanup here - only in the unmount effect
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [movieSrc]);
-
-  // Handle tab visibility change - pause/resume instead of dispose
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      const player = playerRef.current;
-      if (!player) return;
-
-      if (document.visibilityState === "hidden") {
-        // Pause video when tab is hidden (prevents audio playing in background)
-        if (!player.paused()) {
-          player.pause();
-        }
-      }
-      // When tab becomes visible again, do NOT reload - just let user resume
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, []);
-
-  // Cleanup effect - skip disposal during StrictMode double-mount cycle
-  // StrictMode unmounts within ~10ms of mounting, so we use a 100ms threshold
   useEffect(() => {
     return () => {
       const timeSinceMount = Date.now() - mountTime.current;
-
-      // If unmounted within 100ms of mount, this is likely StrictMode - skip disposal
-      if (timeSinceMount < 100) {
-        return;
-      }
-
-      const player = playerRef.current;
-      if (!player) return;
-
-      // Remove event listeners first
-      player.off("loadedmetadata");
-      player.off("timeupdate");
-      player.off("ended");
-      player.off("pause");
-
-      const el = player.el();
-      player.dispose();
-      playerRef.current = null;
-      if (el && el.parentNode) {
-        el.parentNode.removeChild(el);
+      if (timeSinceMount < 100) return;
+      if (playerRef.current) {
+        playerRef.current.dispose();
+        playerRef.current = null;
       }
     };
   }, []);
@@ -248,11 +219,11 @@ export default function VideoPlayer({
     <div className="relative">
       {isLightsOff && (
         <div
-          className={isLightsOff ? "fixed inset-0 bg-black/95 z-[60]" : ""}
+          className="fixed inset-0 bg-black/95 z-[60]"
           onClick={() => setIsLightsOff(false)}
         />
       )}
-      {/* Movie name above video */}
+
       <h2 className="text-lg font-bold text-white mb-3 truncate">
         {movieName}
       </h2>
@@ -260,7 +231,6 @@ export default function VideoPlayer({
       <div
         className={`${isLightsOff ? "relative z-[999]" : ""} bg-background rounded-xl overflow-hidden border border-zinc-800 backdrop-blur-md`}
       >
-        {/* Video player */}
         <div data-vjs-player>
           <div ref={videoRef} />
         </div>
@@ -268,7 +238,7 @@ export default function VideoPlayer({
         {/* Controls bar below video - hugs the video */}
         <div className="flex items-center justify-center gap-3 sm:gap-4 mt-0 -mb-2 py-3 px-3 sm:px-4 rounded-b-xl">
           {/* Favorite button */}
-          <button className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-300 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition">
+           <button className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-300 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -324,14 +294,10 @@ export default function VideoPlayer({
             <span className="hidden md:inline">Bình luận</span>
           </button>
 
-          {/* Auto-next toggle */}
+          {/* Chuyển tập auto toggle */}
           <button
             onClick={() => setIsAutoNext(!isAutoNext)}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg transition ${
-              isAutoNext
-                ? "text-green-400 hover:bg-zinc-800"
-                : "text-gray-500 hover:bg-zinc-800"
-            }`}
+            className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg transition ${isAutoNext ? "text-green-400 hover:bg-zinc-800" : "text-gray-500 hover:bg-zinc-800"}`}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -353,18 +319,14 @@ export default function VideoPlayer({
             </span>
           </button>
 
-          {/* Previous episode button */}
+          {/* Prev/Next buttons */}
           <button
             onClick={() =>
               prevEpisodeSlug &&
               router.push(`?tap=${prevEpisodeSlug}#video`, { scroll: false })
             }
             disabled={!prevEpisodeSlug}
-            className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm transition rounded-lg ${
-              prevEpisodeSlug
-                ? "text-gray-300 hover:text-white hover:bg-zinc-800"
-                : "text-gray-600 cursor-not-allowed"
-            }`}
+            className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm transition rounded-lg ${prevEpisodeSlug ? "text-gray-300 hover:text-white hover:bg-zinc-800" : "text-gray-600 cursor-not-allowed"}`}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -376,18 +338,13 @@ export default function VideoPlayer({
             </svg>
           </button>
 
-          {/* Next episode button */}
           <button
             onClick={() =>
               nextEpisodeSlug &&
               router.push(`?tap=${nextEpisodeSlug}#video`, { scroll: false })
             }
             disabled={!nextEpisodeSlug}
-            className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm transition rounded-lg ${
-              nextEpisodeSlug
-                ? "text-gray-300 hover:text-white hover:bg-zinc-800"
-                : "text-gray-600 cursor-not-allowed"
-            }`}
+            className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm transition rounded-lg ${nextEpisodeSlug ? "text-gray-300 hover:text-white hover:bg-zinc-800" : "text-gray-600 cursor-not-allowed"}`}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -399,7 +356,7 @@ export default function VideoPlayer({
             </svg>
           </button>
 
-          {/* Lights off toggle */}
+          {/* Tắt đèn toggle */}
           <button
             onClick={() => setIsLightsOff(!isLightsOff)}
             className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-300 hover:text-white hover:bg-zinc-800 rounded-lg transition"
