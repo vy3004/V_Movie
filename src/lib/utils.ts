@@ -1,5 +1,6 @@
 import {
   HistoryItem,
+  SubscriptionItem,
   EpisodeProgress,
   HistoryUpdatePayload,
 } from "@/lib/types";
@@ -61,6 +62,27 @@ export const formatUrl = (path: string | undefined): string => {
   return path;
 };
 
+export const formatDuration = (seconds: number) => {
+  if (!seconds || seconds <= 0) return "0m";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+};
+
+export const formatEpisodeName = (
+  input: string,
+  has_new_episode: boolean | string,
+): string => {
+  if (has_new_episode === true || String(has_new_episode) === "true")
+    return "Tập Mới";
+
+  if (/^\d+$/.test(input)) return `Tập ${input}`;
+
+  return input;
+};
+
 const GUEST_HISTORY_KEY = "v_movie_guest_history";
 
 export const saveLocalHistory = (item: HistoryItem) => {
@@ -106,15 +128,6 @@ export const getLocalHistory = (): HistoryItem[] => {
     console.error("[LocalStorage] Error reading history:", error);
     return [];
   }
-};
-
-export const formatDuration = (seconds: number) => {
-  if (!seconds || seconds <= 0) return "0m";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
 };
 
 // Redis Cache Helpers
@@ -227,6 +240,139 @@ export const getHistoryCache = async (userId?: string, deviceId?: string) => {
     return parsedHistory;
   } catch (error) {
     console.error("Error getting history cache:", error);
+    return null;
+  }
+};
+
+// ==========================================
+// SUBSCRIPTIONS (THEO DÕI PHIM) HELPERS
+// ==========================================
+
+const GUEST_SUBS_KEY = "v_movie_guest_subscriptions";
+
+/**
+ * LOCAL STORAGE (Cho Guest)
+ */
+export const getLocalSubscriptions = (): SubscriptionItem[] => {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const data = localStorage.getItem(GUEST_SUBS_KEY);
+    if (!data) return [];
+
+    const parsed = JSON.parse(data);
+    if (Array.isArray(parsed)) {
+      return parsed.filter(
+        (item) => item && typeof item === "object" && item.movie_slug,
+      );
+    }
+    return [];
+  } catch (error) {
+    console.error("[LocalStorage] Error reading subscriptions:", error);
+    return [];
+  }
+};
+
+export const toggleLocalSubscription = (item: SubscriptionItem): boolean => {
+  if (typeof window === "undefined") return false;
+
+  try {
+    const subs = getLocalSubscriptions();
+    const existingIndex = subs.findIndex(
+      (s) => s.movie_slug === item.movie_slug,
+    );
+    let isAdded = false;
+
+    if (existingIndex >= 0) {
+      subs.splice(existingIndex, 1); // Unfollow
+    } else {
+      const newItem = {
+        ...item,
+        updated_at: new Date().toISOString(),
+      };
+      subs.unshift(newItem); // Follow
+      isAdded = true;
+    }
+
+    localStorage.setItem(GUEST_SUBS_KEY, JSON.stringify(subs));
+
+    // Dispatch event (truyền item đã cập nhật)
+    window.dispatchEvent(
+      new CustomEvent("local-subscriptions-updated", {
+        detail: {
+          item:
+            existingIndex >= 0
+              ? item
+              : { ...item, updated_at: new Date().toISOString() },
+          isAdded,
+          subscriptions: subs,
+        },
+      }),
+    );
+
+    return isAdded;
+  } catch (error) {
+    console.error("[LocalStorage] Error toggling subscription:", error);
+    return false;
+  }
+};
+
+/**
+ * REDIS CACHE (Cho User đã đăng nhập)
+ */
+const SUBS_CACHE_PREFIX = "subscriptions";
+const SUBS_CACHE_TTL = 60 * 60 * 24 * 30; // 30 ngày
+
+export const getSubscriptionCacheKey = (userId?: string): string | null => {
+  if (!userId) return null;
+  return `${SUBS_CACHE_PREFIX}:user:${userId}`;
+};
+
+export const updateSubscriptionCache = async (
+  userId: string,
+  action: "add" | "remove" | "update",
+  item: Pick<SubscriptionItem, "movie_slug"> & Partial<SubscriptionItem>,
+) => {
+  const key = getSubscriptionCacheKey(userId);
+  if (!key || !redis) return;
+
+  try {
+    if (action === "remove") {
+      await redis.hdel(key, item.movie_slug);
+    } else {
+      await redis.hset(key, {
+        [item.movie_slug]: JSON.stringify(item),
+      });
+    }
+    await redis.expire(key, SUBS_CACHE_TTL);
+  } catch (error) {
+    console.error("Error updating subscription cache:", error);
+  }
+};
+
+export const getSubscriptionCache = async (userId: string) => {
+  const key = getSubscriptionCacheKey(userId);
+  if (!key || !redis) return null;
+
+  try {
+    const subs = await redis.hgetall(key);
+    if (!subs || Object.keys(subs).length === 0) return null;
+
+    const parsedSubs: Record<string, SubscriptionItem> = {};
+    for (const movieSlug in subs) {
+      try {
+        const val = subs[movieSlug];
+        parsedSubs[movieSlug] =
+          typeof val === "string"
+            ? JSON.parse(val)
+            : (val as unknown as SubscriptionItem);
+      } catch (e) {
+        console.error(`Error parsing subscription: ${movieSlug}`, e);
+      }
+    }
+    return parsedSubs;
+  } catch (error) {
+    console.error("Error getting subscription cache:", error);
     return null;
   }
 };

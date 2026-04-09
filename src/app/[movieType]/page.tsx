@@ -50,7 +50,15 @@ export default async function MoviesPage({ params, searchParams }: PageProps) {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {data.items.length > 0 ? (
-          data.items.map((movie) => <MovieCard key={movie._id} movie={movie} />)
+          data.items.map((movie) => (
+            <MovieCard
+              key={movie._id}
+              movie_slug={movie.slug}
+              name={movie.name}
+              thumb_url={movie.thumb_url}
+              episode_current={movie.episode_current}
+            />
+          ))
         ) : (
           <>
             <p>Không tìm thấy phim phù hợp</p>

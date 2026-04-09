@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Bars3CenterLeftIcon } from "@heroicons/react/24/solid";
+import { FilmIcon } from "@heroicons/react/24/outline";
 import { Episode, ServerData, EpisodeProgress } from "@/lib/types";
 
 interface EpisodeSelectorProps {
@@ -29,7 +31,7 @@ const EpisodeSelector = ({
   const showServerTabs = serversWithEpisodes.length > 1;
 
   return (
-    <div>
+    <div className="bg-background p-6 rounded-xl border border-zinc-800">
       {/* Server selector tabs - only show if multiple servers have episodes */}
       {showServerTabs && (
         <div className="flex flex-wrap gap-2 mb-4">
@@ -41,14 +43,15 @@ const EpisodeSelector = ({
                 key={idx}
                 onClick={() => hasEpisodes && setActiveServerIdx(idx)}
                 disabled={!hasEpisodes}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
+                className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-bold transition ${
                   isActive
-                    ? "bg-primary text-white shadow-lg shadow-primary/30"
+                    ? "border border-primary text-primary"
                     : hasEpisodes
                       ? "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white"
                       : "bg-gray-800/40 text-gray-600 cursor-not-allowed"
                 }`}
               >
+                <FilmIcon className="w-4 h-4" />
                 {server.server_name}
                 {!hasEpisodes && (
                   <span className="ml-1 text-xs opacity-50">(Trống)</span>
@@ -58,6 +61,11 @@ const EpisodeSelector = ({
           })}
         </div>
       )}
+
+      <div className="text-lg font-bold text-white mb-4 capitalize tracking-wider flex items-center gap-2">
+        <Bars3CenterLeftIcon className="w-7 h-7" />
+        <span>Danh sách tập</span>
+      </div>
 
       {/* Episode grid for active server */}
       {activeServer && (
@@ -70,7 +78,7 @@ const EpisodeSelector = ({
                 progress && progress.ep_duration > 0
                   ? Math.min(
                       (progress.ep_last_time / progress.ep_duration) * 100,
-                      100
+                      100,
                     )
                   : 0;
               const isSelected = sv.slug === episodeSelected;

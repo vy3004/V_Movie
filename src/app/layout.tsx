@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
-import Script from "next/script";
 import type { Metadata, Viewport } from "next";
 import { Roboto } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 import ReactQueryClientProvider from "@/providers/ReactQueryClientProvider";
@@ -85,6 +85,7 @@ export default function RootLayout({
                 <Footer />
               </div>
               <AuthModal />
+              <Toaster position="bottom-right" richColors />
             </AuthModalProvider>
           </BaseDataContextProvider>
         </ReactQueryClientProvider>

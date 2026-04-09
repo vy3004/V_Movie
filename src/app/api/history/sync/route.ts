@@ -8,12 +8,18 @@ export const runtime = "edge";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { deviceId, localHistory }: { deviceId?: string; localHistory: HistoryItem[] } = body;
+    const {
+      deviceId,
+      localHistory,
+    }: { deviceId?: string; localHistory: HistoryItem[] } = body;
 
     const supabase = await createSupabaseServer();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     // 1. Sync ownership: Chuyển bản ghi từ device_id sang user_id
     if (deviceId) {
@@ -33,7 +39,11 @@ export async function POST(request: Request) {
           .eq("movie_slug", item.movie_slug)
           .maybeSingle();
 
-        const existingProgress = (existingData?.episodes_progress as Record<string, EpisodeProgress>) || {};
+        const existingProgress =
+          (existingData?.episodes_progress as Record<
+            string,
+            EpisodeProgress
+          >) || {};
         const mergedProgress = { ...existingProgress };
 
         // Hợp nhất tiến độ tập
@@ -54,7 +64,9 @@ export async function POST(request: Request) {
         let latestEpSlug = item.last_episode_slug;
         let latestTime = 0;
         for (const epSlug in mergedProgress) {
-          const epTime = new Date(mergedProgress[epSlug].ep_updated_at).getTime();
+          const epTime = new Date(
+            mergedProgress[epSlug].ep_updated_at,
+          ).getTime();
           if (epTime > latestTime) {
             latestTime = epTime;
             latestEpSlug = epSlug;
@@ -63,7 +75,8 @@ export async function POST(request: Request) {
 
         // LOGIC PHIM XONG: Sử dụng field đã được định nghĩa trong HistoryItem
         const lastEpSlug = item.last_episode_of_movie_slug;
-        const isMovieCompletelyFinished = mergedProgress[lastEpSlug]?.ep_is_finished === true;
+        const isMovieCompletelyFinished =
+          mergedProgress[lastEpSlug]?.ep_is_finished === true;
 
         const updatePayload = {
           user_id: user.id,
@@ -77,9 +90,26 @@ export async function POST(request: Request) {
         };
 
         if (existingData) {
-          await supabase.from("watch_history").update(updatePayload).eq("id", existingData.id);
+          const { error: updateError } = await supabase
+            .from("watch_history")
+            .update(updatePayload)
+            .eq("id", existingData.id);
+          if (updateError) {
+            console.error(
+              `[SYNC_HISTORY] Failed to update ${item.movie_slug}:`,
+              updateError,
+            );
+          }
         } else {
-          await supabase.from("watch_history").insert(updatePayload);
+          const { error: insertError } = await supabase
+            .from("watch_history")
+            .insert(updatePayload);
+          if (insertError) {
+            console.error(
+              `[SYNC_HISTORY] Failed to insert ${item.movie_slug}:`,
+              insertError,
+            );
+          }
         }
 
         // Cập nhật Redis Cache
@@ -98,6 +128,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[SYNC_HISTORY_ERROR]:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
   }
 }

@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { User } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CateCtr, Movie } from "@/lib/types";
-import { getLocalHistory } from "@/lib/utils";
+import { getLocalHistory, getLocalSubscriptions } from "@/lib/utils";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
 interface BaseDataContextType {
@@ -70,11 +70,12 @@ export default function BaseDataContextProvider({
     staleTime: 1000 * 60 * 10, // 10p khớp với Redis
   });
 
-  // 4. Đồng bộ lịch sử (Optimized for Redis)
+  // 4. Đồng bộ lịch sử và phim theo dõi (Optimized for Redis)
   useEffect(() => {
     if (!user) return;
 
-    const handleSync = async () => {
+    // Đồng bộ lịch sử
+    const handleSyncHistory = async () => {
       const localData = getLocalHistory();
       if (localData.length === 0) return;
 
@@ -93,16 +94,43 @@ export default function BaseDataContextProvider({
           queryClient.invalidateQueries({
             queryKey: ["movie-history", user.id],
           });
-          console.log(
-            "🚀 [Redis-Sync] Lịch sử đã được đồng bộ và làm mới cache.",
-          );
+          console.log("🚀 [Sync-History] Đã đồng bộ lịch sử.");
         }
       } catch (error) {
-        console.error("❌ [Sync Error]", error);
+        console.error("❌ [Sync History Error]", error);
       }
     };
 
-    handleSync();
+    // Đồng bộ Phim theo dõi
+    const handleSyncSubscriptions = async () => {
+      const localSubs = getLocalSubscriptions();
+      if (localSubs.length === 0) return;
+
+      try {
+        const res = await fetch("/api/subscriptions/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ localSubscriptions: localSubs }),
+        });
+
+        if (res.ok) {
+          // Xóa sạch ở LocalStorage sau khi sync thành công
+          localStorage.removeItem("v_movie_guest_subscriptions");
+
+          // Làm mới cache của React Query để danh sách phim hiện ra ngay
+          queryClient.invalidateQueries({
+            queryKey: ["subscriptions-list", user.id],
+          });
+
+          console.log("🚀 [Sync Subs] Đã đồng bộ danh sách phim theo dõi.");
+        }
+      } catch (error) {
+        console.error("❌ [Sync Subs Error]", error);
+      }
+    };
+
+    handleSyncHistory();
+    handleSyncSubscriptions(); // Kích hoạt sync subs
   }, [user, queryClient]);
 
   // 5. Auth Listener (Tối ưu tránh Duplicate & Flash UI)

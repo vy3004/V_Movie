@@ -25,6 +25,7 @@
     "react": "^18",
     "react-dom": "^18",
     "react-hook-form": "^7.72.1",
+    "sonner": "^2.0.7",
     "tailwindcss-animate": "^1.0.7",
     "video.js": "^8.23.7",
     "videojs-hotkeys": "^0.2.30",

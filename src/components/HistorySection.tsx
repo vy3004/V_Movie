@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useEffect } from "react";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Carousel,
@@ -110,17 +111,24 @@ export default function HistorySection({ title, type }: HistorySectionProps) {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-700 mb-10">
-      <div className="flex items-center gap-3 font-bold mb-4">
-        <div
-          className={`w-1.5 h-6 rounded-full ${
-            type === "finished"
-              ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"
-              : "bg-primary shadow-[0_0_10px_rgba(225,29,72,0.5)]"
-          }`}
-        />
-        <h2 className="text-xl sm:text-2xl text-white tracking-tight">
-          {title}
-        </h2>
+      <div className="relative z-20 flex items-center justify-between font-bold">
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-1.5 h-6 rounded-full ${
+              type === "finished"
+                ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"
+                : "bg-primary shadow-[0_0_10px_rgba(225,29,72,0.5)]"
+            }`}
+          />
+          <h2 className="text-xl sm:text-2xl text-white tracking-tight">
+            {title}
+          </h2>
+        </div>
+
+        <Link href="/ca-nhan/theo-doi" className="relative group">
+          Xem thêm
+          <span className="absolute -bottom-1 right-0 w-0 border-b-4 border-primary transition-all duration-300 group-hover:w-full" />
+        </Link>
       </div>
 
       <Carousel opts={{ align: "start", slidesToScroll: "auto" }}>

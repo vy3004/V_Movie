@@ -163,3 +163,15 @@ export interface DeviceId {
   id: string;
   isGuest: boolean;
 }
+
+export interface SubscriptionItem {
+  user_id?: string;
+  movie_slug: string;
+  movie_name: string;
+  movie_poster: string;
+  movie_status: string; // "trailer", "ongoing", "complete"
+  last_known_episode_slug: string;
+  has_new_episode: boolean;
+  created_at?: string;
+  updated_at?: string;
+}

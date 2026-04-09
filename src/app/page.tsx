@@ -6,6 +6,7 @@ import HeroCarousel from "@/components/HeroCarousel";
 import MovieSection from "@/components/MovieSection";
 import ListMovieSection from "@/components/ListMovieSection";
 import HistorySection from "@/components/HistorySection";
+import SubscriptionSection from "@/components/SubscriptionSection";
 const Banner = dynamicImport(() => import("@/components/Banner"), {
   ssr: false,
 });
@@ -64,6 +65,7 @@ export default async function HomePage() {
       >
         <Suspense fallback={null}>
           <HistorySection title="Tiếp tục xem" type="watching" />
+          <SubscriptionSection />
           <HistorySection title="Phim đã xem" type="finished" />
         </Suspense>
         <Banner />

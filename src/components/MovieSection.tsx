@@ -42,7 +42,12 @@ const MovieSection = ({ title, movies, hrefViewMore }: MovieSectionProps) => {
               key={movie._id}
               className="!basis-[46%] sm:!basis-1/3 md:!basis-1/4 lg:!basis-1/6 py-4"
             >
-              <MovieCard movie={movie} />
+              <MovieCard
+                movie_slug={movie.slug}
+                name={movie.name}
+                thumb_url={movie.thumb_url}
+                episode_current={movie.episode_current}
+              />
             </CarouselItem>
           ))}
         </CarouselContent>
