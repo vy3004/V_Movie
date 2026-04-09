@@ -15,7 +15,6 @@ import Logo from "@/components/Logo";
 import { useAuthModal } from "@/providers/AuthModalProvider";
 import { authSchema, AuthFormData } from "@/lib/validations/auth";
 import { openAuthPopup } from "@/lib/auth-popup";
-import { GooglePromptNotification } from "@/lib/types";
 
 export default function AuthModal() {
   const { isOpen, onClose } = useAuthModal();
@@ -43,47 +42,41 @@ export default function AuthModal() {
     }
   }, [isOpen, isSignUp, reset]);
 
-  const handleGoogleAuth = useCallback(() => {
-    if (!window.google) return;
+  const handleGoogleAuth = useCallback(async () => {
+    try {
+      const origin = window.location.origin;
+      const { data, error: authError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${origin}/api/auth/callback?next=popup&origin=${encodeURIComponent(origin)}`,
+          skipBrowserRedirect: true,
+        },
+      });
 
-    window.google.accounts.id.prompt(
-      async (notification: GooglePromptNotification) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          try {
-            const origin = window.location.origin;
-            const { data } = await supabase.auth.signInWithOAuth({
-              provider: "google",
-              options: {
-                redirectTo: `${origin}/api/auth/callback?next=popup&origin=${encodeURIComponent(origin)}`,
-                skipBrowserRedirect: true,
-              },
-            });
+      if (authError) throw authError;
 
-            if (data?.url) {
-              openAuthPopup(data.url);
+      if (data?.url) {
+        openAuthPopup(data.url);
 
-              const handleMsg = (e: MessageEvent) => {
-                if (e.origin !== window.location.origin) return;
-                if (e.data?.status === "success") {
-                  onClose();
-                  queryClient.invalidateQueries({ queryKey: ["auth-user"] });
-                  window.removeEventListener("message", handleMsg); // Quan trọng: Remove sau khi xong
-                }
-              };
-              window.addEventListener("message", handleMsg);
-
-              setTimeout(
-                () => window.removeEventListener("message", handleMsg),
-                300000,
-              );
-            }
-          } catch (err) {
-            console.error("Google Auth Error:", err);
-            setError("Lỗi kết nối với Google.");
+        const handleMsg = (e: MessageEvent) => {
+          if (e.origin !== window.location.origin) return;
+          if (e.data?.status === "success") {
+            onClose();
+            queryClient.invalidateQueries({ queryKey: ["auth-user"] });
+            window.removeEventListener("message", handleMsg); // Quan trọng: Remove sau khi xong
           }
-        }
-      },
-    );
+        };
+        window.addEventListener("message", handleMsg);
+
+        setTimeout(
+          () => window.removeEventListener("message", handleMsg),
+          300000,
+        );
+      }
+    } catch (err) {
+      console.error("Google Auth Error:", err);
+      setError("Lỗi kết nối với Google.");
+    }
   }, [onClose, supabase.auth, queryClient]);
 
   const onSubmit = async (data: AuthFormData) => {
@@ -149,7 +142,7 @@ export default function AuthModal() {
           <button
             type="button"
             onClick={handleGoogleAuth}
-            className="flex w-full items-center justify-center gap-3 rounded-xl sm:rounded-2xl bg-white py-3.5 sm:py-4 text-sm font-bold text-black hover:bg-zinc-200 transition-all active:scale-95"
+            className="flex w-full items-center justify-center gap-2 rounded-xl sm:rounded-2xl bg-white py-3.5 font-bold text-black hover:bg-zinc-200 transition-all active:scale-95"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
               <path

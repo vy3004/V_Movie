@@ -30,13 +30,7 @@ export async function updateSession(request: NextRequest) {
 
   const {
     data: { user },
-    error,
   } = await supabase.auth.getUser();
-  // Nếu có lỗi khi xác thực, cho phép request tiếp tục
-  // hoặc có thể redirect về trang login tùy theo yêu cầu
-  if (error) {
-    console.error("Auth error:", error.message);
-  }
 
   // Logic bảo vệ route
   const { pathname } = request.nextUrl;

@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 import withPWAInit from "@ducanh2912/next-pwa";
+import withBundleAnalyzer from "@next/bundle-analyzer";
+
+const withBundleAnalyzerConfig = withBundleAnalyzer({
+  enabled: false, // Tắt phân tích bundle để tránh ảnh hưởng đến hiệu suất
+});
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -9,6 +14,12 @@ const withPWA = withPWAInit({
   buildExcludes: [/middleware-manifest\.json$/, /_next\/static\/.*\.rsc$/],
   publicExcludes: ["!manifest.webmanifest"],
   cacheOnFrontEndNav: true,
+  // Dọn dẹp cache cũ khi có version mới
+  workboxOptions: {
+    cleanupOutdatedCaches: true,
+    // Tùy chọn: giới hạn precache entries
+    maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
+  },
   runtimeCaching: [
     {
       // Cache Poster Phim (Nguồn từ Proxy wsrv.nl)
@@ -33,7 +44,7 @@ const withPWA = withPWAInit({
         cacheName: "api-static-data",
         expiration: {
           maxEntries: 20,
-          maxAgeSeconds: 7 * 24 * 60 * 60,
+          maxAgeSeconds: 30 * 24 * 60 * 60,
         },
       },
     },
@@ -54,13 +65,20 @@ const withPWA = withPWAInit({
 
 const nextConfig = {
   reactStrictMode: true,
+  swcMinify: true,
   images: {
     minimumCacheTTL: 60,
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     remotePatterns: [
       { protocol: "https", hostname: "wsrv.nl" },
       { protocol: "https", hostname: "img.ophim.live" },
     ],
   },
+  compiler: {
+    removeConsole: process.env.NODE_ENV === "production",
+  },
 };
 
-export default withPWA(nextConfig);
+// Wrap theo thứ tự: vớiBundleAnalyzerConfig > withPWA > nextConfig
+export default withBundleAnalyzerConfig(withPWA(nextConfig));

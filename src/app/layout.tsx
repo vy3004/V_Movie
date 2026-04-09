@@ -9,7 +9,6 @@ import BaseDataContextProvider from "@/providers/BaseDataContextProvider";
 import AuthModalProvider from "@/providers/AuthModalProvider";
 
 import Header from "@/components/Header";
-import AuthWatcher from "@/components/AuthWatcher";
 const Footer = dynamic(() => import("@/components/Footer"), {
   ssr: false,
   loading: () => <div className="h-20 w-full bg-zinc-950" />, // Tránh nhảy layout khi Footer load
@@ -24,7 +23,6 @@ import {
   SUPABASE_URL,
   BASE_MOVIE_API,
 } from "@/lib/configs";
-import { Suspense } from "react";
 
 const roboto = Roboto({
   weight: ["400", "500", "700"],
@@ -87,16 +85,9 @@ export default function RootLayout({
                 <Footer />
               </div>
               <AuthModal />
-              <Suspense fallback={null}>
-                <AuthWatcher />
-              </Suspense>
             </AuthModalProvider>
           </BaseDataContextProvider>
         </ReactQueryClientProvider>
-        <Script
-          src="https://accounts.google.com/gsi/client"
-          strategy="beforeInteractive"
-        />
       </body>
     </html>
   );

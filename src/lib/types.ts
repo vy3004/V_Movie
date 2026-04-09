@@ -163,9 +163,3 @@ export interface DeviceId {
   id: string;
   isGuest: boolean;
 }
-
-export interface GooglePromptNotification {
-  isNotDisplayed: () => boolean;
-  isSkippedMoment: () => boolean;
-  getNotDisplayedReason: () => string;
-}

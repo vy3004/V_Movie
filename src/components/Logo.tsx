@@ -7,6 +7,7 @@ const Logo = ({ className = "" }: { className?: string }) => {
       className={className}
       height={51}
       width={176}
+      fetchPriority="high"
       src="/logo.webp"
       alt="Logo"
     />
