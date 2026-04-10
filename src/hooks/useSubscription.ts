@@ -35,12 +35,15 @@ export function useSubscription({ user, movie }: UseSubscriptionProps) {
 
   const mutation = useMutation({
     mutationFn: async (currentlyFollowed: boolean) => {
+      const lastEpisodeSlug =
+        movie.episodes?.[0]?.server_data?.[
+          movie.episodes[0].server_data.length - 1
+        ]?.slug.trim();
       const itemPayload: SubscriptionItem = {
         movie_slug: movie.slug,
         movie_name: movie.name,
         movie_poster: movie.thumb_url,
-        last_known_episode_slug:
-          movie.episodes?.[0]?.server_data?.[0]?.slug || "",
+        last_known_episode_slug: lastEpisodeSlug,
         movie_status: movie.status,
         has_new_episode: false,
       };

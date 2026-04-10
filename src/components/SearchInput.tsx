@@ -50,7 +50,7 @@ const SearchInput = () => {
       <div className="flex items-center justify-between gap-1 px-2 py-1 sm:px-3 sm:py-2">
         <input
           placeholder="Tìm kiếm phim"
-          className="bg-transparent w-24 sm:w-32 outline-none text-sm"
+          className="bg-transparent w-24 sm:w-48 outline-none text-sm"
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

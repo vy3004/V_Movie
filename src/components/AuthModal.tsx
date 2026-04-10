@@ -186,7 +186,7 @@ export default function AuthModal() {
                   />
                 </div>
                 {errors.username && (
-                  <p className="text-[10px] text-red-500 ml-2">
+                  <p className="text-[10px] text-primary ml-2">
                     {errors.username.message}
                   </p>
                 )}
@@ -205,7 +205,7 @@ export default function AuthModal() {
                 />
               </div>
               {errors.email && (
-                <p className="text-[10px] text-red-500 ml-2">
+                <p className="text-[10px] text-primary ml-2">
                   {errors.email.message}
                 </p>
               )}
@@ -222,7 +222,7 @@ export default function AuthModal() {
                 />
               </div>
               {errors.password && (
-                <p className="text-[10px] text-red-500 ml-2">
+                <p className="text-[10px] text-primary ml-2">
                   {errors.password.message}
                 </p>
               )}
@@ -258,7 +258,7 @@ export default function AuthModal() {
               <button
                 type="button"
                 onClick={() => setIsSignUp(!isSignUp)}
-                className="font-bold text-white hover:text-red-500 underline underline-offset-4 transition-colors"
+                className="font-bold text-white hover:text-primary underline underline-offset-4 transition-colors"
               >
                 {isSignUp ? "Đăng nhập" : "Tham gia ngay"}
               </button>

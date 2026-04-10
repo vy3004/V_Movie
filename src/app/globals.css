@@ -90,3 +90,15 @@ body {
   white-space: nowrap;
 }
 
+#comment-section-root {
+  scroll-margin-top: 120px; /* Chỉnh theo độ cao Header */
+}
+
+@keyframes target-flash {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(239, 68, 68, 0.15); }
+}
+
+.animate-target-flash {
+  animation: target-flash 2.5s ease-in-out;
+}

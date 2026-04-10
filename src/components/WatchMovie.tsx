@@ -12,13 +12,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { User } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query"; // Thêm để quản lý cache
 import EpisodeSelector from "@/components/EpisodeSelector";
+import CommentSection from "@/components/CommentSection";
 import {
   Movie,
   HistoryItem,
   EpisodeProgress,
   Episode,
   ServerData,
-  SubscriptionItem, // Thêm type nếu đã định nghĩa
+  SubscriptionItem,
 } from "@/lib/types";
 import { getLocalHistory, getLocalSubscriptions } from "@/lib/utils";
 import { useWatchHistory } from "@/hooks/useWatchHistory";
@@ -222,18 +223,15 @@ export default function WatchMovie({ movie, history, user }: Props) {
       </div>
 
       {movie.episodes.length > 0 && (
-        <div className="bg-background p-6 rounded-xl border border-zinc-800">
-          <h3 className="text-lg font-bold text-white mb-4 uppercase tracking-wider">
-            Danh sách tập
-          </h3>
-          <EpisodeSelector
-            servers={movie.episodes}
-            episodeSelected={tap}
-            onSelect={handleSelectEpisode}
-            episodesProgress={sessionProgress}
-          />
-        </div>
+        <EpisodeSelector
+          servers={movie.episodes}
+          episodeSelected={tap}
+          onSelect={handleSelectEpisode}
+          episodesProgress={sessionProgress}
+        />
       )}
+
+      <CommentSection movieSlug={movie.slug} movieName={movie.name} />
     </div>
   );
 }

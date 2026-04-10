@@ -7,6 +7,8 @@ import "./globals.css";
 import ReactQueryClientProvider from "@/providers/ReactQueryClientProvider";
 import BaseDataContextProvider from "@/providers/BaseDataContextProvider";
 import AuthModalProvider from "@/providers/AuthModalProvider";
+import NotificationProvider from "@/providers/NotificationProvider";
+import ConfirmProvider from "@/providers/ConfirmProvider";
 
 import Header from "@/components/Header";
 const Footer = dynamic(() => import("@/components/Footer"), {
@@ -17,12 +19,7 @@ const AuthModal = dynamic(() => import("@/components/AuthModal"), {
   ssr: false,
 });
 
-import {
-  WEB_TITLE,
-  WSRV_PROXY,
-  SUPABASE_URL,
-  BASE_MOVIE_API,
-} from "@/lib/configs";
+import { WEB_TITLE, SUPABASE_URL, BASE_MOVIE_API } from "@/lib/configs";
 
 const roboto = Roboto({
   weight: ["400", "500", "700"],
@@ -55,7 +52,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#e50914",
+  themeColor: "#0a0a0a",
   width: "device-width",
   initialScale: 1,
 };
@@ -68,7 +65,7 @@ export default function RootLayout({
   return (
     <html lang="vi" className="scroll-smooth">
       <head>
-        <link rel="preconnect" href={WSRV_PROXY} />
+        <link rel="preconnect" href="https://wsrv.nl" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href={SUPABASE_URL} />
         <link rel="dns-prefetch" href={BASE_MOVIE_API} />
       </head>
@@ -77,16 +74,20 @@ export default function RootLayout({
       >
         <ReactQueryClientProvider>
           <BaseDataContextProvider>
-            <AuthModalProvider>
-              <div className="flex flex-col min-h-screen">
-                <Header />
-                {/* min-h-screen giúp tránh hiện tượng "footer nhảy lên trên" khi chưa có nội dung */}
-                <main className="flex-grow">{children}</main>
-                <Footer />
-              </div>
-              <AuthModal />
-              <Toaster position="bottom-right" richColors />
-            </AuthModalProvider>
+            <NotificationProvider>
+              <AuthModalProvider>
+                <ConfirmProvider>
+                  <div className="flex flex-col min-h-screen">
+                    <Header />
+                    {/* min-h-screen giúp tránh hiện tượng "footer nhảy lên trên" khi chưa có nội dung */}
+                    <main className="flex-grow">{children}</main>
+                    <Footer />
+                  </div>
+                  <AuthModal />
+                  <Toaster position="bottom-right" richColors />
+                </ConfirmProvider>
+              </AuthModalProvider>
+            </NotificationProvider>
           </BaseDataContextProvider>
         </ReactQueryClientProvider>
       </body>

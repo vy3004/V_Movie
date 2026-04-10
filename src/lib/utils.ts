@@ -1,3 +1,5 @@
+import { formatDistanceToNow } from "date-fns";
+import { vi } from "date-fns/locale";
 import {
   HistoryItem,
   SubscriptionItem,
@@ -81,6 +83,17 @@ export const formatEpisodeName = (
   if (/^\d+$/.test(input)) return `Tập ${input}`;
 
   return input;
+};
+
+/**
+ * Format thời gian sang dạng: "5 phút trước", "2 ngày trước"
+ */
+export const formatTimeAgo = (date: string | Date): string => {
+  if (!date) return "";
+  return formatDistanceToNow(new Date(date), {
+    addSuffix: true,
+    locale: vi,
+  });
 };
 
 const GUEST_HISTORY_KEY = "v_movie_guest_history";

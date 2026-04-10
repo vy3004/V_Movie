@@ -16,8 +16,6 @@ interface UseWatchHistoryProps {
   episodeSlug: string;
 }
 
-const REDIS_SYNC_INTERVAL = 30000; // 30 giây
-
 export function useWatchHistory({
   user,
   movie,
@@ -139,7 +137,7 @@ export function useWatchHistory({
    */
   const syncToRedis = useCallback(() => {
     const payload = trackingData.current;
-    if (!payload || payload.current_time < REDIS_SYNC_INTERVAL) return;
+    if (!payload || payload.current_time < 30) return;
 
     const finalPayload = {
       ...payload,
@@ -175,7 +173,7 @@ export function useWatchHistory({
 
   // Interval sync Redis + Local
   useEffect(() => {
-    const interval = setInterval(syncToRedis, REDIS_SYNC_INTERVAL);
+    const interval = setInterval(syncToRedis, 30000);
     return () => clearInterval(interval);
   }, [syncToRedis]);
 

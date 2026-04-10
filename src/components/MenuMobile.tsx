@@ -52,7 +52,7 @@ const MenuMobile = () => {
     <>
       <button
         aria-label="Menu"
-        className="flex items-center xl:hidden"
+        className="flex items-center"
         onClick={toggleSidebar}
       >
         <Bars3BottomLeftIcon className="size-6 hover:text-primary" />
@@ -100,7 +100,7 @@ const MenuMobile = () => {
                                 {subItem.name}
                               </li>
                             </a>
-                          )
+                          ),
                         )
                       ) : (
                         <Loading />

@@ -13,6 +13,7 @@ import ImageCustom from "@/components/ImageCustom";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useAuthModal } from "@/providers/AuthModalProvider";
 import { useData } from "@/providers/BaseDataContextProvider";
+import NotificationBell from "./NotificationBell";
 
 export default function UserButton() {
   const supabase = createSupabaseClient();
@@ -28,7 +29,10 @@ export default function UserButton() {
   // 1. Trạng thái đang nạp Auth (Loading)
   if (authLoading) {
     return (
-      <div className="size-7 sm:size-9 rounded-full bg-zinc-800 animate-pulse" />
+      <div className="flex items-center gap-2">
+        <div className="size-8 sm:size-10 rounded-full bg-zinc-800 animate-pulse" />
+        <div className="size-8 sm:size-10 rounded-full bg-zinc-800 animate-pulse" />
+      </div>
     );
   }
 
@@ -47,66 +51,80 @@ export default function UserButton() {
 
   // 3. Trường hợp đã đăng nhập (USER)
   const avatarUrl = user?.user_metadata?.avatar_url;
+  const isDiceBear = avatarUrl?.includes("dicebear.com");
   const fullName = user?.user_metadata?.full_name || user?.email || "User";
   const initials = fullName.split(" ").pop()?.charAt(0).toUpperCase();
 
   return (
-    <div className="relative group">
-      {/* Nút Avatar */}
-      <button className="flex items-center gap-1 hover:opacity-80 transition-all outline-none">
-        <div className="size-8 sm:size-10 rounded-full overflow-hidden flex items-center justify-center bg-purple-600 text-white font-medium border-1 border-transparent group-hover:border-zinc-400 transition-all shadow-lg">
-          {avatarUrl ? (
-            <ImageCustom
-              src={avatarUrl}
-              alt={fullName}
-              widths={[40, 80]}
-              className="w-full h-full object-cover"
-              loading="eager" // Load ngay lập tức vì nằm trên Header
-            />
-          ) : (
-            <span className="text-lg">{initials}</span>
-          )}
-        </div>
-      </button>
+    <div className="flex items-center gap-2">
+      <NotificationBell />
 
-      {/* Menu Dropdown */}
-      <div className="absolute right-0 top-full pt-2 w-56 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden py-2">
-          {/* Thông tin User */}
-          <div className="px-4 py-3 border-b border-zinc-800">
-            <p className="text-sm font-semibold text-white truncate">
-              {fullName}
-            </p>
-            <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
+      <div className="relative group">
+        {/* Nút Avatar */}
+        <button className="flex items-center gap-1 hover:opacity-80 transition-all outline-none">
+          <div className="size-8 sm:size-10 rounded-full overflow-hidden flex items-center justify-center bg-zinc-800 text-white font-medium border-1 border-transparent group-hover:border-zinc-400 transition-all shadow-lg">
+            {avatarUrl ? (
+              isDiceBear ? (
+                /* Nếu là ảnh hoạt hình DiceBear (SVG), hiện trực tiếp không qua Proxy cho nhẹ */
+                <img
+                  src={avatarUrl}
+                  alt="Avatar"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                /* Nếu là ảnh Google hoặc ảnh User Up lên, đi qua ImageCustom để nén */
+                <ImageCustom
+                  src={avatarUrl}
+                  alt="Avatar"
+                  widths={[80, 160]}
+                  className="w-full h-full object-cover"
+                />
+              )
+            ) : (
+              <span>{initials}</span>
+            )}
           </div>
+        </button>
 
-          {/* Các lựa chọn Menu */}
-          <div className="p-1">
-            <MenuLink
-              href="/watchlist"
-              icon={<HeartIcon className="w-5 h-5" />}
-              label="Yêu thích"
-            />
-            <MenuLink
-              href="/history"
-              icon={<ClockIcon className="w-5 h-5" />}
-              label="Lịch sử"
-            />
-            <MenuLink
-              href="/profile"
-              icon={<UserIcon className="w-5 h-5" />}
-              label="Hồ sơ"
-            />
+        {/* Menu Dropdown */}
+        <div className="absolute right-0 top-full pt-2 w-56 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden py-2">
+            {/* Thông tin User */}
+            <div className="px-4 py-3 border-b border-zinc-800">
+              <p className="text-sm font-semibold text-white truncate">
+                {fullName}
+              </p>
+              <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
+            </div>
 
-            <hr className="my-1 border-zinc-800" />
+            {/* Các lựa chọn Menu */}
+            <div className="p-1">
+              <MenuLink
+                href="/watchlist"
+                icon={<HeartIcon className="w-5 h-5" />}
+                label="Yêu thích"
+              />
+              <MenuLink
+                href="/history"
+                icon={<ClockIcon className="w-5 h-5" />}
+                label="Lịch sử"
+              />
+              <MenuLink
+                href="/profile"
+                icon={<UserIcon className="w-5 h-5" />}
+                label="Hồ sơ"
+              />
 
-            <button
-              onClick={handleLogout}
-              className="flex w-full items-center gap-3 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-lg transition-colors group/logout"
-            >
-              <ArrowLeftEndOnRectangleIcon className="w-5 h-5 group-hover/logout:-translate-x-1 transition-transform" />
-              <span>Đăng xuất</span>
-            </button>
+              <hr className="my-1 border-zinc-800" />
+
+              <button
+                onClick={handleLogout}
+                className="flex w-full items-center gap-3 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-lg transition-colors group/logout"
+              >
+                <ArrowLeftEndOnRectangleIcon className="w-5 h-5 group-hover/logout:-translate-x-1 transition-transform" />
+                <span>Đăng xuất</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

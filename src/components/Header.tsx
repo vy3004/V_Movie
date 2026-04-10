@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import Container from "@/components/Container";
-import Menu from "@/components/Menu";
 import MenuMobile from "@/components/MenuMobile";
 import SearchInput from "@/components/SearchInput";
 import Logo from "@/components/Logo";
@@ -47,8 +46,6 @@ const Header = () => {
           <Link href={"/"}>
             <Logo className="h-auto w-32 sm:w-44" />
           </Link>
-
-          <Menu />
         </div>
 
         <div className="flex items-center gap-2">
