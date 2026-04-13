@@ -67,9 +67,12 @@ const CommentItem = memo(
     // TỰ ĐỘNG CUỘN ĐƯỢC TỐI ƯU
     useEffect(() => {
       if (targetId && comment.id === targetId && itemRef.current) {
-        let flashOffTimer: ReturnType<typeof setTimeout>; // Biến chứa timer thứ 2
+        let flashOffTimer: ReturnType<typeof setTimeout> | undefined;
+        let isCancelled = false;
 
         const scrollTimer = setTimeout(() => {
+          if (isCancelled) return;
+
           itemRef.current?.scrollIntoView({
             behavior: "smooth",
             block: "center",
@@ -82,6 +85,7 @@ const CommentItem = memo(
         }, 100);
 
         return () => {
+          isCancelled = true;
           clearTimeout(scrollTimer);
           if (flashOffTimer) clearTimeout(flashOffTimer);
         };

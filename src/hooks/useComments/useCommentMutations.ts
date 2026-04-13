@@ -155,7 +155,14 @@ export function useCommentMutations({
     },
     onSuccess: (newComment, variables, context) => {
       // Thay thế comment ảo bằng dữ liệu thật từ Server để tránh lỗi Reload trang
-      if (!newComment?.id) return;
+      if (!newComment?.id) {
+        // Rollback nếu server không trả về comment hợp lệ
+        if (context?.previousData) {
+          queryClient.setQueryData(currentQueryKey, context.previousData);
+        }
+        return;
+      }
+
       queryClient.setQueryData<InfiniteComments>(currentQueryKey, (old) => {
         if (!old) return old;
         return {
@@ -221,7 +228,7 @@ export function useCommentMutations({
         { queryKey: ["comment-lineage"], exact: false },
         (old) => {
           if (!old) return old;
-          return old?.filter((item) => item.id !== commentId) || null;
+          return old.filter((item) => item.id !== commentId);
         },
       );
 
@@ -250,11 +257,19 @@ export function useCommentMutations({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ commentId, movieSlug }),
       });
+      if (!res.ok) throw new Error("Like toggle failed");
       return res.json();
     },
     onMutate: async (commentId) => {
       const filter = { queryKey: ["comments", movieSlug] };
       await queryClient.cancelQueries(filter);
+      await queryClient.cancelQueries({ queryKey: ["comment-lineage"] });
+
+      const previousComments =
+        queryClient.getQueriesData<InfiniteComments>(filter);
+      const previousLineage = queryClient.getQueriesData<CommentItem[]>({
+        queryKey: ["comment-lineage"],
+      });
 
       const updater = (oldItems: CommentItem[]) =>
         oldItems.map((c) => {
@@ -290,6 +305,20 @@ export function useCommentMutations({
           return updater(old);
         },
       );
+      return { previousComments, previousLineage };
+    },
+    onError: (_err, _commentId, context) => {
+      if (context?.previousComments) {
+        context.previousComments.forEach(([key, data]) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+      if (context?.previousLineage) {
+        context.previousLineage.forEach(([key, data]) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+      toast.error("Không thể thực hiện thao tác.");
     },
   });
 

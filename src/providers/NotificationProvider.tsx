@@ -85,6 +85,12 @@ export default function NotificationProvider({
       const commentId = metadata?.comment_id;
       const episode = metadata?.episode || "1";
 
+      if (!commentId) {
+        router.push(`/phim/${noti.movie_slug}?tap=${episode}`);
+        if (!noti.is_read) markAsRead(noti.id);
+        return;
+      }
+
       /**
        * CHIẾN THUẬT: Chỉ gửi duy nhất commentId.
        * Hook useCommentsQuery sẽ bắt được ID này và tự gọi API nạp nguyên cây gia phả.

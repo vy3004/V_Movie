@@ -48,6 +48,11 @@ export default function WatchMovie({ movie, history, user }: Props) {
   >({});
   const [isInitializing, setIsInitializing] = useState(true);
 
+  const [activeServerIdx, setActiveServerIdx] = useState(() => {
+    const idx = movie.episodes.findIndex((s) => s.server_data.length > 0);
+    return idx >= 0 ? idx : 0;
+  });
+
   const isClearingBadge = useRef(false);
 
   const allEpisodes = useMemo(
@@ -129,15 +134,19 @@ export default function WatchMovie({ movie, history, user }: Props) {
 
   // Logic xác định tập tiếp theo/trước
   const { nextEpSlug, prevEpSlug } = useMemo(() => {
-    const idx = allEpisodes.findIndex((s) => String(s.slug) === String(tap));
+    const currentServerEpisodes =
+      movie.episodes[activeServerIdx]?.server_data || [];
+    const idx = currentServerEpisodes.findIndex(
+      (s) => String(s.slug) === String(tap),
+    );
     return {
       nextEpSlug:
-        idx !== -1 && idx < allEpisodes.length - 1
-          ? allEpisodes[idx + 1].slug
+        idx !== -1 && idx < currentServerEpisodes.length - 1
+          ? currentServerEpisodes[idx + 1].slug
           : null,
-      prevEpSlug: idx > 0 ? allEpisodes[idx - 1].slug : null,
+      prevEpSlug: idx > 0 ? currentServerEpisodes[idx - 1].slug : null,
     };
-  }, [tap, allEpisodes]);
+  }, [tap, activeServerIdx, movie.episodes]);
 
   // Khởi tạo lịch sử xem ban đầu
   useEffect(() => {
@@ -194,6 +203,21 @@ export default function WatchMovie({ movie, history, user }: Props) {
     if (nextEpSlug) router.push(`?tap=${nextEpSlug}#video`, { scroll: false });
   }, [syncToSupabase, nextEpSlug, router]);
 
+  const activeEpisode = useMemo(() => {
+    if (!tap) return null;
+
+    // Ưu tiên: Lấy đúng tập phim của cái Server ĐANG CHỌN
+    const serverEpisodes = movie.episodes[activeServerIdx]?.server_data || [];
+    const epInActiveServer = serverEpisodes.find(
+      (e) => String(e.slug) === String(tap),
+    );
+    if (epInActiveServer) return epInActiveServer;
+
+    // Dự phòng: Tìm tạm ở server khác nếu lỗi data
+    const allEpisodes = movie.episodes.flatMap((ep: Episode) => ep.server_data);
+    return allEpisodes.find((e) => String(e.slug) === String(tap));
+  }, [tap, activeServerIdx, movie.episodes]);
+
   if (isInitializing || !tap)
     return (
       <div className="h-[60vh] flex items-center justify-center text-zinc-500">
@@ -201,14 +225,12 @@ export default function WatchMovie({ movie, history, user }: Props) {
       </div>
     );
 
-  const activeEpisode = allEpisodes.find((e) => String(e.slug) === String(tap));
-
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
       <div id="video" className="scroll-mt-24">
         {activeEpisode && (
           <VideoPlayer
-            key={`${movie.slug}-${tap}`}
+            key={`${movie.slug}-${tap}-${activeServerIdx}`}
             user={user}
             movie={movie}
             movieSrc={activeEpisode.link_m3u8}
@@ -228,6 +250,8 @@ export default function WatchMovie({ movie, history, user }: Props) {
           episodeSelected={tap}
           onSelect={handleSelectEpisode}
           episodesProgress={sessionProgress}
+          activeServerIdx={activeServerIdx}
+          onServerChange={setActiveServerIdx}
         />
       )}
 
