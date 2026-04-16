@@ -10,9 +10,8 @@ import React, {
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { User } from "@supabase/supabase-js";
-import { useQueryClient } from "@tanstack/react-query"; // Thêm để quản lý cache
+import { useQueryClient } from "@tanstack/react-query";
 import EpisodeSelector from "@/components/EpisodeSelector";
-import CommentSection from "@/components/CommentSection";
 import {
   Movie,
   HistoryItem,
@@ -20,15 +19,20 @@ import {
   Episode,
   ServerData,
   SubscriptionItem,
-} from "@/lib/types";
-import { getLocalHistory, getLocalSubscriptions } from "@/lib/utils";
+} from "@/types";
+import { getLocalHistory } from "@/lib/utils";
 import { useWatchHistory } from "@/hooks/useWatchHistory";
+import { useSubscription } from "@/hooks/useSubscription";
 
 const VideoPlayer = dynamic(() => import("@/components/VideoPlayer"), {
   ssr: false,
   loading: () => (
     <div className="aspect-video bg-zinc-900 animate-pulse rounded-2xl" />
   ),
+});
+const CommentSection = dynamic(() => import("@/components/CommentSection"), {
+  ssr: false,
+  loading: () => <div className="h-40 animate-pulse bg-zinc-900 rounded-xl" />,
 });
 
 interface Props {
@@ -42,6 +46,8 @@ export default function WatchMovie({ movie, history, user }: Props) {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const tap = searchParams.get("tap");
+
+  const { clearBadge } = useSubscription({ user, movie });
 
   const [sessionProgress, setSessionProgress] = useState<
     Record<string, EpisodeProgress>
@@ -69,68 +75,21 @@ export default function WatchMovie({ movie, history, user }: Props) {
 
   // 2. Logic Xử lý Xóa nhãn "Tập mới" (Clear Badge)
   useEffect(() => {
-    const handleClearBadge = async () => {
-      // 1. Nếu đang gọi rồi hoặc đã gọi xong thì bỏ qua
-      if (isClearingBadge.current) return;
+    // Kiểm tra cache xem có badge không để xóa
+    const subsList = queryClient.getQueryData<SubscriptionItem[]>([
+      "subscriptions-list",
+      user?.id || "guest",
+    ]);
 
-      const subsList = queryClient.getQueryData<SubscriptionItem[]>([
-        "subscriptions-list",
-        user?.id || "guest",
-      ]);
-      const currentSub = subsList?.find((s) => s.movie_slug === movie.slug);
+    const currentSub = subsList?.find((s) => s.movie_slug === movie.slug);
+    const hasNew =
+      currentSub?.has_new_episode === true ||
+      String(currentSub?.has_new_episode) === "true";
 
-      // Kiểm tra kỹ giá trị (vì Redis có thể trả về string "true")
-      const hasNew =
-        currentSub?.has_new_episode === true ||
-        String(currentSub?.has_new_episode) === "true";
-
-      if (hasNew) {
-        isClearingBadge.current = true; // Chặn ngay lập tức
-
-        if (user) {
-          try {
-            await fetch("/api/subscriptions/clear-badge", {
-              method: "POST",
-              body: JSON.stringify({ movieSlug: movie.slug }),
-            });
-
-            // (Optimistic Update) cho Cache local ngay lập tức
-            // Việc này giúp UI mất chấm đỏ ngay mà không cần đợi API GET lại
-            queryClient.setQueryData(
-              ["subscriptions-list", user.id],
-              (old: SubscriptionItem[] | undefined) => {
-                return old?.map((s) =>
-                  s.movie_slug === movie.slug
-                    ? { ...s, has_new_episode: false }
-                    : s,
-                );
-              },
-            );
-          } catch (e) {
-            console.error("Failed to clear server badge", e);
-          }
-        } else {
-          // Trường hợp Guest: Cập nhật trực tiếp LocalStorage
-          const localSubs = getLocalSubscriptions();
-          const updatedSubs = localSubs.map((s) =>
-            s.movie_slug === movie.slug ? { ...s, has_new_episode: false } : s,
-          );
-          localStorage.setItem(
-            "v_movie_guest_subscriptions",
-            JSON.stringify(updatedSubs),
-          );
-        }
-
-        // Cập nhật lại UI ngay lập tức để mất chấm đỏ ở các nơi khác (Navbar, Trang chủ)
-        queryClient.invalidateQueries({ queryKey: ["subscriptions-list"] });
-        queryClient.invalidateQueries({
-          queryKey: ["subscription", movie.slug],
-        });
-      }
-    };
-
-    handleClearBadge();
-  }, [movie.slug, queryClient, user]);
+    if (hasNew) {
+      clearBadge(); // Gọi hàm từ hook đã tích hợp
+    }
+  }, [movie.slug, user, clearBadge, queryClient]);
 
   // Logic xác định tập tiếp theo/trước
   const { nextEpSlug, prevEpSlug } = useMemo(() => {

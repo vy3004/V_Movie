@@ -9,7 +9,7 @@ import React, {
   useRef,
 } from "react";
 import { formatTimeAgo } from "@/lib/utils";
-import { CommentItem as CommentType } from "@/lib/types";
+import { CommentItem as CommentType } from "@/types";
 import {
   HandThumbUpIcon as HandThumbUpSolid,
   TrashIcon,

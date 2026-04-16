@@ -3,7 +3,7 @@
 import React from "react";
 import { ChatBubbleLeftRightIcon, FilmIcon } from "@heroicons/react/24/outline";
 import ImageCustom from "@/components/ImageCustom";
-import { NotificationItem } from "@/lib/types";
+import { NotificationItem } from "@/types";
 import { formatTimeAgo } from "@/lib/utils";
 
 interface Props {

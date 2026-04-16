@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { BASE_URL, typesMovie, apiConfig } from "@/lib/configs";
-import { Movie } from "@/lib/types";
+import { Movie } from "@/types";
 
 // Nếu muốn sitemap tĩnh hoàn toàn (chỉ build 1 lần): bỏ revalidate
 export const revalidate = 24 * 3600;

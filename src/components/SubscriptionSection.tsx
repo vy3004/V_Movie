@@ -13,7 +13,7 @@ import {
 } from "@/components/Carousel";
 import { useData } from "@/providers/BaseDataContextProvider";
 import { formatEpisodeName, getLocalSubscriptions } from "@/lib/utils";
-import { SubscriptionItem } from "@/lib/types";
+import { SubscriptionItem } from "@/types";
 
 export default function SubscriptionSection() {
   const { user } = useData();

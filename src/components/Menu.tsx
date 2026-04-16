@@ -6,7 +6,7 @@ import Loading from "@/components/Loading";
 
 import { useData } from "@/providers/BaseDataContextProvider";
 
-import { CateCtr } from "@/lib/types";
+import { CateCtr } from "@/types";
 import { typesMovie } from "@/lib/configs";
 
 const DropdownMenu = ({

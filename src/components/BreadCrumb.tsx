@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, Fragment } from "react";
 import Link from "next/link";
 import { ChevronRightIcon, HomeIcon } from "@heroicons/react/24/solid";
 
-import { BreadCrumb as BreadCrumbType } from "@/lib/types";
+import { BreadCrumb as BreadCrumbType } from "@/types";
 import { formatUrl } from "@/lib/utils";
 
 interface BreadCrumbProps {
@@ -13,12 +13,15 @@ interface BreadCrumbProps {
 
 // Function to group items by position
 const groupByPosition = (breadCrumb: BreadCrumbType[]) =>
-  breadCrumb.reduce((acc, item) => {
-    const { position } = item;
-    acc[position] = acc[position] || [];
-    acc[position].push(item);
-    return acc;
-  }, {} as Record<number, BreadCrumbType[]>);
+  breadCrumb.reduce(
+    (acc, item) => {
+      const { position } = item;
+      acc[position] = acc[position] || [];
+      acc[position].push(item);
+      return acc;
+    },
+    {} as Record<number, BreadCrumbType[]>,
+  );
 
 const BreadCrumb = ({ breadCrumb }: BreadCrumbProps) => {
   const [isDropdownOpen, setDropdownOpen] = useState(false);

@@ -136,9 +136,9 @@ const CommentListContent = memo(function CommentListContent({
             {/* 1. HỘI THOẠI TIÊU ĐIỂM */}
             {targetComment && lineageData && lineageData.length > 0 && (
               <div className="mb-10 p-4 sm:p-6 rounded-2xl border border-red-500/20 shadow-2xl animate-in fade-in slide-in-from-top-4 duration-700">
-                <div className="flex items-center gap-2 text-xs font-bold text-primary tracking-[0.25em] mb-6">
-                  <ChatBubbleOvalLeftEllipsisIcon className="size-4" />
-                  <span>Hội thoại được nhắc đến</span>
+                <div className="flex items-center gap-2 text-xs tracking-[0.1em] mb-6">
+                  <ChatBubbleOvalLeftEllipsisIcon className="size-6" />
+                  <span>Bạn được nhắc đến trong bình luận này</span>
                 </div>
                 <CommentItem
                   comment={targetComment}

@@ -2,7 +2,7 @@
 
 const Banner = () => {
   return (
-    <div className="relative aspect-[1.5] sm:aspect-[2] md:aspect-[4] overflow-hidden rounded-lg w-full">
+    <div className="relative content-visibility-auto contain-intrinsic-size-[500px_280px] md:contain-intrinsic-size-[1000px_280px] aspect-[1.5] sm:aspect-[2] md:aspect-[4] overflow-hidden rounded-lg w-full">
       <img
         src="/banner.webp"
         alt="Banner"

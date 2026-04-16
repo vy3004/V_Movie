@@ -19,6 +19,7 @@ export const apiConfig = {
 
 export const typesMovie = {
   NEW: { name: "Phim mới", slug: "phim-moi-cap-nhat" },
+  CHIEU_RAP: { name: "Phim chiếu rạp", slug: "phim-chieu-rap" },
   SINGLE: { name: "Phim lẻ", slug: "phim-le" },
   SERIES: { name: "Phim bộ", slug: "phim-bo" },
   TV_SHOWS: { name: "TV Shows", slug: "tv-shows" },

@@ -9,7 +9,7 @@ import Loading from "@/components/Loading";
 import ImageCustom from "@/components/ImageCustom";
 import { Badge, BorderedItem } from "@/components/MovieDetail";
 
-import { Movie } from "@/lib/types";
+import { Movie } from "@/types";
 
 import { useData } from "@/providers/BaseDataContextProvider";
 

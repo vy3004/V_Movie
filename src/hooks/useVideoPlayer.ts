@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import videojs from "video.js";
 import Player from "video.js/dist/types/player";
 import "video.js/dist/video-js.css";
@@ -16,6 +16,12 @@ interface UseVideoPlayerProps {
   onProgress: (currentTime: number, duration: number) => void;
   onAutoNext: () => void;
   onPause?: () => void;
+  // --- Props cho Watch Party ---
+  isWatchParty?: boolean;
+  isHost?: boolean;
+  onPlaySync?: (time: number) => void;
+  onPauseSync?: (time: number) => void;
+  onSeekSync?: (time: number) => void;
 }
 
 export function useVideoPlayer({
@@ -27,19 +33,32 @@ export function useVideoPlayer({
   onProgress,
   onAutoNext,
   onPause,
+  isWatchParty = false,
+  isHost = false,
+  onPlaySync,
+  onPauseSync,
+  onSeekSync,
 }: UseVideoPlayerProps) {
   const playerRef = useRef<Player | null>(null);
   const isInitialSeekDone = useRef(false);
   const isSeekingRef = useRef(false);
   const lastProgressTime = useRef<number>(0);
 
-  // Refs cho callbacks để tránh re-init player khi props thay đổi
+  // Cờ chặn vòng lặp vô hạn: Để xác định sự kiện play/pause là do User click hay do Sync từ xa
+  const isRemoteAction = useRef(false);
+
+  // Refs cho callbacks để tránh re-init player khi props (như isHost) thay đổi
   const refs = useRef({
     onProgress,
     onAutoNext,
     onPause,
     isAutoNext,
     nextEpisodeSlug,
+    onPlaySync,
+    onPauseSync,
+    onSeekSync,
+    isWatchParty,
+    isHost,
   });
 
   useEffect(() => {
@@ -49,8 +68,55 @@ export function useVideoPlayer({
       onPause,
       isAutoNext,
       nextEpisodeSlug,
+      onPlaySync,
+      onPauseSync,
+      onSeekSync,
+      isWatchParty,
+      isHost,
     };
-  }, [onProgress, onAutoNext, onPause, isAutoNext, nextEpisodeSlug]);
+  }, [
+    onProgress,
+    onAutoNext,
+    onPause,
+    isAutoNext,
+    nextEpisodeSlug,
+    onPlaySync,
+    onPauseSync,
+    onSeekSync,
+    isWatchParty,
+    isHost,
+  ]);
+
+  // --- Hàm điều khiển dành cho Guest (Nhận lệnh từ Host) ---
+  const syncFromRemote = useCallback(
+    (action: "play" | "pause" | "seek", time: number) => {
+      const player = playerRef.current;
+      if (!player) return;
+
+      isRemoteAction.current = true; // Bật cờ chặn trước khi thực hiện lệnh
+
+      const currentTime = player.currentTime() || 0;
+      const diff = Math.abs(currentTime - time);
+
+      switch (action) {
+        case "play":
+          // Nếu lệch quá 2s thì mới sync time để tránh giật hình cho Guest mạng yếu
+          if (diff > 2) player.currentTime(time);
+          player.play();
+          break;
+        case "pause":
+          player.currentTime(time);
+          player.pause();
+          break;
+        case "seek":
+          player.currentTime(time);
+          break;
+      }
+
+      // Sau khi thực hiện lệnh programmatic, cờ sẽ được reset ở các event listener bên dưới
+    },
+    [],
+  );
 
   useEffect(() => {
     const videoContainer = videoRef.current;
@@ -58,7 +124,6 @@ export function useVideoPlayer({
 
     let player: Player;
 
-    // --- KHỞI TẠO PLAYER LẦN ĐẦU ---
     if (!playerRef.current) {
       isInitialSeekDone.current = false;
       lastProgressTime.current = 0;
@@ -77,7 +142,6 @@ export function useVideoPlayer({
         sources: [{ src: movieSrc, type: "application/x-mpegURL" }],
       });
 
-      // Plugins/Overlay logic
       const nextBtn = player.addChild("NextEpisodeButton", {
         onAutoNext: () => refs.current.onAutoNext(),
       });
@@ -92,18 +156,54 @@ export function useVideoPlayer({
 
       // --- EVENT LISTENERS ---
       player.on("loadedmetadata", () => {
-        // Chỉ seek nếu chưa từng seek cho source này
         if (initialTime > 0 && !isInitialSeekDone.current) {
           player.currentTime(initialTime);
           isInitialSeekDone.current = true;
         }
       });
 
+      player.on("play", () => {
+        // Chỉ Host mới gửi tín hiệu Play và chỉ khi KHÔNG phải do lệnh Remote
+        if (
+          refs.current.isWatchParty &&
+          refs.current.isHost &&
+          !isRemoteAction.current
+        ) {
+          refs.current.onPlaySync?.(player.currentTime() || 0);
+        }
+        isRemoteAction.current = false; // Luôn reset cờ sau khi xử lý
+      });
+
+      player.on("pause", () => {
+        // Khi Pause, cờ sẽ reset sync lịch sử xem
+        if (!isSeekingRef.current) refs.current.onPause?.();
+
+        // Chi đồng bộ Watch Party cho Host
+        if (
+          refs.current.isWatchParty &&
+          refs.current.isHost &&
+          !isRemoteAction.current
+        ) {
+          refs.current.onPauseSync?.(player.currentTime() || 0);
+        }
+        isRemoteAction.current = false;
+      });
+
       player.on("seeking", () => {
         isSeekingRef.current = true;
       });
+
       player.on("seeked", () => {
         isSeekingRef.current = false;
+        // Host đồng bộ thời điểm mới khi tua xong
+        if (
+          refs.current.isWatchParty &&
+          refs.current.isHost &&
+          !isRemoteAction.current
+        ) {
+          refs.current.onSeekSync?.(player.currentTime() || 0);
+        }
+        isRemoteAction.current = false;
       });
 
       player.on("timeupdate", () => {
@@ -120,7 +220,6 @@ export function useVideoPlayer({
           refs.current.onProgress(curr, dur);
         }
 
-        // Next Episode Overlay
         if (
           refs.current.nextEpisodeSlug &&
           dur > 0 &&
@@ -142,10 +241,6 @@ export function useVideoPlayer({
           refs.current.onAutoNext();
       });
 
-      player.on("pause", () => {
-        if (!isSeekingRef.current) refs.current.onPause?.();
-      });
-
       player.on("volumechange", () => {
         localStorage.setItem("v_movie_volume", String(player.volume()));
       });
@@ -153,29 +248,20 @@ export function useVideoPlayer({
       const savedVol = localStorage.getItem("v_movie_volume");
       if (savedVol) player.volume(Number(savedVol));
     } else {
-      // --- XỬ LÝ KHI PROPS THAY ĐỔI ---
       player = playerRef.current;
-
-      // 1. Nếu đổi phim: Reset toàn bộ state và load source mới
       if (player.currentSrc() !== movieSrc) {
         isInitialSeekDone.current = false;
         lastProgressTime.current = 0;
         player.src({ src: movieSrc, type: "application/x-mpegURL" });
         player.load();
-      }
-      // 2. Nếu phim cũ nhưng initialTime thay đổi VÀ chưa thực hiện seek lần đầu
-      // (Hữu ích khi initialTime được nạp chậm từ API)
-      else if (initialTime > 0 && !isInitialSeekDone.current) {
+      } else if (initialTime > 0 && !isInitialSeekDone.current) {
         if (player.readyState() >= 1) {
-          // Đã có metadata
           player.currentTime(initialTime);
           isInitialSeekDone.current = true;
         }
-        // Nếu chưa có metadata, logic trong sự kiện 'loadedmetadata' ở trên sẽ tự xử lý
       }
     }
 
-    // --- CLEANUP ---
     return () => {
       if (player && !player.isDisposed()) {
         player.dispose();
@@ -183,7 +269,7 @@ export function useVideoPlayer({
         if (videoContainer) videoContainer.innerHTML = "";
       }
     };
-  }, [movieSrc, initialTime, videoRef]); // Thêm initialTime và videoContainer để handle dữ liệu nạp chậm
+  }, [movieSrc, initialTime, videoRef]);
 
-  return { playerRef };
+  return { playerRef, syncFromRemote };
 }

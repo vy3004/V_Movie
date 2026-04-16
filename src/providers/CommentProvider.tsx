@@ -8,7 +8,7 @@ import React, {
   useEffect,
 } from "react";
 import { useSearchParams } from "next/navigation";
-import { CommentItem } from "@/lib/types";
+import { CommentItem } from "@/types";
 
 interface CommentContextType {
   activePath: string[];

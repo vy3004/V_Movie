@@ -9,7 +9,7 @@ import {
 } from "@/components/Carousel";
 import MovieCard from "@/components/MovieCard";
 
-import { Movie } from "@/lib/types";
+import { Movie } from "@/types";
 
 interface MovieSectionProps {
   title: string;

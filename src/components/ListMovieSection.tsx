@@ -1,119 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import dynamic from "next/dynamic";
-
-const MovieSection = dynamic(() => import("@/components/MovieSection"), {
-  ssr: false,
-});
-const Loading = dynamic(() => import("@/components/Loading"), { ssr: false });
-
+import React from "react";
+import LazyMovieSection from "@/components/LazyMovieSection";
 import { typesMovie } from "@/lib/configs";
-import { Movie, PageMoviesData } from "@/lib/types";
 
-type MoviesData = {
-  single: Movie[];
-  series: Movie[];
-  tv_shows: Movie[];
-  anime: Movie[];
-};
-
-type TypesMovieKeys = keyof typeof typesMovie;
+const SECTIONS = [
+  { type: "CHIEU_RAP", config: typesMovie.CHIEU_RAP },
+  { type: "SINGLE", config: typesMovie.SINGLE },
+  { type: "SERIES", config: typesMovie.SERIES },
+  { type: "TV_SHOWS", config: typesMovie.TV_SHOWS },
+  { type: "ANIME", config: typesMovie.ANIME },
+];
 
 const ListMovieSection = () => {
-  const [moviesData, setMoviesData] = useState<MoviesData>({
-    single: [],
-    series: [],
-    tv_shows: [],
-    anime: [],
-  });
-  const [loadMore, setLoadMore] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const bottom =
-        Math.ceil(window.innerHeight + window.scrollY) >=
-        document.documentElement.scrollHeight;
-
-      if (bottom && !loadMore && !loading) {
-        setLoadMore(true);
-      }
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [loadMore, loading]);
-
-  useEffect(() => {
-    const loadMovies = async () => {
-      if (loadMore) {
-        setLoading(true);
-
-        const sections: (keyof MoviesData)[] = [
-          "single",
-          "series",
-          "tv_shows",
-          "anime",
-        ];
-
-        for (const section of sections) {
-          if (moviesData[section].length === 0) {
-            const pathName =
-              typesMovie[section.toUpperCase() as TypesMovieKeys].slug;
-
-            const response = await fetch(
-              `/api/movies?slug=${pathName}&limit=24`,
-            );
-            const data: PageMoviesData = await response.json();
-
-            setMoviesData((prev) => ({
-              ...prev,
-              [section]: data.items,
-            }));
-            setLoadMore(false);
-            break;
-          }
-        }
-
-        setLoading(false);
-      }
-    };
-
-    loadMovies();
-  }, [loadMore, moviesData]);
-
   return (
     <div className="space-y-6 sm:space-y-12">
-      {moviesData.single.length > 0 && (
-        <MovieSection
-          title={typesMovie.SINGLE.name}
-          movies={moviesData.single}
-          hrefViewMore={typesMovie.SINGLE.slug}
+      {SECTIONS.map((section) => (
+        <LazyMovieSection
+          key={section.type}
+          title={section.config.name}
+          slug={section.config.slug}
         />
-      )}
-      {moviesData.series.length > 0 && (
-        <MovieSection
-          title={typesMovie.SERIES.name}
-          movies={moviesData.series}
-          hrefViewMore={typesMovie.SERIES.slug}
-        />
-      )}
-      {moviesData.tv_shows.length > 0 && (
-        <MovieSection
-          title={typesMovie.TV_SHOWS.name}
-          movies={moviesData.tv_shows}
-          hrefViewMore={typesMovie.TV_SHOWS.slug}
-        />
-      )}
-      {moviesData.anime.length > 0 && (
-        <MovieSection
-          title={typesMovie.ANIME.name}
-          movies={moviesData.anime}
-          hrefViewMore={typesMovie.ANIME.slug}
-        />
-      )}
-      {loading && <Loading />}
+      ))}
     </div>
   );
 };

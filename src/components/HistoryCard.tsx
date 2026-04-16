@@ -3,7 +3,7 @@
 import Link from "next/link";
 import ImageCustom from "@/components/ImageCustom";
 import { formatDuration } from "@/lib/utils";
-import { HistoryItem } from "@/lib/types";
+import { HistoryItem } from "@/types";
 
 interface HistoryCardProps {
   item: HistoryItem;

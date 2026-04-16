@@ -1,124 +1,29 @@
 "use client";
 
-import Link from "next/link";
-import React, { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import React, { useState } from "react";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-
-import Loading from "@/components/Loading";
-import ImageCustom from "@/components/ImageCustom";
-import { BorderedItem } from "@/components/MovieDetail";
-import { Movie } from "@/lib/types";
+import SearchModal from "@/components/SearchModal";
 
 const SearchInput = () => {
-  const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-
-  useEffect(() => {
-    const handler = setTimeout(() => setDebouncedQuery(query), 1000);
-    return () => clearTimeout(handler);
-  }, [query]);
-
-  const { data: movies = [], isLoading } = useQuery({
-    queryKey: ["searchMovies", debouncedQuery],
-    queryFn: async () => {
-      if (!debouncedQuery) return [];
-      const response = await fetch(
-        `/api/search?keyword=${encodeURIComponent(debouncedQuery)}`,
-      );
-      if (!response.ok) return [];
-      return response.json();
-    },
-    enabled: !!debouncedQuery,
-  });
-
-  const isTyping = query !== debouncedQuery || isLoading;
-
-  const handleKeyEnterDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && query.trim() !== "") {
-      router.push(`/tim-kiem?keyword=${encodeURIComponent(query)}`);
-      setQuery("");
-    }
-  };
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div
-      className={`relative bg-gray-500/40 rounded-lg transition-all duration-500`}
-    >
-      <div className="flex items-center justify-between gap-1 px-2 py-1 sm:px-3 sm:py-2">
-        <input
-          placeholder="Tìm kiếm phim"
-          className="bg-transparent w-24 sm:w-48 outline-none text-sm"
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={handleKeyEnterDown}
-        />
-        <MagnifyingGlassIcon className="size-6" />
-      </div>
+    <>
+      <button
+        onClick={() => setIsOpen(true)}
+        className="flex items-center justify-center sm:justify-between size-8 sm:h-10 sm:w-52 sm:px-4 rounded-full sm:rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 transition-all group"
+      >
+        <span className="hidden sm:inline text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors">
+          Tìm kiếm phim
+        </span>
 
-      {query.trim() !== "" && (
-        <>
-          {isTyping ? (
-            <DropdownResult className="w-full">
-              <Loading />
-            </DropdownResult>
-          ) : movies.length > 0 ? (
-            <DropdownResult className="max-h-96 max-w-80 sm:max-w-96 w-max overflow-y-scroll space-y-2">
-              {movies.map((movie: Movie) => (
-                <Link
-                  key={movie._id}
-                  href={`/phim/${movie.slug}`}
-                  onClick={() => setQuery("")}
-                  className="space-y-2 group grid grid-cols-3 gap-2 hover:bg-secondary rounded-lg p-1"
-                >
-                  <div className="relative aspect-square rounded overflow-hidden">
-                    <ImageCustom
-                      alt={movie.origin_name}
-                      src={movie.thumb_url}
-                      widths={[120]}
-                      loading="lazy"
-                      className="absolute inset-0 size-full object-cover"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <h3 className="line-clamp-2 text-primary font-semibold text-sm sm:text-base">
-                      {movie.name}
-                    </h3>
-                    <h6 className="line-clamp-1 text-xs sm:text-sm">
-                      ({movie.origin_name})
-                    </h6>
-                    <div className="flex items-center gap-2 text-xs sm:text-sm mt-2">
-                      <BorderedItem>{movie.year}</BorderedItem>
-                      <BorderedItem>{movie.episode_current}</BorderedItem>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </DropdownResult>
-          ) : (
-            <DropdownResult className="w-full">Không tìm thấy</DropdownResult>
-          )}
-        </>
-      )}
-    </div>
+        <MagnifyingGlassIcon className="size-5 sm:size-6 group-hover:text-white transition-colors" />
+      </button>
+
+      {/* MODAL (ẨN BÊN DƯỚI) */}
+      <SearchModal isOpen={isOpen} onClose={() => setIsOpen(false)} />
+    </>
   );
 };
 
 export default SearchInput;
-
-const DropdownResult = ({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) => (
-  <div
-    className={`absolute right-0 mt-2 bg-gray-800 rounded-lg p-2 z-10 ${className}`}
-  >
-    {children}
-  </div>
-);

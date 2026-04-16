@@ -13,7 +13,7 @@ import {
 import HistoryCard from "@/components/HistoryCard";
 import { getLocalHistory } from "@/lib/utils";
 import { useData } from "@/providers/BaseDataContextProvider";
-import { HistoryItem, EpisodeProgress } from "@/lib/types";
+import { HistoryItem, EpisodeProgress } from "@/types";
 
 interface HistorySectionProps {
   title: string;

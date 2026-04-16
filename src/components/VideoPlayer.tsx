@@ -8,7 +8,7 @@ import { User } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { useVideoPlayer } from "@/hooks/useVideoPlayer";
 import { useSubscription } from "@/hooks/useSubscription";
-import { Movie } from "@/lib/types";
+import { Movie } from "@/types";
 import VideoControls from "@/components/VideoControls";
 
 interface Props {
@@ -22,6 +22,12 @@ interface Props {
   onProgress: (currentTime: number, duration: number) => void;
   onAutoNext: () => void;
   onPause?: () => void;
+  isWatchParty?: boolean;
+  isHost?: boolean;
+  onPlaySync?: (time: number) => void;
+  onPauseSync?: (time: number) => void;
+  onSeekSync?: (time: number) => void;
+  playerSyncRef?: React.MutableRefObject<any>;
 }
 
 interface NextEpisodeOptions {
@@ -84,7 +90,7 @@ export default function VideoPlayer(props: Props) {
   });
 
   // 2. Logic Player
-  useVideoPlayer({
+  const { playerRef, syncFromRemote } = useVideoPlayer({
     videoRef,
     movieSrc: props.movieSrc,
     initialTime: props.initialTime || 0,
@@ -93,7 +99,16 @@ export default function VideoPlayer(props: Props) {
     onProgress: props.onProgress,
     onAutoNext: props.onAutoNext,
     onPause: props.onPause,
+    isWatchParty: props.isWatchParty,
+    isHost: props.isHost,
+    onPlaySync: props.onPlaySync,
+    onPauseSync: props.onPauseSync,
+    onSeekSync: props.onSeekSync,
   });
+
+  if (props.playerSyncRef) {
+    props.playerSyncRef.current = { syncFromRemote };
+  }
 
   // Lưu cấu hình AutoNext
   useEffect(() => {

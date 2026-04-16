@@ -13,7 +13,7 @@ import {
 import { ActionButtons, MovieInfo } from "@/components/MovieDetail";
 import ImageCustom from "@/components/ImageCustom";
 
-import { Movie } from "@/lib/types";
+import { Movie } from "@/types";
 
 const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
   return (

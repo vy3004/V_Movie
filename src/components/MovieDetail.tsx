@@ -3,7 +3,7 @@ import Link from "next/link";
 import { PlayIcon, StarIcon } from "@heroicons/react/24/solid";
 
 import { apiConfig } from "@/lib/configs";
-import { Movie } from "@/lib/types";
+import { Movie } from "@/types";
 
 interface MovieDetailProps {
   movie: Movie;
@@ -22,6 +22,7 @@ const MovieDetail = ({ movie }: MovieDetailProps) => {
           src={`${apiConfig.IMG_URL}${movie.poster_url}&w=640`}
           className="object-cover rounded-lg"
           loading="eager"
+          fetchPriority="high"
         />
       </picture>
 

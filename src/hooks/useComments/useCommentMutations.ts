@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
-import { CommentItem } from "@/lib/types";
+import { CommentItem } from "@/types";
 import { useAuthModal } from "@/providers/AuthModalProvider";
 import { InfiniteComments } from "./useCommentsQuery";
 
@@ -14,13 +14,6 @@ interface MutationProps {
   user?: User | null;
 }
 
-interface AddCommentVariables {
-  content: string;
-  movieName?: string;
-  replyToId?: string;
-  rootId?: string | null;
-}
-
 export function useCommentMutations({
   movieSlug,
   parentId = null,
@@ -28,7 +21,10 @@ export function useCommentMutations({
 }: MutationProps) {
   const queryClient = useQueryClient();
   const { onOpen } = useAuthModal();
-  const currentQueryKey = ["comments", movieSlug, parentId];
+
+  // Ép kiểu an toàn cho Cache Key
+  const safeParentId = parentId || null;
+  const currentQueryKey = ["comments", movieSlug, safeParentId];
 
   const checkAuth = useCallback(() => {
     if (!user) {
@@ -39,10 +35,8 @@ export function useCommentMutations({
     return true;
   }, [user, onOpen]);
 
-  // Cập nhật số lượng phản hồi đồng thời ở cả List chính và Cây gia phả
   const updateParentReplyCount = useCallback(
     (targetParentId: string, diff: number) => {
-      // 1. Cập nhật trong danh sách bình luận (Infinite Query)
       queryClient.setQueriesData<InfiniteComments>(
         { queryKey: ["comments", movieSlug], exact: false },
         (old) => {
@@ -64,7 +58,6 @@ export function useCommentMutations({
         },
       );
 
-      // 2. Cập nhật trong cây gia phả (Tagged Section)
       queryClient.setQueriesData<CommentItem[]>(
         { queryKey: ["comment-lineage"], exact: false },
         (old) => {
@@ -83,16 +76,9 @@ export function useCommentMutations({
     [queryClient, movieSlug],
   );
 
-  // ===============================================
-  // 1. MUTATION: THÊM BÌNH LUẬN
-  // ===============================================
+  // 1. ADD
   const addCommentMutation = useMutation({
-    mutationFn: async ({
-      content,
-      movieName,
-      replyToId,
-      rootId,
-    }: AddCommentVariables) => {
+    mutationFn: async ({ content, movieName, replyToId, rootId }: any) => {
       const res = await fetch("/api/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -100,25 +86,25 @@ export function useCommentMutations({
           movieSlug,
           movieName,
           content,
-          parentId,
+          parentId: safeParentId,
           replyToId,
           rootId,
         }),
       });
       if (!res.ok) throw new Error("Server error");
-      return res.json() as Promise<CommentItem>;
+      return res.json().then((d) => d.comment as CommentItem);
     },
     onMutate: async ({ content }) => {
       await queryClient.cancelQueries({ queryKey: currentQueryKey });
       const previousData =
         queryClient.getQueryData<InfiniteComments>(currentQueryKey);
-
       const fakeId = `temp-${crypto.randomUUID()}`;
+
       const fakeComment: CommentItem = {
         id: fakeId,
         movie_slug: movieSlug,
         user_id: user?.id || "temp-user",
-        parent_id: parentId,
+        parent_id: safeParentId,
         content,
         likes_count: 0,
         replies_count: 0,
@@ -131,7 +117,7 @@ export function useCommentMutations({
           avatar_url: user?.user_metadata?.avatar_url || "",
         },
         isOptimistic: true,
-      } as CommentItem;
+      };
 
       queryClient.setQueryData<InfiniteComments>(currentQueryKey, (old) => {
         if (!old)
@@ -142,7 +128,7 @@ export function useCommentMutations({
         const newPages = [...old.pages];
         newPages[0] = {
           ...newPages[0],
-          items: parentId
+          items: safeParentId
             ? [...newPages[0].items, fakeComment]
             : [fakeComment, ...newPages[0].items],
           total: (newPages[0].total || 0) + 1,
@@ -150,19 +136,14 @@ export function useCommentMutations({
         return { ...old, pages: newPages };
       });
 
-      if (parentId) updateParentReplyCount(parentId, 1);
+      if (safeParentId) updateParentReplyCount(safeParentId, 1);
       return { previousData, fakeId };
     },
-    onSuccess: (newComment, variables, context) => {
-      // Thay thế comment ảo bằng dữ liệu thật từ Server để tránh lỗi Reload trang
-      if (!newComment?.id) {
-        // Rollback nếu server không trả về comment hợp lệ
-        if (context?.previousData) {
-          queryClient.setQueryData(currentQueryKey, context.previousData);
-        }
+    onSuccess: (newComment, _vars, context) => {
+      if (!newComment?.id && context?.previousData) {
+        queryClient.setQueryData(currentQueryKey, context.previousData);
         return;
       }
-
       queryClient.setQueryData<InfiniteComments>(currentQueryKey, (old) => {
         if (!old) return old;
         return {
@@ -177,25 +158,28 @@ export function useCommentMutations({
       });
     },
     onError: (_err, _vars, context) => {
-      if (context?.previousData)
+      // FIX LỖI CACHE TREO: Nếu chưa từng có data, xóa luôn cache thay vì để lại Comment Ảo
+      if (context?.previousData) {
         queryClient.setQueryData(currentQueryKey, context.previousData);
+      } else {
+        queryClient.setQueryData(currentQueryKey, {
+          pages: [],
+          pageParams: [],
+        });
+      }
+      if (safeParentId) updateParentReplyCount(safeParentId, -1);
       toast.error("Không thể gửi bình luận.");
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: currentQueryKey });
-    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: currentQueryKey }),
   });
 
-  // ===============================================
-  // 2. MUTATION: XÓA BÌNH LUẬN
-  // ===============================================
+  // 2. DELETE
   const deleteCommentMutation = useMutation({
     mutationFn: async (commentId: string) => {
       const res = await fetch(
         `/api/comments?id=${commentId}&movieSlug=${movieSlug}`,
-        {
-          method: "DELETE",
-        },
+        { method: "DELETE" },
       );
       if (!res.ok) throw new Error("Delete failed");
       return res.json();
@@ -223,7 +207,6 @@ export function useCommentMutations({
         },
       );
 
-      // Xóa trong gia phả
       queryClient.setQueriesData<CommentItem[]>(
         { queryKey: ["comment-lineage"], exact: false },
         (old) => {
@@ -232,13 +215,14 @@ export function useCommentMutations({
         },
       );
 
-      if (parentId) updateParentReplyCount(parentId, -1);
+      if (safeParentId) updateParentReplyCount(safeParentId, -1);
       return { previousQueries };
     },
     onError: (_err, _commentId, context) => {
+      // FIX LỖI UNDEFINED ROLLBACK
       if (context?.previousQueries) {
         context.previousQueries.forEach(([key, data]) => {
-          queryClient.setQueryData(key, data);
+          if (data !== undefined) queryClient.setQueryData(key, data);
         });
       }
       toast.error("Không thể xóa bình luận.");
@@ -247,9 +231,7 @@ export function useCommentMutations({
       queryClient.invalidateQueries({ queryKey: ["comments", movieSlug] }),
   });
 
-  // ===============================================
-  // 3. MUTATION: LIKE/UNLIKE
-  // ===============================================
+  // 3. TOGGLE LIKE
   const toggleLikeMutation = useMutation({
     mutationFn: async (commentId: string) => {
       const res = await fetch("/api/comments/like", {
@@ -299,23 +281,21 @@ export function useCommentMutations({
 
       queryClient.setQueriesData<CommentItem[]>(
         { queryKey: ["comment-lineage"], exact: false },
-
-        (old) => {
-          if (!old) return old;
-          return updater(old);
-        },
+        (old) => (old ? updater(old) : old),
       );
+
       return { previousComments, previousLineage };
     },
     onError: (_err, _commentId, context) => {
+      // FIX LỖI UNDEFINED ROLLBACK
       if (context?.previousComments) {
         context.previousComments.forEach(([key, data]) => {
-          queryClient.setQueryData(key, data);
+          if (data !== undefined) queryClient.setQueryData(key, data);
         });
       }
       if (context?.previousLineage) {
         context.previousLineage.forEach(([key, data]) => {
-          queryClient.setQueryData(key, data);
+          if (data !== undefined) queryClient.setQueryData(key, data);
         });
       }
       toast.error("Không thể thực hiện thao tác.");

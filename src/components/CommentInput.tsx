@@ -7,7 +7,10 @@ import { PaperAirplaneIcon } from "@heroicons/react/24/solid";
 import ImageCustom from "@/components/ImageCustom";
 import { useData } from "@/providers/BaseDataContextProvider";
 import { useAuthModal } from "@/providers/AuthModalProvider";
-import { commentSchema, CommentFormData } from "@/lib/validations/comment";
+import {
+  commentSchema,
+  CommentFormData,
+} from "@/lib/validations/comment.validation";
 
 interface CommentInputProps {
   onSubmit: (content: string) => Promise<void>;

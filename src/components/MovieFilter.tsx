@@ -7,7 +7,7 @@ import { AdjustmentsHorizontalIcon } from "@heroicons/react/24/solid";
 import BreadCrumb from "@/components/BreadCrumb";
 
 import { useData } from "@/providers/BaseDataContextProvider";
-import { BreadCrumb as BreadCrumbType } from "@/lib/types";
+import { BreadCrumb as BreadCrumbType } from "@/types";
 import { typesMovie } from "@/lib/configs";
 
 interface SelectInputProps {
@@ -57,7 +57,7 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
   });
 
   const handleFilterChange = (
-    e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>
+    e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>,
   ) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));

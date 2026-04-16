@@ -1,15 +1,15 @@
 "use client";
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo } from "react";
 import {
   useInfiniteQuery,
   useQuery,
   useQueryClient,
   InfiniteData,
 } from "@tanstack/react-query";
-import { useSearchParams } from "next/navigation";
-import { CommentItem } from "@/lib/types";
 import { toast } from "sonner";
+import { useSearchParams } from "next/navigation";
+import { CommentItem } from "@/types";
 
 const PAGINATION_LIMIT = 5;
 
@@ -53,19 +53,21 @@ export function useCommentsQuery({
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const targetId = searchParams.get("commentId");
-  const isManualRef = useRef(false);
 
+  // Chuẩn hóa Key: Phải ép về null nếu undefined để tránh tạo 2 cache rác
+  const safeParentId = parentId || null;
   const queryKey = useMemo(
-    () => ["comments", movieSlug, parentId],
-    [movieSlug, parentId],
+    () => ["comments", movieSlug, safeParentId],
+    [movieSlug, safeParentId],
   );
 
   const {
     data: lineageData,
     isLoading: isTargetLoading,
     isFetched: isLineageFetched,
-  } = useThreadLineageQuery(parentId === null ? movieSlug : "");
+  } = useThreadLineageQuery(safeParentId === null ? movieSlug : "");
 
+  // Mảng các ID đã hiện ở Cây gia phả
   const pathIds = useMemo(
     () => lineageData?.map((c) => c.id) || [],
     [lineageData],
@@ -77,7 +79,7 @@ export function useCommentsQuery({
       const url = new URL("/api/comments", window.location.origin);
       url.searchParams.append("movieSlug", movieSlug);
       url.searchParams.append("limit", PAGINATION_LIMIT.toString());
-      if (parentId) url.searchParams.append("parentId", parentId);
+      if (safeParentId) url.searchParams.append("parentId", safeParentId);
       if (pageParam) url.searchParams.append("cursor", pageParam as string);
 
       const res = await fetch(url.toString(), { cache: "no-store" });
@@ -93,26 +95,34 @@ export function useCommentsQuery({
     enabled:
       enabled &&
       !!movieSlug &&
-      (!targetId || parentId !== null || isLineageFetched),
+      (!targetId || safeParentId !== null || isLineageFetched),
     staleTime: 1000 * 60 * 5,
   });
 
+  // KHỬ TRÙNG LẶP TUYỆT ĐỐI BẰNG SET O(1)
   const allComments = useMemo(() => {
     const list = queryResult.data?.pages.flatMap((page) => page.items) || [];
-    if (pathIds.length > 0 && parentId === null) {
-      return list.filter((c) => c.id !== pathIds[0]);
+
+    if (pathIds.length > 0 && safeParentId === null) {
+      const lineageSet = new Set(pathIds);
+      // Chặn TẤT CẢ các comment đã có mặt trong gia phả khỏi danh sách chính
+      return list.filter((c) => !lineageSet.has(c.id));
     }
     return list;
-  }, [queryResult.data, pathIds, parentId]);
+  }, [queryResult.data, pathIds, safeParentId]);
 
   const refresh = useCallback(async () => {
-    isManualRef.current = true;
     await queryClient.invalidateQueries({
       queryKey: ["comments", movieSlug],
       exact: false,
     });
+    if (targetId) {
+      await queryClient.invalidateQueries({
+        queryKey: ["comment-lineage", targetId, movieSlug],
+      });
+    }
     toast.success("Đã làm mới bình luận");
-  }, [movieSlug, queryClient]);
+  }, [movieSlug, queryClient, targetId]);
 
   return {
     ...queryResult,

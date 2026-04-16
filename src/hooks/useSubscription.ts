@@ -3,8 +3,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
-import { Movie, SubscriptionItem } from "@/lib/types";
+import { Movie, SubscriptionItem } from "@/types";
 import { getLocalSubscriptions, toggleLocalSubscription } from "@/lib/utils";
+import { useCallback } from "react";
 
 interface UseSubscriptionProps {
   user: User | null | undefined;
@@ -13,10 +14,15 @@ interface UseSubscriptionProps {
 
 export function useSubscription({ user, movie }: UseSubscriptionProps) {
   const queryClient = useQueryClient();
-  const queryKey = ["subscription", movie.slug, user?.id || "guest"];
+  const userId = user?.id || "guest";
 
+  // Danh sách các Key dùng chung
+  const subQueryKey = ["subscription", movie.slug, userId];
+  const listQueryKey = ["subscriptions-list", userId];
+
+  // 1. Lấy trạng thái theo dõi
   const { data: isFollowed = false } = useQuery({
-    queryKey,
+    queryKey: subQueryKey,
     queryFn: async () => {
       if (!user) {
         if (typeof window === "undefined") return false;
@@ -33,12 +39,14 @@ export function useSubscription({ user, movie }: UseSubscriptionProps) {
     staleTime: 1000 * 60 * 5,
   });
 
-  const mutation = useMutation({
+  // 2. Mutation: Theo dõi / Hủy theo dõi
+  const toggleMutation = useMutation({
     mutationFn: async (currentlyFollowed: boolean) => {
       const lastEpisodeSlug =
         movie.episodes?.[0]?.server_data?.[
           movie.episodes[0].server_data.length - 1
         ]?.slug.trim();
+
       const itemPayload: SubscriptionItem = {
         movie_slug: movie.slug,
         movie_name: movie.name,
@@ -48,15 +56,13 @@ export function useSubscription({ user, movie }: UseSubscriptionProps) {
         has_new_episode: false,
       };
 
-      if (!user) {
-        return toggleLocalSubscription(itemPayload);
-      }
+      if (!user) return toggleLocalSubscription(itemPayload);
 
       if (currentlyFollowed) {
         const res = await fetch(`/api/subscriptions?movieSlug=${movie.slug}`, {
           method: "DELETE",
         });
-        if (!res.ok) throw new Error("Lỗi khi hủy theo dõi");
+        if (!res.ok) throw new Error();
         return false;
       } else {
         const res = await fetch("/api/subscriptions", {
@@ -70,39 +76,83 @@ export function useSubscription({ user, movie }: UseSubscriptionProps) {
     },
 
     onMutate: async (currentlyFollowed: boolean) => {
-      await queryClient.cancelQueries({ queryKey });
-      const previousState = queryClient.getQueryData<boolean>(queryKey);
-      queryClient.setQueryData(queryKey, !currentlyFollowed);
+      await queryClient.cancelQueries({ queryKey: subQueryKey });
+      const previousState = queryClient.getQueryData<boolean>(subQueryKey);
+      queryClient.setQueryData(subQueryKey, !currentlyFollowed);
       return { previousState };
     },
-
-    // Sửa lỗi 6133 bằng cách dùng _ hoặc bỏ biến
-    onError: (err, _variables, context) => {
-      if (context?.previousState !== undefined) {
-        queryClient.setQueryData(queryKey, context.previousState);
-      }
-
-      // Toast lỗi bằng Sonner
-      toast.error("Có lỗi xảy ra, vui lòng thử lại sau!");
-      console.error("Subscription toggle failed:", err);
+    onError: (err, _var, context) => {
+      queryClient.setQueryData(subQueryKey, context?.previousState);
+      toast.error("Thao tác thất bại!");
     },
-
     onSuccess: (_, currentlyFollowed) => {
-      // Toast thành công
       toast.success(
         currentlyFollowed ? "Đã hủy theo dõi" : "Đã theo dõi phim này",
       );
     },
-
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey });
-      queryClient.invalidateQueries({ queryKey: ["subscriptions-list"] });
+      queryClient.invalidateQueries({ queryKey: subQueryKey });
+      queryClient.invalidateQueries({ queryKey: listQueryKey });
     },
   });
 
+  // 3. Mutation: Xóa Badge (Chấm đỏ tập mới) - TÍCH HỢP MỚI
+  const clearBadgeMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) {
+        const localSubs = getLocalSubscriptions();
+        const updatedSubs = localSubs.map((s) =>
+          s.movie_slug === movie.slug ? { ...s, has_new_episode: false } : s,
+        );
+        localStorage.setItem(
+          "v_movie_guest_subscriptions",
+          JSON.stringify(updatedSubs),
+        );
+        return;
+      }
+      const res = await fetch("/api/subscriptions/clear-badge", {
+        method: "POST",
+        body: JSON.stringify({ movieSlug: movie.slug }),
+      });
+      if (!res.ok) throw new Error("Failed to clear badge");
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: listQueryKey });
+      const previousList =
+        queryClient.getQueryData<SubscriptionItem[]>(listQueryKey);
+
+      // Optimistic update cho danh sách subscription
+      queryClient.setQueryData(
+        listQueryKey,
+        (old: SubscriptionItem[] | undefined) => {
+          return old?.map((s) =>
+            s.movie_slug === movie.slug ? { ...s, has_new_episode: false } : s,
+          );
+        },
+      );
+
+      return { previousList };
+    },
+    onError: (_err, _var, context) => {
+      if (context?.previousList) {
+        queryClient.setQueryData(listQueryKey, context.previousList);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: listQueryKey });
+      // Cập nhật lại cả trạng thái follow nếu cần
+      queryClient.invalidateQueries({ queryKey: subQueryKey });
+    },
+  });
+
+  const clearBadge = useCallback(() => {
+    clearBadgeMutation.mutate();
+  }, [clearBadgeMutation.mutate]);
+
   return {
     isFollowed,
-    toggleFollow: () => mutation.mutate(isFollowed),
-    isLoading: mutation.isPending,
+    toggleFollow: () => toggleMutation.mutate(isFollowed),
+    clearBadge,
+    isLoading: toggleMutation.isPending || clearBadgeMutation.isPending,
   };
 }

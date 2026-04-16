@@ -7,7 +7,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/solid";
 import { FilmIcon } from "@heroicons/react/24/outline";
-import { Episode, ServerData, EpisodeProgress } from "@/lib/types";
+import { Episode, ServerData, EpisodeProgress } from "@/types";
 
 interface EpisodeSelectorProps {
   servers: Episode[];

@@ -13,7 +13,7 @@ import {
 import { createSupabaseClient } from "@/lib/supabase/client";
 import Logo from "@/components/Logo";
 import { useAuthModal } from "@/providers/AuthModalProvider";
-import { authSchema, AuthFormData } from "@/lib/validations/auth";
+import { authSchema, AuthFormData } from "@/lib/validations/auth.validation";
 import { openAuthPopup } from "@/lib/auth-popup";
 
 export default function AuthModal() {

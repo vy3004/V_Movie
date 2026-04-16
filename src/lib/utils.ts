@@ -1,12 +1,13 @@
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
+import { redis } from "@/lib/redis";
 import {
+  Movie,
   HistoryItem,
   SubscriptionItem,
   EpisodeProgress,
   HistoryUpdatePayload,
-} from "@/lib/types";
-import { redis } from "@/lib/redis";
+} from "@/types";
 
 // Device ID helper for guest users
 const DEVICE_ID_KEY = "v_movie_device_id";
@@ -94,6 +95,20 @@ export const formatTimeAgo = (date: string | Date): string => {
     addSuffix: true,
     locale: vi,
   });
+};
+
+/**
+ * Helper xáo trộn phim (Fisher-Yates shuffle)
+ */
+export const shuffleMovies = (items: Movie[]): Movie[] => {
+  if (!items.length) return [];
+
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
 };
 
 const GUEST_HISTORY_KEY = "v_movie_guest_history";
@@ -264,128 +279,74 @@ export const getHistoryCache = async (userId?: string, deviceId?: string) => {
 const GUEST_SUBS_KEY = "v_movie_guest_subscriptions";
 
 /**
- * LOCAL STORAGE (Cho Guest)
+ * 1. Đọc danh sách phim theo dõi từ LocalStorage (Dành cho Guest)
  */
 export const getLocalSubscriptions = (): SubscriptionItem[] => {
   if (typeof window === "undefined") return [];
 
   try {
-    const data = localStorage.getItem(GUEST_SUBS_KEY);
-    if (!data) return [];
+    const rawData = localStorage.getItem(GUEST_SUBS_KEY);
+    if (!rawData) return [];
 
-    const parsed = JSON.parse(data);
-    if (Array.isArray(parsed)) {
-      return parsed.filter(
-        (item) => item && typeof item === "object" && item.movie_slug,
+    const parsedData = JSON.parse(rawData);
+
+    // Kiểm tra tính hợp lệ của dữ liệu (bảo vệ khỏi việc user tự sửa bậy trong DevTools)
+    if (Array.isArray(parsedData)) {
+      return parsedData.filter(
+        (item): item is SubscriptionItem =>
+          item !== null &&
+          typeof item === "object" &&
+          typeof item.movie_slug === "string",
       );
     }
     return [];
   } catch (error) {
-    console.error("[LocalStorage] Error reading subscriptions:", error);
+    console.error(
+      "[LocalStorage] Cảnh báo: Lỗi đọc dữ liệu Subscriptions.",
+      error,
+    );
+    // Nếu lỗi (ví dụ JSON.parse fail), xóa dữ liệu cũ để tránh lỗi liên hoàn
+    localStorage.removeItem(GUEST_SUBS_KEY);
     return [];
   }
 };
 
+/**
+ * 2. Thêm/Xóa phim khỏi danh sách theo dõi trong LocalStorage
+ * Trả về: true (nếu mới thêm), false (nếu vừa xóa)
+ */
 export const toggleLocalSubscription = (item: SubscriptionItem): boolean => {
   if (typeof window === "undefined") return false;
 
   try {
-    const subs = getLocalSubscriptions();
-    const existingIndex = subs.findIndex(
+    const currentSubs = getLocalSubscriptions();
+    const isCurrentlyFollowed = currentSubs.some(
       (s) => s.movie_slug === item.movie_slug,
     );
-    let isAdded = false;
 
-    if (existingIndex >= 0) {
-      subs.splice(existingIndex, 1); // Unfollow
+    let newSubs: SubscriptionItem[];
+
+    if (isCurrentlyFollowed) {
+      // Hủy theo dõi: Lọc bỏ item đó ra khỏi mảng (Immutable approach)
+      newSubs = currentSubs.filter((s) => s.movie_slug !== item.movie_slug);
     } else {
-      const newItem = {
+      // Theo dõi: Thêm lên đầu mảng
+      const newItem: SubscriptionItem = {
         ...item,
         updated_at: new Date().toISOString(),
       };
-      subs.unshift(newItem); // Follow
-      isAdded = true;
+      newSubs = [newItem, ...currentSubs];
     }
 
-    localStorage.setItem(GUEST_SUBS_KEY, JSON.stringify(subs));
+    // Ghi xuống đĩa
+    localStorage.setItem(GUEST_SUBS_KEY, JSON.stringify(newSubs));
 
-    // Dispatch event (truyền item đã cập nhật)
-    window.dispatchEvent(
-      new CustomEvent("local-subscriptions-updated", {
-        detail: {
-          item:
-            existingIndex >= 0
-              ? item
-              : { ...item, updated_at: new Date().toISOString() },
-          isAdded,
-          subscriptions: subs,
-        },
-      }),
+    return !isCurrentlyFollowed;
+  } catch (error) {
+    console.error(
+      "[LocalStorage] Cảnh báo: Lỗi lưu dữ liệu Subscription.",
+      error,
     );
-
-    return isAdded;
-  } catch (error) {
-    console.error("[LocalStorage] Error toggling subscription:", error);
     return false;
-  }
-};
-
-/**
- * REDIS CACHE (Cho User đã đăng nhập)
- */
-const SUBS_CACHE_PREFIX = "subscriptions";
-const SUBS_CACHE_TTL = 60 * 60 * 24 * 30; // 30 ngày
-
-export const getSubscriptionCacheKey = (userId?: string): string | null => {
-  if (!userId) return null;
-  return `${SUBS_CACHE_PREFIX}:user:${userId}`;
-};
-
-export const updateSubscriptionCache = async (
-  userId: string,
-  action: "add" | "remove" | "update",
-  item: Pick<SubscriptionItem, "movie_slug"> & Partial<SubscriptionItem>,
-) => {
-  const key = getSubscriptionCacheKey(userId);
-  if (!key || !redis) return;
-
-  try {
-    if (action === "remove") {
-      await redis.hdel(key, item.movie_slug);
-    } else {
-      await redis.hset(key, {
-        [item.movie_slug]: JSON.stringify(item),
-      });
-    }
-    await redis.expire(key, SUBS_CACHE_TTL);
-  } catch (error) {
-    console.error("Error updating subscription cache:", error);
-  }
-};
-
-export const getSubscriptionCache = async (userId: string) => {
-  const key = getSubscriptionCacheKey(userId);
-  if (!key || !redis) return null;
-
-  try {
-    const subs = await redis.hgetall(key);
-    if (!subs || Object.keys(subs).length === 0) return null;
-
-    const parsedSubs: Record<string, SubscriptionItem> = {};
-    for (const movieSlug in subs) {
-      try {
-        const val = subs[movieSlug];
-        parsedSubs[movieSlug] =
-          typeof val === "string"
-            ? JSON.parse(val)
-            : (val as unknown as SubscriptionItem);
-      } catch (e) {
-        console.error(`Error parsing subscription: ${movieSlug}`, e);
-      }
-    }
-    return parsedSubs;
-  } catch (error) {
-    console.error("Error getting subscription cache:", error);
-    return null;
   }
 };

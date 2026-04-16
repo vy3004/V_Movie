@@ -10,9 +10,12 @@ import React, {
 import { useRouter } from "next/navigation";
 import { User } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CateCtr, Movie } from "@/lib/types";
+import { CateCtr, Movie, PageMoviesData } from "@/types";
 import { getLocalHistory, getLocalSubscriptions } from "@/lib/utils";
 import { createSupabaseClient } from "@/lib/supabase/client";
+
+// Chỉ lọc bỏ các nhãn thể loại nhạy cảm khỏi Menu/UI
+const HIDDEN_GENRE_SLUGS = ["phim-18", "nguoi-lon", "xxx", "phim-sex"];
 
 interface BaseDataContextType {
   user: User | null | undefined;
@@ -40,7 +43,7 @@ export default function BaseDataContextProvider({
   const router = useRouter();
   const lastEventTime = useRef<number>(0);
 
-  // 1. Auth User: Cache vô hạn vì sẽ cập nhật chủ động qua onAuthStateChange
+  // 1. Auth User
   const { data: user, isLoading: authLoading } = useQuery<
     User | null | undefined
   >({
@@ -55,7 +58,7 @@ export default function BaseDataContextProvider({
     gcTime: Infinity,
   });
 
-  // 2. Metadata (Categories/Countries): Backend đã có Cache-Control 1h
+  // 2. Metadata: Lấy Thể loại & Quốc gia
   const { data: metadata } = useQuery({
     queryKey: ["metadata"],
     queryFn: () => fetch("/api/metadata").then((res) => res.json()),
@@ -63,103 +66,82 @@ export default function BaseDataContextProvider({
     gcTime: Infinity,
   });
 
-  // 3. Top Movies: Backend có Redis cache 10p
-  const { data: dataTopMovies } = useQuery<Movie[]>({
+  // 3. Top Movies: Lấy danh sách phim hot
+  const { data: responseTopMovies } = useQuery<PageMoviesData>({
     queryKey: ["topMovies"],
-    queryFn: () => fetch("/api/movies/top").then((res) => res.json()),
-    staleTime: 1000 * 60 * 10, // 10p khớp với Redis
+    queryFn: async () => {
+      const res = await fetch(
+        "/api/movies/list?limit=20&sort_field=tmdb.vote_count",
+      );
+      if (!res.ok) throw new Error("Failed to fetch movies");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 60,
   });
 
-  // 4. Đồng bộ lịch sử và phim theo dõi (Optimized for Redis)
+  // 4. Đồng bộ Lịch sử & Theo dõi
   useEffect(() => {
     if (!user) return;
-
-    // Đồng bộ lịch sử
-    const handleSyncHistory = async () => {
-      const localData = getLocalHistory();
+    const handleSync = async (
+      url: string,
+      localData: any[],
+      storageKey: string,
+      queryKey: string[],
+    ) => {
       if (localData.length === 0) return;
-
       try {
-        const res = await fetch("/api/history/sync", {
+        const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ localHistory: localData }),
+          body: JSON.stringify({
+            [storageKey === "v_movie_guest_history"
+              ? "localHistory"
+              : "localSubscriptions"]: localData,
+          }),
         });
-
         if (res.ok) {
-          localStorage.removeItem("v_movie_guest_history");
-          window.dispatchEvent(new Event("history-synced"));
-
-          // Ta invalidate để React Query fetch lại bản mới nhất từ DB
-          queryClient.invalidateQueries({
-            queryKey: ["movie-history", user.id],
-          });
-          console.log("🚀 [Sync-History] Đã đồng bộ lịch sử.");
+          localStorage.removeItem(storageKey);
+          if (storageKey === "v_movie_guest_history")
+            window.dispatchEvent(new Event("history-synced"));
+          queryClient.invalidateQueries({ queryKey });
         }
       } catch (error) {
-        console.error("❌ [Sync History Error]", error);
+        console.error(`❌ [Sync Error: ${url}]`, error);
       }
     };
-
-    // Đồng bộ Phim theo dõi
-    const handleSyncSubscriptions = async () => {
-      const localSubs = getLocalSubscriptions();
-      if (localSubs.length === 0) return;
-
-      try {
-        const res = await fetch("/api/subscriptions/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ localSubscriptions: localSubs }),
-        });
-
-        if (res.ok) {
-          // Xóa sạch ở LocalStorage sau khi sync thành công
-          localStorage.removeItem("v_movie_guest_subscriptions");
-
-          // Làm mới cache của React Query để danh sách phim hiện ra ngay
-          queryClient.invalidateQueries({
-            queryKey: ["subscriptions-list", user.id],
-          });
-
-          console.log("🚀 [Sync Subs] Đã đồng bộ danh sách phim theo dõi.");
-        }
-      } catch (error) {
-        console.error("❌ [Sync Subs Error]", error);
-      }
-    };
-
-    handleSyncHistory();
-    handleSyncSubscriptions(); // Kích hoạt sync subs
+    handleSync(
+      "/api/history/sync",
+      getLocalHistory(),
+      "v_movie_guest_history",
+      ["movie-history", user.id],
+    );
+    handleSync(
+      "/api/subscriptions/sync",
+      getLocalSubscriptions(),
+      "v_movie_guest_subscriptions",
+      ["subscriptions-list", user.id],
+    );
   }, [user, queryClient]);
 
-  // 5. Auth Listener (Tối ưu tránh Duplicate & Flash UI)
+  // 5. Auth Listener
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         const now = Date.now();
         if (now - lastEventTime.current < 500) return;
         lastEventTime.current = now;
-
         const currentUser = session?.user ?? null;
         const previousUser = queryClient.getQueryData(["auth-user"]);
 
         if (event === "SIGNED_IN") {
           queryClient.setQueryData(["auth-user"], currentUser);
-          if (!previousUser) {
-            router.refresh();
-          }
+          if (!previousUser) router.refresh();
         }
-
         if (event === "SIGNED_OUT") {
           queryClient.setQueryData(["auth-user"], null);
           queryClient.removeQueries({ queryKey: ["movie-history"] });
-          if (previousUser) {
-            router.refresh();
-          }
+          if (previousUser) router.refresh();
         }
-
-        // TOKEN_REFRESHED và USER_UPDATED:
         if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
           queryClient.setQueryData(["auth-user"], currentUser);
         }
@@ -168,32 +150,32 @@ export default function BaseDataContextProvider({
     return () => authListener.subscription.unsubscribe();
   }, [supabase, queryClient, router]);
 
-  // 6. Xử lý dữ liệu thô (Memoized)
+  // 6. Xử lý dữ liệu (Chỉ lọc ở tầng Category)
   const processedData = useMemo(() => {
-    const cats = metadata?.categories ? [...metadata.categories] : undefined;
-    const ctrs = metadata?.countries ? [...metadata.countries] : undefined;
+    // A. Lọc bỏ các thể loại nhạy cảm khỏi danh sách hiển thị (Navbar/Sidebar)
+    const cats = metadata?.categories
+      ? metadata.categories
+          .filter((c: CateCtr) => !HIDDEN_GENRE_SLUGS.includes(c.slug))
+          .sort((a: any, b: any) => a.name.localeCompare(b.name))
+      : undefined;
 
-    if (cats) {
-      cats.sort((a, b) => a.name.localeCompare(b.name));
-    }
-    if (ctrs) {
-      ctrs.sort((a, b) => a.name.localeCompare(b.name));
-    }
+    const ctrs = metadata?.countries
+      ? [...metadata.countries].sort((a: any, b: any) =>
+          a.name.localeCompare(b.name),
+        )
+      : undefined;
 
-    // Top Movies Logic
-    const year = dataTopMovies?.slice(0, 10) || [];
-    const month =
-      dataTopMovies
-        ?.slice(0, 14)
-        .sort(() => 0.5 - Math.random())
-        .slice(0, 10) || [];
-    const day =
-      dataTopMovies?.sort(() => 0.5 - Math.random()).slice(0, 10) || [];
+    // B. Top Movies: Lấy nguyên bản từ API (Không lọc phim bên trong)
+    const items: Movie[] = responseTopMovies?.items || [];
+
+    const year = items.slice(0, 10);
+    const month = [...items].sort(() => 0.5 - Math.random()).slice(0, 10);
+    const day = [...items].sort(() => 0.5 - Math.random()).slice(0, 10);
 
     return { cats, ctrs, year, month, day };
-  }, [metadata, dataTopMovies]);
+  }, [metadata, responseTopMovies]);
 
-  // 7. Context Value (Memoized)
+  // 7. Context Value
   const contextValue = useMemo(
     () => ({
       user,
