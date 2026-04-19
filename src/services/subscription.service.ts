@@ -20,10 +20,14 @@ export const SubscriptionService = {
     try {
       // BƯỚC 1: Lấy từ Redis Hash
       if (redis) {
-        const cachedData = await redis.hgetall(key);
+        const cachedData = await redis.hgetall<Record<string, string>>(key);
+
         if (cachedData && Object.keys(cachedData).length > 0) {
-          subsList = Object.values(cachedData).map((val: any) =>
-            typeof val === "string" ? JSON.parse(val) : val,
+          subsList = Object.values(cachedData).map(
+            (val: string | SubscriptionItem) =>
+              typeof val === "string"
+                ? (JSON.parse(val) as SubscriptionItem)
+                : val,
           );
         }
       }
@@ -184,7 +188,7 @@ export const SubscriptionService = {
 
     const supabase = await createSupabaseServer();
 
-    // 1. Lấy dữ liệu DB hiện tại (để không ghi đè trạng thái 'has_new_episode' đang true)
+    // 1. Lấy dữ liệu DB hiện tại
     const { data: dbSubs } = await supabase
       .from("user_subscriptions")
       .select("*")

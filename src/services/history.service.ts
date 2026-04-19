@@ -11,8 +11,7 @@ const getHistoryKey = (userId?: string, deviceId?: string) => {
 
 export const HistoryService = {
   /**
-   *  Lấy lịch sử của MỘT bộ phim cụ thể (Dùng cho trang phim)
-   * Priority: Redis Hash -> Supabase -> Backfill Redis
+   * Lấy lịch sử của MỘT bộ phim cụ thể (Dùng cho trang phim)
    */
   getLatest: async (
     userId: string,
@@ -21,19 +20,20 @@ export const HistoryService = {
     const hashKey = `history:user:${userId}`;
 
     try {
-      // BƯỚC 1: Truy vấn Redis Hash (Cực nhanh)
       if (redis) {
-        const movieData = await redis.hget<HistoryItem>(hashKey, movieSlug);
+        // HGET có thể trả về string (dữ liệu thô) hoặc null
+        const movieData = await redis.hget<string | HistoryItem>(
+          hashKey,
+          movieSlug,
+        );
         if (movieData) {
-          console.log(`[History Hit] Redis: ${movieSlug}`);
-          // Nếu redis trả về string (tùy client), ta parse, nếu object rồi thì trả về luôn
+          console.log(`🚀[History Hit] Redis: ${movieSlug}`);
           return typeof movieData === "string"
-            ? JSON.parse(movieData)
+            ? (JSON.parse(movieData) as HistoryItem)
             : movieData;
         }
       }
 
-      // BƯỚC 2: Cache Miss -> Truy vấn Supabase
       const supabase = await createSupabaseServer();
       const { data, error } = await supabase
         .from("watch_history")
@@ -50,18 +50,15 @@ export const HistoryService = {
         return null;
       }
 
-      // BƯỚC 3: Nếu tìm thấy trong DB, thực hiện Backfill (Nạp ngược lại Cache)
       if (data && redis) {
-        // Lưu vào Hash với field là movie_slug
         await redis.hset(hashKey, { [movieSlug]: JSON.stringify(data) });
-        // Set expire cho toàn bộ hash lịch sử của user (ví dụ: 7 ngày)
         await redis.expire(hashKey, 604800);
       }
 
       return data as HistoryItem;
     } catch (err) {
       console.error(
-        `❌ [HistoryService.getLatest] Fatal Error [${movieSlug}]:`,
+        `❌[HistoryService.getLatest] Fatal Error [${movieSlug}]:`,
         err,
       );
       return null;
@@ -75,15 +72,18 @@ export const HistoryService = {
     userId?: string,
     deviceId?: string,
   ): Promise<HistoryItem[]> => {
-    const key = getHistoryKey(userId || undefined, deviceId || undefined);
+    const key = getHistoryKey(userId, deviceId);
     if (!key) return [];
 
-    // Thử lấy từ Redis
     if (redis) {
-      const cached = await redis.hgetall(key);
+      // HGETALL trả về Record<string, string>
+      const cached = await redis.hgetall<Record<string, string>>(key);
       if (cached && Object.keys(cached).length > 0) {
         return Object.values(cached)
-          .map((v: any) => (typeof v === "string" ? JSON.parse(v) : v))
+          .map(
+            (v: string | HistoryItem) =>
+              (typeof v === "string" ? JSON.parse(v) : v) as HistoryItem,
+          )
           .sort(
             (a, b) =>
               new Date(b.updated_at).getTime() -
@@ -92,7 +92,6 @@ export const HistoryService = {
       }
     }
 
-    // Cache miss -> Vào DB
     const supabase = await createSupabaseServer();
     let query = supabase.from("watch_history").select("*");
     if (userId) query = query.eq("user_id", userId);
@@ -103,13 +102,12 @@ export const HistoryService = {
     });
     if (error || !data) return [];
 
-    // Backfill vào Redis
     if (redis && data.length > 0) {
       const pipeline = redis.pipeline();
       data.forEach((item) => {
         pipeline.hset(key, { [item.movie_slug]: JSON.stringify(item) });
       });
-      pipeline.expire(key, 604800); // 7 ngày
+      pipeline.expire(key, 604800);
       await pipeline.exec();
     }
 
@@ -123,11 +121,15 @@ export const HistoryService = {
     const key = getHistoryKey(payload.user_id, payload.device_id);
     if (!key || !redis) return;
 
-    const existing: any = await redis.hget(key, payload.movie_slug);
+    const existing = await redis.hget<string | HistoryItem | null>(
+      key,
+      payload.movie_slug,
+    );
+
     const historyItem: HistoryItem = existing
-      ? typeof existing === "string"
-        ? JSON.parse(existing)
-        : existing
+      ? ((typeof existing === "string"
+          ? JSON.parse(existing)
+          : existing) as HistoryItem)
       : {
           movie_slug: payload.movie_slug,
           movie_name: payload.movie_name || "",
@@ -156,11 +158,9 @@ export const HistoryService = {
     historyItem.last_episode_slug = payload.last_episode_slug;
     historyItem.updated_at = new Date().toISOString();
 
-    // Kiểm tra cờ is_finished của CẢ BỘ PHIM
     if (payload.last_episode_slug === payload.last_episode_of_movie_slug) {
       historyItem.is_finished = finalEpFinished;
     } else {
-      // Nếu đang xem tập giữa chừng, thì lấy cờ cũ của tập cuối
       historyItem.is_finished =
         historyItem.episodes_progress[payload.last_episode_of_movie_slug]
           ?.ep_is_finished || false;
@@ -174,19 +174,16 @@ export const HistoryService = {
 
   /**
    * Cập nhật Cache Redis thay vì xóa (Write-through Cache)
-   * Giúp hệ thống không bị Cache Miss ở lần truy cập sau
    */
   updateCache: async (userId: string, updatedItem: HistoryItem) => {
     if (!redis) return;
     const key = getHistoryKey(userId);
     if (!key) return;
 
-    // Ghi đè bộ phim này vào Hash hiện tại
     await redis.hset(key, {
       [updatedItem.movie_slug]: JSON.stringify(updatedItem),
     });
-    // Gia hạn thời gian sống
-    await redis.expire(key, 604800); // 7 ngày
+    await redis.expire(key, 604800);
   },
 
   /**
@@ -195,7 +192,6 @@ export const HistoryService = {
   syncItemToDB: async (userId: string, incomingItem: HistoryItem) => {
     const supabase = await createSupabaseServer();
 
-    // 1. Lấy dữ liệu cũ để merge (tránh mất các tập khác)
     const { data: existing } = await supabase
       .from("watch_history")
       .select("id, episodes_progress, last_episode_of_movie_slug, is_finished")
@@ -207,7 +203,6 @@ export const HistoryService = {
       (existing?.episodes_progress as Record<string, EpisodeProgress>) || {};
     const incomingProgress = incomingItem.episodes_progress || {};
 
-    // 2. Merge tiến độ
     const mergedProgress = { ...existingProgress };
     for (const slug in incomingProgress) {
       const newEp = incomingProgress[slug];
@@ -218,19 +213,17 @@ export const HistoryService = {
       };
     }
 
-    // 3. Xử lý tập phim mới (Auto-reopen)
     const currentTotalLastSlug = incomingItem.last_episode_of_movie_slug;
     const storedTotalLastSlug = existing?.last_episode_of_movie_slug;
     let isMovieFinished = false;
 
     if (storedTotalLastSlug && currentTotalLastSlug !== storedTotalLastSlug) {
-      isMovieFinished = false; // Có tập mới -> Chưa xong
+      isMovieFinished = false;
     } else {
       isMovieFinished =
         mergedProgress[currentTotalLastSlug]?.ep_is_finished || false;
     }
 
-    // 4. Tìm tập vừa xem gần nhất
     let latestEpSlug = incomingItem.last_episode_slug;
     let latestTime = 0;
     for (const slug in mergedProgress) {
@@ -242,7 +235,7 @@ export const HistoryService = {
     }
 
     const finalItem = {
-      id: existing?.id, // Có ID thì Update, không thì Insert
+      id: existing?.id,
       user_id: userId,
       movie_slug: incomingItem.movie_slug,
       movie_name: incomingItem.movie_name,
@@ -254,19 +247,16 @@ export const HistoryService = {
       updated_at: new Date().toISOString(),
     };
 
-    // 5. Lưu DB
     const { error } = await supabase
       .from("watch_history")
-      .upsert(finalItem, { onConflict: "user_id,movie_slug" });
+      .upsert(finalItem, { onConflict: "id" });
     if (error) throw error;
 
-    // 6. Cập nhật Cache Redis (Không Purge)
-    await HistoryService.updateCache(userId, finalItem);
+    await HistoryService.updateCache(userId, finalItem as HistoryItem);
   },
 
   /**
    * LƯU NHIỀU PHIM VÀO DB (Xử lý lỗi N+1 Query)
-   * Dùng khi Guest đăng nhập và đẩy LocalStorage lên
    */
   bulkSyncToDB: async (userId: string, localItems: HistoryItem[]) => {
     if (!localItems || localItems.length === 0) return;
@@ -274,7 +264,6 @@ export const HistoryService = {
     const supabase = await createSupabaseServer();
     const movieSlugs = localItems.map((item) => item.movie_slug);
 
-    // 1. LẤY TOÀN BỘ DATA CŨ TRONG 1 LẦN (Khử N+1)
     const { data: existingRecords } = await supabase
       .from("watch_history")
       .select(
@@ -287,7 +276,6 @@ export const HistoryService = {
     const upsertPayloads = [];
     const cachePayloads: HistoryItem[] = [];
 
-    // 2. MERGE TRONG RAM
     for (const item of localItems) {
       const existing = existingMap.get(item.movie_slug);
       const existingProgress =
@@ -339,16 +327,14 @@ export const HistoryService = {
       };
 
       upsertPayloads.push(finalItem);
-      cachePayloads.push(finalItem);
+      cachePayloads.push(finalItem as HistoryItem);
     }
 
-    // 3. BULK UPSERT VÀO DB TRONG 1 LẦN
     const { error } = await supabase
       .from("watch_history")
-      .upsert(upsertPayloads, { onConflict: "user_id,movie_slug" });
+      .upsert(upsertPayloads, { onConflict: "id" });
     if (error) throw error;
 
-    // 4. BULK UPDATE VÀO REDIS
     if (redis) {
       const key = getHistoryKey(userId);
       if (key) {

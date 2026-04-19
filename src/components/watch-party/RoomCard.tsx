@@ -3,8 +3,9 @@
 import { UserGroupIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import Link from "next/link";
 import ImageCustom from "@/components/ImageCustom";
+import { WatchPartyRoom } from "@/types";
 
-export default function RoomCard({ room }: { room: any }) {
+export default function RoomCard({ room }: { room: WatchPartyRoom }) {
   // Thay url này bằng link ảnh default nếu phòng không có ảnh phim
   const bgImage =
     room.movie_image ||
@@ -21,16 +22,17 @@ export default function RoomCard({ room }: { room: any }) {
       <div className="group relative aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 hover:border-red-600 transition-all duration-300 hover:scale-105 shadow-lg cursor-pointer">
         {/* Background Image */}
         <ImageCustom
+          className="absolute inset-0 object-cover size-full rounded-xl group-hover:opacity-40 transition-opacity"
           src={bgImage}
           alt={room.title}
-          className="absolute inset-0 object-cover size-full opacity-60 group-hover:opacity-40 transition-opacity"
+          widths={[400]}
         />
 
-        {/* Gradient Overlay (Netflix style) */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+        {/* Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent rounded-xl" />
 
         {/* Top Badges */}
-        <div className="absolute top-3 w-full px-3 flex justify-between items-center">
+        <div className="absolute top-2 w-full px-2 flex justify-between items-center">
           <span className="bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-md text-xs font-bold text-white uppercase tracking-wider border border-zinc-700">
             Mã: {room.room_code}
           </span>
@@ -42,20 +44,18 @@ export default function RoomCard({ room }: { room: any }) {
         </div>
 
         {/* Content Bottom */}
-        <div className="absolute bottom-0 w-full p-4 flex flex-col justify-end">
-          <h3 className="text-white font-bold text-lg leading-tight line-clamp-1 group-hover:text-red-500 transition-colors">
+        <div className="absolute bottom-0 w-full p-2 flex flex-col justify-end">
+          <h3 className="text-white font-bold text-md leading-tight line-clamp-1 group-hover:text-red-500 transition-colors">
             {room.title}
           </h3>
-          <p className="text-zinc-300 text-sm mt-1 line-clamp-1">
-            {room.current_movie_slug.replace(/-/g, " ")}
-          </p>
 
           <div className="flex items-center gap-4 mt-3">
             <div className="flex items-center gap-2">
-              <img
-                src={room.host?.avatar_url || "/default-avatar.png"}
-                alt="Host"
+              <ImageCustom
                 className="w-6 h-6 rounded-full border border-zinc-500"
+                src={room.host?.avatar_url || "/default-avatar.png"}
+                alt={room.host?.full_name || "Host"}
+                widths={[36]}
               />
               <span className="text-xs text-zinc-400 font-medium truncate max-w-[100px]">
                 {room.host?.full_name}

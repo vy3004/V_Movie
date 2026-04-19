@@ -1,21 +1,21 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import videojs from "video.js";
 import Player from "video.js/dist/types/player";
 import Component from "video.js/dist/types/component";
 import { User } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useVideoPlayer } from "@/hooks/useVideoPlayer";
 import { useSubscription } from "@/hooks/useSubscription";
-import { Movie } from "@/types";
+import { Movie, PlayerSyncRef } from "@/types";
 import VideoControls from "@/components/VideoControls";
 
 interface Props {
   user: User | null | undefined;
   movie: Movie;
   movieSrc: string;
-  movieName: string;
   nextEpisodeSlug?: string | null;
   prevEpisodeSlug?: string | null;
   initialTime?: number;
@@ -23,11 +23,14 @@ interface Props {
   onAutoNext: () => void;
   onPause?: () => void;
   isWatchParty?: boolean;
+  canControl?: boolean;
   isHost?: boolean;
   onPlaySync?: (time: number) => void;
   onPauseSync?: (time: number) => void;
   onSeekSync?: (time: number) => void;
-  playerSyncRef?: React.MutableRefObject<any>;
+  onPlayerReady?: () => void;
+  playerSyncRef?: React.MutableRefObject<PlayerSyncRef | null>;
+  onChangeEpisode?: (slug: string) => void;
 }
 
 interface NextEpisodeOptions {
@@ -35,25 +38,13 @@ interface NextEpisodeOptions {
   children?: unknown[];
   onAutoNext?: () => void;
 }
-
-// Định nghĩa class Button của VideoJS
 const Button = videojs.getComponent("Button");
 class NextEpisodeButton extends Button {
   constructor(player: Player, options: NextEpisodeOptions) {
     super(player, options);
     this.addClass("vjs-next-overlay-btn");
-
-    this.el().innerHTML = `
-      <div class="next-btn-fill-bar"></div>
-      <div class="next-btn-inner-content">
-        <span>Tập tiếp theo</span>
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="m5.25 4.5 7.5 7.5-7.5 7.5m6-15 7.5 7.5-7.5 7.5" />
-        </svg>
-      </div>
-    `;
+    this.el().innerHTML = `<div class="next-btn-fill-bar"></div><div class="next-btn-inner-content"><span>Tập tiếp theo</span><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5"><path stroke-linecap="round" stroke-linejoin="round" d="m5.25 4.5 7.5 7.5-7.5 7.5m6-15 7.5 7.5-7.5 7.5" /></svg></div>`;
   }
-
   handleClick(event: Event) {
     if (event) event.stopPropagation();
     const options = (this as unknown as { options_: NextEpisodeOptions })
@@ -62,35 +53,58 @@ class NextEpisodeButton extends Button {
     if (cb) cb();
   }
 }
-
-if (!videojs.getComponent("NextEpisodeButton")) {
+if (!videojs.getComponent("NextEpisodeButton"))
   videojs.registerComponent(
     "NextEpisodeButton",
     NextEpisodeButton as unknown as typeof Component,
   );
-}
+
+// --------------------------------------------------------------------------
 
 export default function VideoPlayer(props: Props) {
   const videoRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
   const [isLightsOff, setIsLightsOff] = useState(false);
   const [isAutoNext, setIsAutoNext] = useState(() => {
     if (typeof window === "undefined") return true;
     return localStorage.getItem("v_movie_auto_next") !== "false";
   });
 
-  // 1. Logic Theo dõi
+  const canControlRef = useRef(props.canControl);
+  const onPlaySyncRef = useRef(props.onPlaySync);
+  const onPauseSyncRef = useRef(props.onPauseSync);
+  const onSeekSyncRef = useRef(props.onSeekSync);
+
+  useEffect(() => {
+    canControlRef.current = props.canControl;
+    onPlaySyncRef.current = props.onPlaySync;
+    onPauseSyncRef.current = props.onPauseSync;
+    onSeekSyncRef.current = props.onSeekSync;
+  }, [props.canControl, props.onPlaySync, props.onPauseSync, props.onSeekSync]);
+
+  const handlePlaySync = useCallback((time: number) => {
+    if (canControlRef.current && onPlaySyncRef.current)
+      onPlaySyncRef.current(time);
+  }, []);
+
+  const handlePauseSync = useCallback((time: number) => {
+    if (canControlRef.current && onPauseSyncRef.current)
+      onPauseSyncRef.current(time);
+  }, []);
+
+  const handleSeekSync = useCallback((time: number) => {
+    if (canControlRef.current && onSeekSyncRef.current)
+      onSeekSyncRef.current(time);
+  }, []);
+
   const {
     isFollowed,
     toggleFollow,
     isLoading: isFollowLoading,
-  } = useSubscription({
-    user: props.user,
-    movie: props.movie,
-  });
+  } = useSubscription({ user: props.user, movie: props.movie });
 
-  // 2. Logic Player
-  const { playerRef, syncFromRemote } = useVideoPlayer({
+  const { syncFromRemote, getCurrentState, isSyncing } = useVideoPlayer({
     videoRef,
     movieSrc: props.movieSrc,
     initialTime: props.initialTime || 0,
@@ -100,20 +114,55 @@ export default function VideoPlayer(props: Props) {
     onAutoNext: props.onAutoNext,
     onPause: props.onPause,
     isWatchParty: props.isWatchParty,
+    canControl: props.canControl,
     isHost: props.isHost,
-    onPlaySync: props.onPlaySync,
-    onPauseSync: props.onPauseSync,
-    onSeekSync: props.onSeekSync,
+    onPlaySync: handlePlaySync,
+    onPauseSync: handlePauseSync,
+    onSeekSync: handleSeekSync,
+    onPlayerReady: props.onPlayerReady,
   });
 
-  if (props.playerSyncRef) {
-    props.playerSyncRef.current = { syncFromRemote };
-  }
+  useEffect(() => {
+    if (props.playerSyncRef) {
+      props.playerSyncRef.current = {
+        syncFromRemote,
+        getCurrentState,
+      };
+    }
+  }, [syncFromRemote, getCurrentState, props.playerSyncRef]);
 
-  // Lưu cấu hình AutoNext
   useEffect(() => {
     localStorage.setItem("v_movie_auto_next", String(isAutoNext));
   }, [isAutoNext]);
+
+  const handleKeyDownCapture = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (props.isWatchParty && !props.canControl) {
+        const blockedKeys = [
+          " ",
+          "Spacebar",
+          "ArrowLeft",
+          "ArrowRight",
+          "MediaPlayPause",
+          "MediaTrackNext",
+          "MediaTrackPrevious",
+        ];
+        if (blockedKeys.includes(e.key)) {
+          e.preventDefault();
+          e.stopPropagation();
+          toast.warning("Bạn đang ở chế độ Khách, không thể dùng phím tắt!", {
+            id: "guest-keyboard-lock",
+          });
+        }
+      }
+    },
+    [props.isWatchParty, props.canControl],
+  );
+
+  const guestModeClasses =
+    !props.canControl && props.isWatchParty
+      ? "[&_.vjs-tech]:pointer-events-none [&_.vjs-play-control]:pointer-events-none [&_.vjs-progress-control]:pointer-events-none [&_.vjs-play-control]:opacity-50 [&_.vjs-progress-control]:opacity-50"
+      : "";
 
   return (
     <div className="relative">
@@ -123,14 +172,26 @@ export default function VideoPlayer(props: Props) {
           onClick={() => setIsLightsOff(false)}
         />
       )}
-      <h2 className="text-lg font-bold text-white mb-3 truncate">
-        {props.movieName}
-      </h2>
 
       <div
         className={`${isLightsOff ? "relative z-[999]" : ""} bg-background rounded-xl overflow-hidden border border-zinc-800 backdrop-blur-md`}
       >
-        <div data-vjs-player>
+        {isSyncing && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-12 h-12 border-4 border-red-600/30 border-t-red-600 rounded-full animate-spin shadow-[0_0_15px_rgba(220,38,38,0.5)]" />
+              <p className="text-white font-bold tracking-[0.2em] uppercase text-xs animate-pulse">
+                Đang đồng bộ máy chủ...
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div
+          data-vjs-player
+          className={guestModeClasses}
+          onKeyDownCapture={handleKeyDownCapture}
+        >
           <div ref={videoRef} />
         </div>
 
@@ -142,20 +203,38 @@ export default function VideoPlayer(props: Props) {
           setIsAutoNext={setIsAutoNext}
           isLightsOff={isLightsOff}
           setIsLightsOff={setIsLightsOff}
-          onPrev={() =>
-            props.prevEpisodeSlug &&
-            router.push(`?tap=${props.prevEpisodeSlug}#video`, {
-              scroll: false,
-            })
+          onPrev={() => {
+            if (!props.prevEpisodeSlug) return;
+            if (props.isWatchParty) {
+              if (props.canControl && props.onChangeEpisode) {
+                props.onChangeEpisode(props.prevEpisodeSlug);
+              }
+            } else {
+              router.push(`?tap=${props.prevEpisodeSlug}#video`, {
+                scroll: false,
+              });
+            }
+          }}
+          onNext={() => {
+            if (!props.nextEpisodeSlug) return;
+            if (props.isWatchParty) {
+              if (props.canControl && props.onChangeEpisode) {
+                props.onChangeEpisode(props.nextEpisodeSlug);
+              }
+            } else {
+              router.push(`?tap=${props.nextEpisodeSlug}#video`, {
+                scroll: false,
+              });
+            }
+          }}
+          prevEnabled={
+            !!props.prevEpisodeSlug &&
+            (!props.isWatchParty || !!props.canControl)
           }
-          onNext={() =>
-            props.nextEpisodeSlug &&
-            router.push(`?tap=${props.nextEpisodeSlug}#video`, {
-              scroll: false,
-            })
+          nextEnabled={
+            !!props.nextEpisodeSlug &&
+            (!props.isWatchParty || !!props.canControl)
           }
-          prevEnabled={!!props.prevEpisodeSlug}
-          nextEnabled={!!props.nextEpisodeSlug}
         />
       </div>
     </div>

@@ -1,8 +1,10 @@
 "use client";
+
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useInView } from "react-intersection-observer";
 import { useMovieSearch } from "@/hooks/useMovieSearch";
+import { toast } from "sonner";
 import {
   PlusIcon,
   TrashIcon,
@@ -10,12 +12,18 @@ import {
   MagnifyingGlassIcon,
   QueueListIcon,
 } from "@heroicons/react/24/outline";
+import ImageCustom from "@/components/ImageCustom";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { toast } from "sonner";
+import { Movie, PlaylistItem, WatchPartyRoom } from "@/types";
 
-export default function PlaylistTab({ room, canManage }: any) {
+interface PlaylistTabProps {
+  room: WatchPartyRoom;
+  canManage: boolean;
+}
+
+export default function PlaylistTab({ room, canManage }: PlaylistTabProps) {
   const queryClient = useQueryClient();
-  const supabase = createSupabaseClient();
+  const [supabase] = useState(() => createSupabaseClient());
   const [isAdding, setIsAdding] = useState(false);
 
   const {
@@ -24,7 +32,6 @@ export default function PlaylistTab({ room, canManage }: any) {
     movies,
     setIsOpen,
     isOpen,
-    isFetching,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -35,7 +42,7 @@ export default function PlaylistTab({ room, canManage }: any) {
     if (inView && hasNextPage && !isFetchingNextPage) fetchNextPage();
   }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const { data: playlist = [] } = useQuery({
+  const { data: playlist = [] } = useQuery<PlaylistItem[]>({
     queryKey: ["wp-playlist", room.id],
     queryFn: () =>
       fetch(`/api/watch-party/playlist?roomId=${room.id}`).then((res) =>
@@ -52,15 +59,15 @@ export default function PlaylistTab({ room, canManage }: any) {
     queryClient.invalidateQueries({ queryKey: ["wp-playlist", room.id] });
   };
 
-  const addMovie = async (movie: any) => {
+  const addMovie = async (movie: Movie) => {
     const res = await fetch("/api/watch-party/playlist", {
       method: "POST",
       body: JSON.stringify({
         roomId: room.id,
         movieSlug: movie.slug,
         movieName: movie.name,
-        thumbUrl: movie.poster_url || movie.thumb_url,
-        episodeSlug: "tap-1",
+        thumbUrl: movie.thumb_url || movie.poster_url,
+        episodeSlug: movie.episodes[0]?.server_data[0]?.slug,
       }),
     });
     if (res.ok) {
@@ -70,7 +77,7 @@ export default function PlaylistTab({ room, canManage }: any) {
     }
   };
 
-  const playNow = async (item: any) => {
+  const playNow = async (item: PlaylistItem) => {
     const { error } = await supabase
       .from("watch_party_rooms")
       .update({
@@ -117,18 +124,20 @@ export default function PlaylistTab({ room, canManage }: any) {
               className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl py-3 pl-10 pr-3 text-xs focus:border-red-600 outline-none shadow-inner"
             />
           </div>
+
           {isOpen && query && (
             <div className="absolute top-full mt-2 w-full bg-zinc-900 border border-zinc-800 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden max-h-60 overflow-y-auto custom-scrollbar z-[80]">
-              {movies.map((m: any) => (
+              {movies.map((m: Movie) => (
                 <div
                   key={m._id}
                   onClick={() => addMovie(m)}
                   className="flex items-center gap-3 p-3 hover:bg-zinc-800 cursor-pointer transition border-b border-zinc-800/50 last:border-0 group"
                 >
-                  <img
-                    src={m.poster_url || m.thumb_url}
+                  <ImageCustom
                     className="w-9 h-12 object-cover rounded-lg shadow group-hover:scale-105 transition"
-                    alt=""
+                    src={m.thumb_url || m.poster_url}
+                    alt={m.slug}
+                    widths={[54]}
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-bold text-zinc-200 truncate">
@@ -141,6 +150,7 @@ export default function PlaylistTab({ room, canManage }: any) {
                   <PlusIcon className="w-4 h-4 text-zinc-600 group-hover:text-red-500 mr-1" />
                 </div>
               ))}
+
               {hasNextPage && <div ref={loadMoreRef} className="h-4" />}
             </div>
           )}
@@ -156,16 +166,19 @@ export default function PlaylistTab({ room, canManage }: any) {
             Hãy thêm phim để xem tiếp!
           </div>
         )}
-        {playlist.map((item: any) => (
+
+        {/* 🌟 FIX LỖI 170:30: item giờ đã có type chuẩn là PlaylistItem */}
+        {playlist.map((item) => (
           <div
             key={item.id}
             className="group relative flex items-center gap-3 p-3 bg-zinc-900/40 rounded-2xl border border-zinc-800/50 hover:bg-zinc-800/40 transition-all duration-300"
           >
             <div className="relative shrink-0 overflow-hidden rounded-xl">
-              <img
-                src={item.thumb_url}
+              <ImageCustom
                 className="w-12 h-16 object-cover shadow-lg group-hover:scale-110 transition-transform duration-500"
-                alt=""
+                src={item.thumb_url}
+                alt={item.movie_name}
+                widths={[72]}
               />
               <div className="absolute inset-0 bg-black/20" />
             </div>
@@ -178,6 +191,7 @@ export default function PlaylistTab({ room, canManage }: any) {
                 {item.profiles?.full_name || "Thành viên"}
               </p>
             </div>
+
             {canManage && (
               <div className="hidden group-hover:flex items-center gap-1.5 shrink-0 animate-in fade-in slide-in-from-right-2">
                 <button

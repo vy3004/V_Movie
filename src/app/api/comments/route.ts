@@ -29,6 +29,7 @@ export async function GET(request: Request) {
     );
     return NextResponse.json(data);
   } catch (error) {
+    console.error("[API_COMMENTS_GET]:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 },
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
     const comment = await CommentService.addComment(user.id, body);
     return NextResponse.json({ success: true, comment });
   } catch (error) {
+    console.error("[API_COMMENTS_POST]:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 },
@@ -72,6 +74,7 @@ export async function DELETE(request: Request) {
     await CommentService.deleteComment(user.id, commentId, movieSlug);
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error("[API_COMMENTS_DELETE]:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 },

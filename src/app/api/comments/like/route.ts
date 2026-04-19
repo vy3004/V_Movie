@@ -22,6 +22,7 @@ export async function POST(request: Request) {
     );
     return NextResponse.json({ success: true, action });
   } catch (error) {
+    console.error("[API_COMMENTS_LIKE_POST]:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 },

@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
-import { CommentItem } from "@/types";
+import { AddCommentPayload, CommentItem } from "@/types";
 import { useAuthModal } from "@/providers/AuthModalProvider";
 import { InfiniteComments } from "./useCommentsQuery";
 
@@ -78,7 +78,12 @@ export function useCommentMutations({
 
   // 1. ADD
   const addCommentMutation = useMutation({
-    mutationFn: async ({ content, movieName, replyToId, rootId }: any) => {
+    mutationFn: async ({
+      content,
+      movieName,
+      replyToId,
+      rootId,
+    }: AddCommentPayload) => {
       const res = await fetch("/api/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -311,6 +316,7 @@ export function useCommentMutations({
     ) => {
       if (checkAuth())
         return addCommentMutation.mutateAsync({
+          movieSlug,
           content,
           movieName,
           replyToId,

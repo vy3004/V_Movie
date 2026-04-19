@@ -52,6 +52,15 @@ export interface CommentItem {
   isOptimistic?: boolean;
 }
 
+export interface AddCommentPayload {
+  movieSlug: string;
+  movieName?: string;
+  content: string;
+  parentId?: string | null;
+  replyToId?: string | null;
+  rootId?: string | null;
+}
+
 export interface SupabaseRawComment extends Omit<
   CommentItem,
   "replies_count" | "is_liked_by_me"

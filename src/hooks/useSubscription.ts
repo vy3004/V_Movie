@@ -15,15 +15,18 @@ interface UseSubscriptionProps {
 export function useSubscription({ user, movie }: UseSubscriptionProps) {
   const queryClient = useQueryClient();
   const userId = user?.id || "guest";
+  const movieSlug = movie?.slug || "";
 
   // Danh sách các Key dùng chung
-  const subQueryKey = ["subscription", movie.slug, userId];
+  const subQueryKey = ["subscription", movieSlug, userId];
   const listQueryKey = ["subscriptions-list", userId];
 
   // 1. Lấy trạng thái theo dõi
   const { data: isFollowed = false } = useQuery({
     queryKey: subQueryKey,
     queryFn: async () => {
+      if (!movie) return false;
+
       if (!user) {
         if (typeof window === "undefined") return false;
         const subs = getLocalSubscriptions();
@@ -36,16 +39,20 @@ export function useSubscription({ user, movie }: UseSubscriptionProps) {
       const data = await res.json();
       return data.isFollowed;
     },
+    enabled: !!movie,
     staleTime: 1000 * 60 * 5,
   });
 
   // 2. Mutation: Theo dõi / Hủy theo dõi
   const toggleMutation = useMutation({
     mutationFn: async (currentlyFollowed: boolean) => {
+      if (!movie) throw new Error("Chưa tải xong thông tin phim");
+
+      const firstEpisode = movie.episodes?.[0];
       const lastEpisodeSlug =
-        movie.episodes?.[0]?.server_data?.[
-          movie.episodes[0].server_data.length - 1
-        ]?.slug.trim();
+        firstEpisode?.server_data?.[
+          firstEpisode.server_data.length - 1
+        ]?.slug?.trim();
 
       const itemPayload: SubscriptionItem = {
         movie_slug: movie.slug,

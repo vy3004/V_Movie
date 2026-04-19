@@ -18,6 +18,7 @@ export async function POST(req: Request) {
     await HistoryService.bulkSyncToDB(user.id, localHistory);
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error("[API_HISTORY_SYNC_POST]:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 },

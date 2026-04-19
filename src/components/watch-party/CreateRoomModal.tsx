@@ -54,7 +54,6 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
   // Watch các giá trị để render UI Custom (ví dụ slider, nút public/private)
   const isPrivate = watch("isPrivate");
   const maxParticipants = watch("maxParticipants");
-  const movieSlug = watch("movieSlug");
   const titleVal = watch("title");
 
   // Hook tìm kiếm phim vô tận (Infinite Scroll)
@@ -110,6 +109,7 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
         toast.error(result.error);
       }
     } catch (error) {
+      console.log(error);
       toast.error("Lỗi kết nối máy chủ");
     } finally {
       setLoading(false);

@@ -22,14 +22,11 @@ export default async function WatchPartyPage({
   }
 
   // 1. Fetch thông tin phòng
-  const { data: room, error } = await supabase
+  const { data: room } = await supabase
     .from("watch_party_rooms")
     .select("*, host:profiles!host_id(full_name, avatar_url)")
     .eq("room_code", params.code.toUpperCase())
     .maybeSingle();
-
-  console.log("=== ROOM DATA ===", room);
-  console.log("=== SUPABASE ERROR ===", error);
 
   if (!room || !room.is_active) {
     return (
@@ -59,8 +56,7 @@ export default async function WatchPartyPage({
       return <WatchPartyClient room={room} user={user} me={participant} />;
     }
     if (participant.status === "pending") {
-      // Đang chờ duyệt -> Render Sảnh chờ (Có Realtime)
-      return <WaitingRoomClient room={room} user={user} />;
+      return <WaitingRoomClient room={room} user={user} me={participant} />;
     }
     if (participant.status === "blocked") {
       // Bị Kick/Từ chối -> Màn hình cấm

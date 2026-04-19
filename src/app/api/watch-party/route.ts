@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { redis } from "@/lib/redis";
+import { WatchPartyVideoState, RoomSettings } from "@/types/watch-party"; // Import interface của bạn
 
 export const runtime = "edge";
 
@@ -13,11 +14,12 @@ export async function GET(request: Request) {
     const roomId = searchParams.get("roomId");
     const roomCode = searchParams.get("roomCode");
 
-    if (!roomId && !roomCode)
+    if (!roomId && !roomCode) {
       return NextResponse.json(
         { error: "Missing ID or Code" },
         { status: 400 },
       );
+    }
 
     const supabase = await createSupabaseServer();
     let query = supabase
@@ -35,26 +37,35 @@ export async function GET(request: Request) {
     else query = query.eq("room_code", roomCode);
 
     const { data: room, error } = await query.single();
-    if (error || !room)
+    if (error || !room) {
       return NextResponse.json(
-        { error: "Phòng không tồn tại" },
+        { error: "Phòng không tồn tại hoặc đã đóng" },
         { status: 404 },
       );
+    }
 
-    // Lấy trạng thái từ Redis
-    const state: any = redis
-      ? await redis.get(`wp:room:${room.id}:state`)
-      : null;
+    // XỬ LÝ REDIS VỚI TYPE CHUẨN (Không dùng any)
+    let state: WatchPartyVideoState | null = null;
+    if (redis) {
+      state = await redis.get(`wp:room:${room.id}:state`);
+    }
+
     let actualTime = state?.time || 0;
-    if (state?.status === "playing") {
+
+    // TÍNH TOÁN BÙ TRỪ ĐỘ TRỄ (Chỉ cộng thêm nếu video đang play)
+    if (state?.status === "play") {
+      // Sửa lại thành "play" cho chuẩn với logic Client
       actualTime += (Date.now() - state.updated_at) / 1000;
     }
 
     return NextResponse.json({
       room,
-      state: state ? { ...state, actualTime } : { status: "paused", time: 0 },
+      state: state
+        ? { ...state, time: actualTime }
+        : { status: "pause", time: 0 },
     });
   } catch (error) {
+    console.error("[WP_GET_ERROR]:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 },
@@ -68,9 +79,11 @@ export async function POST(request: Request) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
     if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const body = await request.json();
     const {
       title,
       isPrivate,
@@ -79,20 +92,26 @@ export async function POST(request: Request) {
       movieImage,
       episodeSlug,
       settings,
-    } = await request.json();
+    } = body;
 
-    if (!movieSlug || !movieImage || !episodeSlug)
+    if (!movieSlug || !movieImage || !episodeSlug) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Thiếu dữ liệu bắt buộc" },
         { status: 400 },
       );
+    }
 
     let room = null;
     let retryCount = 0;
 
-    // Retry tạo mã phòng không trùng lặp
+    // Retry tạo mã phòng
     while (retryCount < 3) {
       const code = generateRoomCode();
+      const defaultSettings: RoomSettings = settings || {
+        wait_for_all: false,
+        guest_can_chat: true,
+        allow_guest_control: false,
+      };
 
       const { data, error } = await supabase
         .from("watch_party_rooms")
@@ -104,14 +123,10 @@ export async function POST(request: Request) {
           movie_image: movieImage,
           title:
             title ||
-            `Phòng xem chung của ${user.user_metadata?.full_name || "User"}`,
+            `Cùng xem phim với ${user.user_metadata?.full_name || "User"}`,
           is_private: isPrivate || false,
           max_participants: maxParticipants || 20,
-          settings: settings || {
-            wait_for_all: false,
-            guest_can_chat: true,
-            allow_guest_control: false,
-          },
+          settings: defaultSettings,
         })
         .select()
         .single();
@@ -122,7 +137,6 @@ export async function POST(request: Request) {
       }
 
       if (error.code === "23505") {
-        // Lỗi trùng unique room_code
         retryCount++;
         continue;
       }
@@ -131,35 +145,44 @@ export async function POST(request: Request) {
 
     if (!room) {
       return NextResponse.json(
-        { error: "Không thể tạo phòng lúc này" },
+        { error: "Hệ thống quá tải, không thể tạo phòng" },
         { status: 500 },
       );
     }
 
-    // Thêm Host vào bảng participants với role='host', status='approved'
-    await supabase.from("watch_party_participants").insert({
-      room_id: room.id,
-      user_id: user.id,
-      role: "host",
-      status: "approved",
-    });
+    const { error: participantErr } = await supabase
+      .from("watch_party_participants")
+      .insert({
+        room_id: room.id,
+        user_id: user.id,
+        role: "host",
+        status: "approved",
+      });
 
-    // Khởi tạo State trên Redis (Paused ở giây số 0)
-    if (redis) {
-      await redis.set(
-        `wp:room:${room.id}:state`,
-        {
-          status: "paused",
-          time: 0,
-          episode_slug: episodeSlug,
-          updated_at: Date.now(),
-        },
-        { ex: 86400 }, // Tồn tại 24h
+    if (participantErr) {
+      // Nếu thêm Host thất bại, xóa luôn phòng vừa tạo để tránh rác DB
+      await supabase.from("watch_party_rooms").delete().eq("id", room.id);
+      console.error("[WP_HOST_INSERT_ERROR]:", participantErr);
+      return NextResponse.json(
+        { error: "Không thể khởi tạo quyền Host" },
+        { status: 500 },
       );
     }
 
+    // Khởi tạo State trên Redis (Type Safe)
+    if (redis) {
+      const initialState: WatchPartyVideoState = {
+        status: "pause",
+        time: 0,
+        episode_slug: episodeSlug,
+        updated_at: Date.now(),
+      };
+
+      await redis.set(`wp:room:${room.id}:state`, initialState, { ex: 86400 }); // 24h
+    }
+
     return NextResponse.json({ room });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[WP_CREATE_ERROR]:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },

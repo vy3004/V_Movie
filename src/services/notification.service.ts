@@ -82,9 +82,6 @@ export const NotificationService = {
         }
 
         await pipeline.exec();
-        console.log(
-          `[NotificationService] Đã xóa cache chi tiết cho ${newEpisodeNotis.length} phim có tập mới.`,
-        );
       }
     }
   },

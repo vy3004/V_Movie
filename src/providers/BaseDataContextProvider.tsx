@@ -10,7 +10,13 @@ import React, {
 import { useRouter } from "next/navigation";
 import { User } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CateCtr, Movie, PageMoviesData } from "@/types";
+import {
+  CateCtr,
+  HistoryItem,
+  Movie,
+  PageMoviesData,
+  SubscriptionItem,
+} from "@/types";
 import { getLocalHistory, getLocalSubscriptions } from "@/lib/utils";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
@@ -84,7 +90,7 @@ export default function BaseDataContextProvider({
     if (!user) return;
     const handleSync = async (
       url: string,
-      localData: any[],
+      localData: HistoryItem[] | SubscriptionItem[],
       storageKey: string,
       queryKey: string[],
     ) => {
@@ -156,11 +162,11 @@ export default function BaseDataContextProvider({
     const cats = metadata?.categories
       ? metadata.categories
           .filter((c: CateCtr) => !HIDDEN_GENRE_SLUGS.includes(c.slug))
-          .sort((a: any, b: any) => a.name.localeCompare(b.name))
+          .sort((a: CateCtr, b: CateCtr) => a.name.localeCompare(b.name))
       : undefined;
 
     const ctrs = metadata?.countries
-      ? [...metadata.countries].sort((a: any, b: any) =>
+      ? [...metadata.countries].sort((a: CateCtr, b: CateCtr) =>
           a.name.localeCompare(b.name),
         )
       : undefined;

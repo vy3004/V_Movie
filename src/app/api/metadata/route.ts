@@ -20,6 +20,7 @@ export async function GET() {
       },
     });
   } catch (error) {
+    console.error("[API_METADATA_GET]:", error);
     return NextResponse.json({ error: "Error" }, { status: 500 });
   }
 }

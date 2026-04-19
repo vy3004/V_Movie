@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { debounce } from "lodash-es"; // <--- Import từ lodash-es
 import RoomCard from "@/components/watch-party/RoomCard";
 import CreateRoomModal from "@/components/watch-party/CreateRoomModal";
+import { WatchPartyRoom } from "@/types";
 
 export default function WatchPartyLobbyPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -90,7 +91,7 @@ export default function WatchPartyLobbyPage() {
           </div>
         ) : rooms.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {rooms.map((room: any) => (
+            {rooms.map((room: WatchPartyRoom) => (
               <RoomCard key={room.id} room={room} />
             ))}
           </div>

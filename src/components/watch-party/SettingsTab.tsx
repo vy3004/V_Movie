@@ -1,23 +1,33 @@
 "use client";
+
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { LockClosedIcon, GlobeAltIcon } from "@heroicons/react/24/outline";
+import { WatchPartyRoom, RoomSettings } from "@/types/watch-party";
 
-export default function SettingsTab({ room, setRoom }: any) {
+interface SettingsTabProps {
+  room: WatchPartyRoom;
+  setRoom:
+    | React.Dispatch<React.SetStateAction<WatchPartyRoom>>
+    | ((room: WatchPartyRoom) => void);
+}
+
+export default function SettingsTab({ room, setRoom }: SettingsTabProps) {
   const router = useRouter();
 
-  // Optimistic UI Update
-  const updateSetting = async (key: string, value: any, isRoot = false) => {
-    // 1. Lưu state cũ để backup
+  const updateSetting = async (
+    key: keyof WatchPartyRoom | keyof RoomSettings,
+    value: string | boolean,
+    isRoot = false,
+  ) => {
     const prevRoom = { ...room };
 
-    // 2. Cập nhật state UI ngay lập tức
     const newRoom = isRoot
       ? { ...room, [key]: value }
       : { ...room, settings: { ...room.settings, [key]: value } };
-    setRoom(newRoom);
 
-    // 3. Gọi API chạy ngầm
+    setRoom(newRoom as WatchPartyRoom);
+
     const payload = isRoot ? { [key]: value } : { settings: newRoom.settings };
     const res = await fetch("/api/watch-party/settings", {
       method: "PATCH",
@@ -25,7 +35,6 @@ export default function SettingsTab({ room, setRoom }: any) {
     });
 
     if (!res.ok) {
-      // 4. Nếu API lỗi, revert lại state cũ
       setRoom(prevRoom);
       toast.error("Lỗi khi lưu cài đặt!");
     }
@@ -44,6 +53,12 @@ export default function SettingsTab({ room, setRoom }: any) {
     });
     router.push("/xem-chung");
   };
+
+  const settingOptions: { label: string; key: keyof RoomSettings }[] = [
+    { label: "Đợi tất cả tải xong (Chống lag)", key: "wait_for_all" },
+    { label: "Khách được phép chat", key: "guest_can_chat" },
+    { label: "Khách được phép điều khiển Video", key: "allow_guest_control" },
+  ];
 
   return (
     <div className="space-y-6 h-full overflow-y-auto pr-2 custom-scrollbar pb-20">
@@ -91,14 +106,7 @@ export default function SettingsTab({ room, setRoom }: any) {
           Quyền Mặc định (Cho người mới)
         </label>
         <div className="space-y-2">
-          {[
-            { label: "Đợi tất cả tải xong (Chống lag)", key: "wait_for_all" },
-            { label: "Khách được phép chat", key: "guest_can_chat" },
-            {
-              label: "Khách được phép điều khiển Video",
-              key: "allow_guest_control",
-            },
-          ].map((s) => (
+          {settingOptions.map((s) => (
             <label
               key={s.key}
               className="flex items-center justify-between p-3 bg-zinc-800/30 rounded-xl cursor-pointer hover:bg-zinc-800/50 transition border border-transparent hover:border-zinc-700"
@@ -106,9 +114,8 @@ export default function SettingsTab({ room, setRoom }: any) {
               <span className="text-xs text-zinc-300 font-medium">
                 {s.label}
               </span>
-              {/* Toggle UI */}
               <div
-                className={`w-8 h-4 rounded-full relative transition-colors ${room.settings[s.key] ? "bg-emerald-500" : "bg-zinc-900"}`}
+                className={`w-8 h-4 rounded-full relative transition-colors ${room.settings[s.key] ? "bg-emerald-500" : "bg-zinc-700"}`}
               >
                 <div
                   className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${room.settings[s.key] ? "left-4.5 translate-x-4" : "left-0.5"}`}

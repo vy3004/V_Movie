@@ -109,7 +109,7 @@ export default async function MoviesPage({ params, searchParams }: PageProps) {
             {totalItems.toLocaleString()}
           </span>{" "}
           kết quả cho từ khóa:
-          <span className="italic"> "{searchParams.keyword}"</span>
+          <span className="italic"> &ldquo;{searchParams.keyword}&rdquo;</span>
         </div>
       )}
 

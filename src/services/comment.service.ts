@@ -1,7 +1,7 @@
 import "server-only";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { redis } from "@/lib/redis";
-import { CommentItem, SupabaseRawComment } from "@/types";
+import { AddCommentPayload, CommentItem, SupabaseRawComment } from "@/types";
 
 const PAGINATION_LIMIT = 5;
 const COMMENT_CACHE_TTL = 300; // 5 phút
@@ -172,7 +172,7 @@ export const CommentService = {
   },
 
   // 4. POST: Thêm Comment mới & Bắn Thông báo
-  addComment: async (userId: string, body: any) => {
+  addComment: async (userId: string, body: AddCommentPayload) => {
     const { movieSlug, movieName, content, parentId, replyToId, rootId } = body;
     const supabase = await createSupabaseServer();
 

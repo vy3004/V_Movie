@@ -55,7 +55,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function MoviePage({ params, searchParams }: PageProps) {
+export default async function MoviePage({ params }: PageProps) {
   const { slug } = params;
 
   // 1. Khởi tạo Supabase và lấy thông tin User

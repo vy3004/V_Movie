@@ -66,6 +66,7 @@ export default function UserButton() {
             {avatarUrl ? (
               isDiceBear ? (
                 /* Nếu là ảnh hoạt hình DiceBear (SVG), hiện trực tiếp không qua Proxy cho nhẹ */
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={avatarUrl}
                   alt="Avatar"

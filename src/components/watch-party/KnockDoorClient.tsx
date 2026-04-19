@@ -1,10 +1,13 @@
 "use client";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { LockClosedIcon } from "@heroicons/react/24/outline";
+import ImageCustom from "@/components/ImageCustom";
+import { WatchPartyRoom } from "@/types";
 
-export default function KnockDoorClient({ room }: { room: any }) {
+export default function KnockDoorClient({ room }: { room: WatchPartyRoom }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -25,12 +28,15 @@ export default function KnockDoorClient({ room }: { room: any }) {
     <div className="min-h-screen relative flex items-center justify-center bg-[#141414]">
       {/* Background Blur */}
       <div className="absolute inset-0 z-0">
-        <img
-          src={room.movie_image}
-          alt=""
-          className="w-full h-full object-cover opacity-20 blur-xl"
-        />
-        <div className="absolute inset-0 bg-black/70" />
+        {room.movie_image && (
+          <ImageCustom
+            className="w-full h-full object-cover opacity-50 blur-2xl"
+            src={room.movie_image}
+            alt={room.title || "Waiting Room"}
+            widths={[10]}
+          />
+        )}
+        <div className="absolute inset-0 bg-black/20" />
       </div>
 
       <div className="relative z-10 w-full max-w-md bg-zinc-900/80 backdrop-blur-xl p-8 rounded-3xl border border-zinc-800 text-center shadow-2xl">

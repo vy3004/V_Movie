@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
+import { toast } from "sonner";
 import videojs from "video.js";
 import Player from "video.js/dist/types/player";
 import "video.js/dist/video-js.css";
 import "@videojs/themes/dist/city/index.css";
 import "videojs-hotkeys";
+import { PlayerSyncRef } from "@/types";
 
 interface UseVideoPlayerProps {
   videoRef: React.RefObject<HTMLDivElement>;
@@ -16,13 +18,27 @@ interface UseVideoPlayerProps {
   onProgress: (currentTime: number, duration: number) => void;
   onAutoNext: () => void;
   onPause?: () => void;
-  // --- Props cho Watch Party ---
   isWatchParty?: boolean;
+  canControl?: boolean;
   isHost?: boolean;
   onPlaySync?: (time: number) => void;
   onPauseSync?: (time: number) => void;
   onSeekSync?: (time: number) => void;
+  playerSyncRef?: React.MutableRefObject<PlayerSyncRef | null>;
+  onPlayerReady?: () => void;
 }
+
+type ExtendedPlayer = Player & {
+  scrubbing?: () => boolean;
+  tech_?: unknown;
+};
+
+const getPlayerTime = (p: ExtendedPlayer) =>
+  typeof p.currentTime === "function" ? (p.currentTime() as number) : 0;
+
+const setPlayerTime = (p: ExtendedPlayer, t: number) => {
+  if (typeof p.currentTime === "function") p.currentTime(t);
+};
 
 export function useVideoPlayer({
   videoRef,
@@ -34,20 +50,34 @@ export function useVideoPlayer({
   onAutoNext,
   onPause,
   isWatchParty = false,
+  canControl = false,
   isHost = false,
   onPlaySync,
   onPauseSync,
   onSeekSync,
+  playerSyncRef,
+  onPlayerReady,
 }: UseVideoPlayerProps) {
   const playerRef = useRef<Player | null>(null);
+  const currentMovieSrcRef = useRef<string>(movieSrc);
+
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const isInitialSeekDone = useRef(false);
-  const isSeekingRef = useRef(false);
   const lastProgressTime = useRef<number>(0);
+  const isComponentUnmounted = useRef<boolean>(false);
 
-  // Cờ chặn vòng lặp vô hạn: Để xác định sự kiện play/pause là do User click hay do Sync từ xa
-  const isRemoteAction = useRef(false);
+  const syncAnimFrame = useRef<number>(0);
+  const targetHostTime = useRef<number>(0);
+  const isHostPaused = useRef<boolean>(true);
+  const lastSyncReceivedAt = useRef<number>(0);
 
-  // Refs cho callbacks để tránh re-init player khi props (như isHost) thay đổi
+  const pendingInitialSync = useRef<{
+    action: "play" | "pause" | "seek";
+    time: number;
+  } | null>(null);
+  const remoteLockUntil = useRef<number>(0);
+
   const refs = useRef({
     onProgress,
     onAutoNext,
@@ -57,9 +87,42 @@ export function useVideoPlayer({
     onPlaySync,
     onPauseSync,
     onSeekSync,
-    isWatchParty,
+    canControl,
     isHost,
+    onPlayerReady,
   });
+
+  const runSoftSync = useCallback(() => {
+    if (isComponentUnmounted.current) return;
+
+    const player = playerRef.current as ExtendedPlayer;
+    if (!player || refs.current.canControl || isHostPaused.current) return;
+
+    const isPlayerBusy =
+      player.seeking() ||
+      (typeof player.readyState === "function" && player.readyState() < 2);
+    if (isPlayerBusy) {
+      syncAnimFrame.current = requestAnimationFrame(runSoftSync);
+      return;
+    }
+
+    const timeSinceLastSync = (Date.now() - lastSyncReceivedAt.current) / 1000;
+    const actualHostTime = targetHostTime.current + timeSinceLastSync;
+    const myTime = getPlayerTime(player);
+    const gap = actualHostTime - myTime;
+
+    if (Math.abs(gap) > 3.0) {
+      setPlayerTime(player, actualHostTime);
+    } else if (Math.abs(gap) > 0.1) {
+      const newRate = Math.max(0.85, Math.min(1.15, 1.0 + gap * 0.3));
+      if (typeof player.playbackRate === "function")
+        player.playbackRate(newRate);
+    } else {
+      if (typeof player.playbackRate === "function") player.playbackRate(1.0);
+    }
+
+    syncAnimFrame.current = requestAnimationFrame(runSoftSync);
+  }, []); // runSoftSync độc lập
 
   useEffect(() => {
     refs.current = {
@@ -71,9 +134,15 @@ export function useVideoPlayer({
       onPlaySync,
       onPauseSync,
       onSeekSync,
-      isWatchParty,
+      canControl,
       isHost,
+      onPlayerReady,
     };
+
+    if (!canControl && !isHostPaused.current) {
+      cancelAnimationFrame(syncAnimFrame.current);
+      syncAnimFrame.current = requestAnimationFrame(runSoftSync);
+    }
   }, [
     onProgress,
     onAutoNext,
@@ -83,54 +152,132 @@ export function useVideoPlayer({
     onPlaySync,
     onPauseSync,
     onSeekSync,
-    isWatchParty,
+    canControl,
     isHost,
+    onPlayerReady,
+    runSoftSync,
   ]);
 
-  // --- Hàm điều khiển dành cho Guest (Nhận lệnh từ Host) ---
   const syncFromRemote = useCallback(
     (action: "play" | "pause" | "seek", time: number) => {
-      const player = playerRef.current;
+      const player = playerRef.current as ExtendedPlayer;
       if (!player) return;
 
-      isRemoteAction.current = true; // Bật cờ chặn trước khi thực hiện lệnh
-
-      const currentTime = player.currentTime() || 0;
-      const diff = Math.abs(currentTime - time);
-
-      switch (action) {
-        case "play":
-          // Nếu lệch quá 2s thì mới sync time để tránh giật hình cho Guest mạng yếu
-          if (diff > 2) player.currentTime(time);
-          player.play();
-          break;
-        case "pause":
-          player.currentTime(time);
-          player.pause();
-          break;
-        case "seek":
-          player.currentTime(time);
-          break;
+      if (typeof player.readyState === "function" && player.readyState() < 1) {
+        pendingInitialSync.current = { action, time };
+        return;
       }
 
-      // Sau khi thực hiện lệnh programmatic, cờ sẽ được reset ở các event listener bên dưới
+      const isCurrentlyPlaying =
+        typeof player.paused === "function" ? !player.paused() : false;
+      const diff = Math.abs(getPlayerTime(player) - time);
+
+      const isSameAction =
+        (action === "play" && isCurrentlyPlaying) ||
+        (action === "pause" && !isCurrentlyPlaying);
+
+      if (isSameAction && diff <= 1.5) return;
+
+      remoteLockUntil.current = Date.now() + 15000;
+      targetHostTime.current = time;
+      lastSyncReceivedAt.current = Date.now();
+
+      if (action === "play") {
+        isHostPaused.current = false;
+        if (diff > 1.5) setPlayerTime(player, time);
+
+        if (typeof player.paused === "function" && player.paused()) {
+          const playPromise = player.play();
+          if (
+            playPromise !== undefined &&
+            typeof playPromise.catch === "function"
+          ) {
+            playPromise.catch(() => {
+              if (!playerRef.current || player.isDisposed()) return;
+              player.muted(true);
+              player.play()?.catch(() => {});
+              toast.info("Tự động phát (đã tắt tiếng)");
+            });
+          }
+        }
+        cancelAnimationFrame(syncAnimFrame.current);
+        syncAnimFrame.current = requestAnimationFrame(runSoftSync);
+      } else if (action === "pause") {
+        isHostPaused.current = true;
+        cancelAnimationFrame(syncAnimFrame.current);
+        if (typeof player.playbackRate === "function") player.playbackRate(1.0);
+
+        if (typeof player.paused === "function" && !player.paused())
+          player.pause();
+        if (diff > 1.5) setPlayerTime(player, time);
+      } else if (action === "seek") {
+        setPlayerTime(player, time);
+
+        if (!isHostPaused.current) {
+          const playPromise = player.play();
+          if (
+            playPromise !== undefined &&
+            typeof playPromise.catch === "function"
+          ) {
+            playPromise.catch(() => {});
+          }
+        }
+      }
     },
-    [],
+    [runSoftSync],
   );
+
+  const getCurrentState = useCallback(() => {
+    if (!playerRef.current) return null;
+    const p = playerRef.current as ExtendedPlayer;
+    return {
+      time: getPlayerTime(p),
+      isPaused: typeof p.paused === "function" ? p.paused() : false,
+    };
+  }, []);
+
+  useEffect(() => {
+    if (playerSyncRef) {
+      playerSyncRef.current = { syncFromRemote, getCurrentState };
+    }
+  }, [syncFromRemote, getCurrentState, playerSyncRef]);
 
   useEffect(() => {
     const videoContainer = videoRef.current;
     if (!videoContainer || !movieSrc) return;
+    isComponentUnmounted.current = false;
+
+    let globalNetworkTimer: NodeJS.Timeout | null = null;
+    let pendingAction: "play" | "pause" | "seek" | null = null;
+
+    const commitNetworkSync = (action: "play" | "pause" | "seek") => {
+      if (Date.now() < remoteLockUntil.current) return;
+      pendingAction = action;
+      if (globalNetworkTimer) clearTimeout(globalNetworkTimer);
+
+      globalNetworkTimer = setTimeout(() => {
+        if (!pendingAction || !playerRef.current) return;
+        const time = getPlayerTime(playerRef.current as ExtendedPlayer);
+
+        if (pendingAction === "play") refs.current.onPlaySync?.(time);
+        else if (pendingAction === "pause") refs.current.onPauseSync?.(time);
+        else if (pendingAction === "seek") refs.current.onSeekSync?.(time);
+
+        pendingAction = null;
+      }, 300);
+    };
 
     let player: Player;
 
     if (!playerRef.current) {
+      currentMovieSrcRef.current = movieSrc;
       isInitialSeekDone.current = false;
       lastProgressTime.current = 0;
 
       const videoElement = document.createElement("video");
       videoElement.className =
         "video-js vjs-big-play-centered vjs-vmovie-theme";
+      videoElement.setAttribute("preservesPitch", "true");
       videoRef.current.appendChild(videoElement);
 
       player = playerRef.current = videojs(videoElement, {
@@ -154,57 +301,54 @@ export function useVideoPlayer({
         alwaysCaptureHotkeys: true,
       });
 
-      // --- EVENT LISTENERS ---
       player.on("loadedmetadata", () => {
-        if (initialTime > 0 && !isInitialSeekDone.current) {
+        const tech = player.tech(true) as unknown as {
+          el: () => HTMLVideoElement;
+        };
+        if (tech && tech.el()) tech.el().preservesPitch = true;
+
+        if (pendingInitialSync.current) {
+          const { action, time } = pendingInitialSync.current;
+          syncFromRemote(action, time);
+          isInitialSeekDone.current = true;
+          pendingInitialSync.current = null;
+        } else if (initialTime > 0 && !isInitialSeekDone.current) {
+          if (isWatchParty) {
+            setIsSyncing(true);
+            remoteLockUntil.current = Date.now() + 3000;
+            setTimeout(() => {
+              if (!isComponentUnmounted.current) setIsSyncing(false);
+            }, 3000);
+          }
           player.currentTime(initialTime);
           isInitialSeekDone.current = true;
         }
+        refs.current.onPlayerReady?.();
       });
 
-      player.on("play", () => {
-        // Chỉ Host mới gửi tín hiệu Play và chỉ khi KHÔNG phải do lệnh Remote
-        if (
-          refs.current.isWatchParty &&
-          refs.current.isHost &&
-          !isRemoteAction.current
-        ) {
-          refs.current.onPlaySync?.(player.currentTime() || 0);
-        }
-        isRemoteAction.current = false; // Luôn reset cờ sau khi xử lý
-      });
+      const domEl = player.el();
+      if (domEl) {
+        domEl.addEventListener(
+          "pointerdown",
+          () => {
+            remoteLockUntil.current = 0;
+          },
+          true,
+        );
+      }
 
+      player.on("play", () => commitNetworkSync("play"));
       player.on("pause", () => {
-        // Khi Pause, cờ sẽ reset sync lịch sử xem
-        if (!isSeekingRef.current) refs.current.onPause?.();
-
-        // Chi đồng bộ Watch Party cho Host
-        if (
-          refs.current.isWatchParty &&
-          refs.current.isHost &&
-          !isRemoteAction.current
-        ) {
-          refs.current.onPauseSync?.(player.currentTime() || 0);
-        }
-        isRemoteAction.current = false;
+        refs.current.onPause?.();
+        commitNetworkSync("pause");
       });
-
       player.on("seeking", () => {
-        isSeekingRef.current = true;
+        const extPlayer = player as ExtendedPlayer;
+        if (typeof extPlayer.scrubbing === "function" && extPlayer.scrubbing())
+          remoteLockUntil.current = 0;
+        commitNetworkSync("seek");
       });
-
-      player.on("seeked", () => {
-        isSeekingRef.current = false;
-        // Host đồng bộ thời điểm mới khi tua xong
-        if (
-          refs.current.isWatchParty &&
-          refs.current.isHost &&
-          !isRemoteAction.current
-        ) {
-          refs.current.onSeekSync?.(player.currentTime() || 0);
-        }
-        isRemoteAction.current = false;
-      });
+      player.on("seeked", () => commitNetworkSync("seek"));
 
       player.on("timeupdate", () => {
         const curr = player.currentTime() ?? 0;
@@ -225,8 +369,7 @@ export function useVideoPlayer({
           dur > 0 &&
           refs.current.isAutoNext
         ) {
-          const timeLeft = dur - curr;
-          if (timeLeft <= 15 && timeLeft > 0) {
+          if (dur - curr <= 15 && dur - curr > 0) {
             nextBtn.show();
             nextBtn.addClass("is-active");
           } else {
@@ -249,11 +392,18 @@ export function useVideoPlayer({
       if (savedVol) player.volume(Number(savedVol));
     } else {
       player = playerRef.current;
-      if (player.currentSrc() !== movieSrc) {
+      if (currentMovieSrcRef.current !== movieSrc) {
+        currentMovieSrcRef.current = movieSrc;
         isInitialSeekDone.current = false;
         lastProgressTime.current = 0;
         player.src({ src: movieSrc, type: "application/x-mpegURL" });
         player.load();
+
+        // Ngay khi tập mới tải xong Metadata, ép nó về initialTime (là 0)
+        player.one("loadedmetadata", () => {
+          player.currentTime(initialTime);
+          isInitialSeekDone.current = true;
+        });
       } else if (initialTime > 0 && !isInitialSeekDone.current) {
         if (player.readyState() >= 1) {
           player.currentTime(initialTime);
@@ -264,12 +414,15 @@ export function useVideoPlayer({
 
     return () => {
       if (player && !player.isDisposed()) {
+        isComponentUnmounted.current = true;
+        cancelAnimationFrame(syncAnimFrame.current);
+        if (globalNetworkTimer) clearTimeout(globalNetworkTimer);
         player.dispose();
         playerRef.current = null;
         if (videoContainer) videoContainer.innerHTML = "";
       }
     };
-  }, [movieSrc, initialTime, videoRef]);
+  }, [movieSrc, videoRef, initialTime, isWatchParty, syncFromRemote]);
 
-  return { playerRef, syncFromRemote };
+  return { playerRef, syncFromRemote, getCurrentState, isSyncing };
 }

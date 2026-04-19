@@ -27,6 +27,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(data);
   } catch (error) {
+    console.error("[API_MOVIES_LIST_GET]:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 },

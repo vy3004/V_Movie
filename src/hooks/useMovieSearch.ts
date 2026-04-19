@@ -6,28 +6,25 @@ import { debounce } from "lodash-es";
 import { PageMoviesData } from "@/types";
 
 export function useMovieSearch(limit: number = 10) {
-  // State quản lý text input để UI mượt mà
   const [query, setQuery] = useState("");
-  // State đã qua debounce để kích hoạt react-query fetch data
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
 
-  // 1. Logic Debounce chuẩn: Chỉ chạy 1 lần duy nhất trong vòng đời component
-  const debouncedSetQuery = useCallback(
-    debounce((val: string) => {
-      setDebouncedQuery(val.trim());
-    }, 600),
-    [],
+  const debouncedSetQuery = useMemo(
+    () =>
+      debounce((val: string) => {
+        setDebouncedQuery(val.trim());
+      }, 600),
+    [], // dependency rỗng vì hàm không phụ thuộc vào state nào khác bên ngoài
   );
 
-  // Cleanup debounce on unmount
+  // Cleanup debounce khi unmount để tránh memory leak
   useEffect(() => {
     return () => {
       debouncedSetQuery.cancel();
     };
   }, [debouncedSetQuery]);
 
-  // 2. Hàm xử lý sự kiện onChange (Được gọi từ input)
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
@@ -44,9 +41,35 @@ export function useMovieSearch(limit: number = 10) {
   const result = useInfiniteQuery<PageMoviesData>({
     queryKey: ["searchMovies", debouncedQuery],
     queryFn: async ({ pageParam = 1 }) => {
-      // Chỉ fetch nếu từ khóa dài hơn 1 ký tự
-      if (!debouncedQuery || debouncedQuery.length < 2)
-        return { items: [] } as any;
+      if (!debouncedQuery || debouncedQuery.length < 2) {
+        return {
+          items: [],
+          params: {
+            type_slug: "tim-kiem",
+            filterCategory: [],
+            filterCountry: [],
+            filterYear: "",
+            filterType: "",
+            sortField: "",
+            sortType: "",
+            pagination: {
+              totalItems: 0,
+              totalItemsPerPage: limit,
+              currentPage: 1,
+              pageRanges: 5,
+            },
+          },
+          titlePage: "",
+          breadCrumb: [],
+          seoOnPage: {
+            titleHead: "",
+            descriptionHead: "",
+            og_type: "",
+            og_image: [],
+            og_url: "",
+          },
+        } as PageMoviesData;
+      }
 
       const res = await fetch(
         `/api/movies/list?slug=tim-kiem&keyword=${encodeURIComponent(debouncedQuery)}&limit=${limit}&page=${pageParam}`,
@@ -65,30 +88,24 @@ export function useMovieSearch(limit: number = 10) {
 
       return currentPage < totalPages ? currentPage + 1 : undefined;
     },
-    // Quan trọng: Chỉ enable query khi từ khóa hợp lệ
     enabled: debouncedQuery.length >= 2,
-    staleTime: 1000 * 60 * 5, // Cache kết quả tìm kiếm trong 5 phút
+    staleTime: 1000 * 60 * 5,
   });
 
-  // 4. Data Processing (Memoized để tối ưu render)
-
-  // Trích xuất mảng phim đã làm phẳng (Flatten) từ các trang
   const movies = useMemo(
     () => result.data?.pages.flatMap((page) => page.items) || [],
     [result.data],
   );
 
-  // Lấy tổng số lượng phim từ trang đầu tiên
   const totalItems = useMemo(
     () => result.data?.pages[0]?.params?.pagination?.totalItems || 0,
     [result.data],
   );
 
-  // 5. Helper function để reset tìm kiếm
   const clearSearch = useCallback(() => {
     setQuery("");
     setDebouncedQuery("");
-    debouncedSetQuery.cancel(); // Hủy các lệnh debounce đang chờ
+    debouncedSetQuery.cancel();
   }, [debouncedSetQuery]);
 
   return {

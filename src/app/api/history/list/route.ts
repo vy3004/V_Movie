@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { HistoryService } from "@/services/history.service";
-import { createSupabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "edge";
 

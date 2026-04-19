@@ -1,13 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import React, {
-  useEffect,
-  useState,
-  useMemo,
-  useCallback,
-  useRef,
-} from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { User } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
@@ -58,8 +52,6 @@ export default function WatchMovie({ movie, history, user }: Props) {
     const idx = movie.episodes.findIndex((s) => s.server_data.length > 0);
     return idx >= 0 ? idx : 0;
   });
-
-  const isClearingBadge = useRef(false);
 
   const allEpisodes = useMemo(
     () => movie.episodes.flatMap((ep: Episode) => ep.server_data),
@@ -188,18 +180,22 @@ export default function WatchMovie({ movie, history, user }: Props) {
     <div className="space-y-8 animate-in fade-in duration-700">
       <div id="video" className="scroll-mt-24">
         {activeEpisode && (
-          <VideoPlayer
-            key={`${movie.slug}-${tap}-${activeServerIdx}`}
-            user={user}
-            movie={movie}
-            movieSrc={activeEpisode.link_m3u8}
-            movieName={`${movie.name} - Tập ${activeEpisode.name}`}
-            nextEpisodeSlug={nextEpSlug}
-            prevEpisodeSlug={prevEpSlug}
-            initialTime={resumeTime}
-            onProgress={handleTimeUpdate}
-            onAutoNext={handleAutoNext}
-          />
+          <>
+            <h2 className="text-lg font-bold text-white mb-3 truncate">
+              {`${movie.name} - Tập ${activeEpisode.name}`}
+            </h2>
+            <VideoPlayer
+              key={`${movie.slug}-${tap}-${activeServerIdx}`}
+              user={user}
+              movie={movie}
+              movieSrc={activeEpisode.link_m3u8}
+              nextEpisodeSlug={nextEpSlug}
+              prevEpisodeSlug={prevEpSlug}
+              initialTime={resumeTime}
+              onProgress={handleTimeUpdate}
+              onAutoNext={handleAutoNext}
+            />
+          </>
         )}
       </div>
 

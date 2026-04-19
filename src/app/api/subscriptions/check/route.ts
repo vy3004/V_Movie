@@ -21,6 +21,7 @@ export async function GET(req: Request) {
     );
     return NextResponse.json({ isFollowed });
   } catch (error) {
+    console.error("[API_SUBSCRIPTIONS_CHECK_GET]:", error);
     return NextResponse.json({ isFollowed: false }, { status: 500 });
   }
 }

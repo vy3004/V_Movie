@@ -19,6 +19,7 @@ export async function GET(request: Request) {
     const data = await CommentService.getThreadLineage(commentId, user?.id);
     return NextResponse.json(data);
   } catch (error) {
+    console.error("[API_COMMENTS_THREAD_GET]:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 },
