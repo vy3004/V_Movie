@@ -5,7 +5,7 @@ export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 export const BASE_URL = process.env.NEXT_PUBLIC_PORT!;
 export const WEB_TITLE = "V · Movie";
 
-export const WSRV_PROXY = "https://wsrv.nl/?output=webp&q=75&url=";
+export const WSRV_PROXY = "https://wsrv.nl";
 export const MOVIE_IMG_PATH = `${BASE_IMG_API}/uploads/movies/`;
 
 export const apiConfig = {
@@ -13,8 +13,7 @@ export const apiConfig = {
   MOVIES_URL: `${BASE_MOVIE_API}/danh-sach/`,
   MOVIE_URL: `${BASE_MOVIE_API}/phim/`,
   CATEGORIES_URL: `${BASE_MOVIE_API}/the-loai/`,
-  COUNTRIES_URL: `${BASE_MOVIE_API}/quoc-gia/`,
-  IMG_URL: `${WSRV_PROXY}${MOVIE_IMG_PATH}`,
+  COUNTRIES_URL: `${BASE_MOVIE_API}/quoc-gia/`
 };
 
 export const typesMovie = {

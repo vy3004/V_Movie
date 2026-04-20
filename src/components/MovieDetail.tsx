@@ -1,8 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { PlayIcon, StarIcon } from "@heroicons/react/24/solid";
-
-import { apiConfig } from "@/lib/configs";
+import ExpandableText from "@/components/ExpandableText";
+import { MOVIE_IMG_PATH, WSRV_PROXY } from "@/lib/configs";
 import { Movie } from "@/types";
 
 interface MovieDetailProps {
@@ -15,11 +15,11 @@ const MovieDetail = ({ movie }: MovieDetailProps) => {
       <picture className="col-span-3 sm:col-span-1">
         <source
           media="(min-width: 640px)"
-          srcSet={`${apiConfig.IMG_URL}${movie.thumb_url}&w=400`}
+          srcSet={`${WSRV_PROXY}/?output=webp&q=65&url=${MOVIE_IMG_PATH}${movie.thumb_url}&w=400`}
         />
         <img
           alt={movie.origin_name}
-          src={`${apiConfig.IMG_URL}${movie.poster_url}&w=640`}
+          src={`${WSRV_PROXY}/?output=webp&q=65&url=${MOVIE_IMG_PATH}${movie.poster_url}&w=640`}
           className="object-cover rounded-lg"
           loading="eager"
           fetchPriority="high"
@@ -106,7 +106,7 @@ export const MovieInfo = ({
           {movie.content && movie.content.trim() !== "" && (
             <div>
               <span className="text-gray-400">Mô tả:</span>
-              <div dangerouslySetInnerHTML={{ __html: movie.content }} />
+              <ExpandableText content={movie.content} maxLines={3} />
             </div>
           )}
         </div>

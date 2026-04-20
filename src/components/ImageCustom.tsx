@@ -3,6 +3,7 @@ import { WSRV_PROXY, MOVIE_IMG_PATH } from "@/lib/configs";
 
 interface ImageCustomProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   widths?: number[];
+  quality?: number;
 }
 
 // Định nghĩa kiểu dữ liệu trả về rõ ràng
@@ -13,6 +14,7 @@ interface ImageSource {
 
 const ImageCustom: React.FC<ImageCustomProps> = ({
   widths = [300, 600, 900],
+  quality = 65,
   src,
   alt,
   ...props
@@ -30,7 +32,7 @@ const ImageCustom: React.FC<ImageCustomProps> = ({
 
     const getProxyUrl = (w?: number) => {
       const widthParam = w ? `&w=${w}` : "";
-      return `${WSRV_PROXY}${encodeURIComponent(rawUrl)}${widthParam}`;
+      return `${WSRV_PROXY}/?output=webp&q=${quality}&url=${encodeURIComponent(rawUrl)}${widthParam}`;
     };
 
     const srcSet = widths.map((w) => `${getProxyUrl(w)} ${w}w`).join(", ");
@@ -39,7 +41,7 @@ const ImageCustom: React.FC<ImageCustomProps> = ({
       main: getProxyUrl(widths[0]),
       srcSet,
     };
-  }, [src, widths]);
+  }, [src, widths, quality]);
 
   // Early return nếu không có src để tránh render thẻ img lỗi
   if (!src) {
@@ -52,7 +54,7 @@ const ImageCustom: React.FC<ImageCustomProps> = ({
       src={finalSrc.main}
       srcSet={finalSrc.srcSet}
       alt={alt || "Image"}
-      decoding="async"
+      decoding={props.fetchPriority === "high" ? "auto" : "async"}
       referrerPolicy="no-referrer"
       {...props}
     />

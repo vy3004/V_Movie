@@ -15,9 +15,7 @@ const Banner = dynamicImport(() => import("@/components/Banner"), {
   ssr: false,
 });
 
-// Cấu hình Render: Luôn lấy mới (force-dynamic) kết hợp với
-// Redis Cache trong Service để đảm bảo tốc độ.
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 const getHomeData = cache(async () => {
   return await MovieService.getList({ limit: 24 });
