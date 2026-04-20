@@ -1,12 +1,16 @@
 "use client";
 
-import { UserGroupIcon, LockClosedIcon } from "@heroicons/react/24/outline";
+import {
+  UserGroupIcon,
+  LockClosedIcon,
+  PlayCircleIcon,
+  GlobeAltIcon,
+} from "@heroicons/react/24/outline";
 import Link from "next/link";
 import ImageCustom from "@/components/ImageCustom";
 import { WatchPartyRoom } from "@/types";
 
 export default function RoomCard({ room }: { room: WatchPartyRoom }) {
-  // Thay url này bằng link ảnh default nếu phòng không có ảnh phim
   const bgImage =
     room.movie_image ||
     "https://images.unsplash.com/photo-1574267432553-4b4628081c31?q=80&w=1000&auto=format&fit=crop";
@@ -16,77 +20,85 @@ export default function RoomCard({ room }: { room: WatchPartyRoom }) {
 
   return (
     <Link
-      href={isFull && !room.is_private ? "#" : `/xem-chung/${room.room_code}?`}
-      className={isFull ? "pointer-events-none opacity-50" : ""}
+      href={isFull ? "#" : `/xem-chung/${room.room_code}`}
+      className={`group relative bg-[#111] rounded-xl overflow-hidden border border-white/5 hover:border-red-600/30 transition-all duration-500 block ${
+        isFull ? "opacity-50 pointer-events-none" : ""
+      }`}
     >
-      <div className="group relative aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 hover:border-red-600 transition-all duration-300 hover:scale-105 shadow-lg cursor-pointer">
-        {/* Background Image */}
+      {/* --- PHẦN BADGES TRÊN CÙNG --- */}
+      <div className="absolute top-4 left-4 right-4 z-20 flex justify-between items-center">
+        {/* Số lượng người bên trái */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-black/60 backdrop-blur-md rounded-full border border-white/5 text-[10px] font-black text-zinc-200">
+          <UserGroupIcon
+            className={`size-4 stroke-[3px] ${isFull ? "text-red-500" : "text-emerald-500"}`}
+          />
+          <span>
+            {participantsCount}/{maxLimit}
+          </span>
+        </div>
+
+        {/* Icon Private/Public bên phải */}
+        {room.is_private ? (
+          <div className="p-2 bg-black/60 backdrop-blur-md rounded-full text-red-600 border border-white/5">
+            <LockClosedIcon className="size-4" />
+          </div>
+        ) : (
+          <div className="p-2 bg-black/60 backdrop-blur-md rounded-full text-zinc-400 border border-white/5">
+            <GlobeAltIcon className="size-4" />
+          </div>
+        )}
+      </div>
+
+      {/* Thumbnail Area - Aspect 21/9 */}
+      <div className="aspect-[21/9] relative overflow-hidden">
         <ImageCustom
-          className="absolute inset-0 object-cover size-full rounded-xl group-hover:opacity-40 transition-opacity"
+          className="w-full h-full object-cover rounded-xl transition-all duration-700 scale-105 group-hover:scale-110"
           src={bgImage}
           alt={room.title}
-          widths={[400]}
+          widths={[500]}
         />
+        {/* Lớp phủ khói đen mờ dưới chữ */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#111] via-transparent to-black/20" />
+      </div>
 
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent rounded-xl" />
-
-        {/* Top Badges */}
-        <div className="absolute top-2 w-full px-2 flex justify-between items-center">
-          <span className="bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-md text-xs font-bold text-white uppercase tracking-wider border border-zinc-700">
-            Mã: {room.room_code}
-          </span>
-          {room.is_private && (
-            <span className="bg-red-600 text-white p-1.5 rounded-md shadow-md">
-              <LockClosedIcon className="w-4 h-4" />
-            </span>
-          )}
-        </div>
-
-        {/* Content Bottom */}
-        <div className="absolute bottom-0 w-full p-2 flex flex-col justify-end">
-          <h3 className="text-white font-bold text-md leading-tight line-clamp-1 group-hover:text-red-500 transition-colors">
+      {/* Room Details Area */}
+      <div className="p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-zinc-200 line-clamp-1 text-sm">
             {room.title}
           </h3>
-
-          <div className="flex items-center gap-4 mt-3">
-            <div className="flex items-center gap-2">
-              <ImageCustom
-                className="w-6 h-6 rounded-full border border-zinc-500"
-                src={room.host?.avatar_url || "/default-avatar.png"}
-                alt={room.host?.full_name || "Host"}
-                widths={[36]}
-              />
-              <span className="text-xs text-zinc-400 font-medium truncate max-w-[100px]">
-                {room.host?.full_name}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-300 ml-auto bg-black/40 px-2 py-1 rounded-full">
-              <UserGroupIcon
-                className={`w-4 h-4 ${isFull ? "text-red-500" : "text-emerald-400"} `}
-              />
-              <span>
-                {participantsCount}/{maxLimit}
-              </span>
-            </div>
-          </div>
         </div>
 
-        {/* Hover Play Icon Overlay */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-          <div className="bg-red-600 text-white rounded-full p-3 shadow-xl transform scale-75 group-hover:scale-100 transition-transform">
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path d="M8 5V19L19 12L8 5Z" />
-            </svg>
+        <div className="flex items-center gap-3">
+          {/* Host Avatar */}
+          <div className="relative">
+            <ImageCustom
+              className="w-8 h-8 rounded-full border border-white/10 object-cover"
+              src={room.host?.avatar_url || "/default-avatar.png"}
+              alt="Host"
+              widths={[32]}
+            />
+          </div>
+
+          <div className="flex-1">
+            <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest leading-none mb-0.5">
+              Chủ phòng
+            </p>
+            <p className="text-xs font-bold text-zinc-400 truncate max-w-[120px]">
+              {room.host?.full_name || "Ẩn danh"}
+            </p>
+          </div>
+
+          {/* Nút Play thay thế motion bằng CSS transition */}
+          <div className="h-10 w-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-red-600 group-hover:border-red-600 group-hover:text-white transition-all text-zinc-400">
+            <PlayCircleIcon className="w-5 h-5" />
           </div>
         </div>
+      </div>
+
+      {/* Số Index mờ phía dưới (Dùng Room Code hoặc ID) */}
+      <div className="absolute -bottom-4 -left-2 text-6xl font-black text-white/[0.02] select-none pointer-events-none group-hover:text-red-600/[0.05] transition-colors">
+        #{room.room_code}
       </div>
     </Link>
   );

@@ -88,7 +88,7 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
 
     // Auto điền tên phòng nếu chưa có
     if (!titleVal) {
-      setValue("title", `Cùng xem: ${movie.name}`, { shouldValidate: true });
+      setValue("title", `Cùng xem ${movie.name}`, { shouldValidate: true });
     }
   };
 
@@ -240,7 +240,7 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {/* 3. Chế độ (Public/Private) */}
               <div>
                 <label className="block text-sm font-bold text-zinc-300 mb-2">

@@ -3,14 +3,14 @@
 import { useState, useRef, useEffect } from "react";
 import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { useQuery } from "@tanstack/react-query";
-import { debounce } from "lodash-es"; // <--- Import từ lodash-es
+import { debounce } from "lodash-es";
 import RoomCard from "@/components/watch-party/RoomCard";
 import CreateRoomModal from "@/components/watch-party/CreateRoomModal";
 import { WatchPartyRoom } from "@/types";
 
 export default function WatchPartyLobbyPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [querySearch, setQuerySearch] = useState(""); // State thực sự dùng để gọi API
+  const [querySearch, setQuerySearch] = useState("");
   const [showModal, setShowModal] = useState(false);
 
   // 1. Tạo hàm debounce bằng lodash-es và giữ nó không bị re-create bằng useRef
@@ -44,37 +44,58 @@ export default function WatchPartyLobbyPage() {
   const rooms = data?.rooms || [];
 
   return (
-    <div className="min-h-screen bg-[#141414] text-white pt-24 pb-20 px-6 lg:px-12">
+    <div className="min-h-screen bg-[#141414] text-white py-12 px-6 lg:px-12">
       {/* Header Section */}
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 mb-12">
-        <div>
-          <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-2">
-            Xem chung <span className="text-red-600">Cùng bạn bè</span>
-          </h1>
-          <p className="text-zinc-400 text-sm md:text-base">
-            Trải nghiệm rạp chiếu phim tại nhà. Vừa xem vừa chém gió.
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16 px-1">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-red-600 font-black text-xs tracking-widest uppercase">
+            <span className="w-8 h-px bg-red-600" />
+            Sảnh chờ trực tuyến
+          </div>
+          <h2 className="text-4xl md:text-6xl font-black tracking-tighter uppercase italic">
+            PHÒNG{" "}
+            <span
+              className="text-transparent stroke-text"
+              style={{ WebkitTextStroke: "1px white" }}
+            >
+              TRỐNG
+            </span>
+          </h2>
+          <p className="text-zinc-500 font-medium max-w-md">
+            Tìm một căn phòng phù hợp với tâm trạng của bạn hoặc tự tạo không
+            gian riêng cùng hội bạn thân nhé.
           </p>
         </div>
 
-        <div className="flex w-full md:w-auto items-center gap-4">
-          <div className="relative w-full md:w-72">
-            <MagnifyingGlassIcon className="size-5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-            <input
-              type="text"
-              placeholder="Mã phòng, tên phim..."
-              value={searchTerm}
-              onChange={handleSearchChange} // <--- Sử dụng hàm change mới
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-full py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-zinc-600 focus:bg-zinc-800 transition"
-            />
-          </div>
-
+        <div className="flex gap-4">
           <button
             onClick={() => setShowModal(true)}
-            className="flex-shrink-0 flex items-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 rounded-full font-semibold transition"
+            className="flex items-center gap-2 px-6 py-4 bg-red-600 hover:bg-[#b20710] text-white font-black text-xs uppercase tracking-widest rounded transition-all shadow-xl shadow-red-600/10 group"
           >
-            <PlusIcon className="size-5" />{" "}
-            <span className="hidden sm:inline">Tạo phòng</span>
+            <PlusIcon className="size-5" />
+            Tạo phòng mới
           </button>
+        </div>
+      </div>
+      {/* Options & Filters */}
+      <div className="flex flex-wrap items-center justify-between gap-6 mb-12 py-6 border-y border-white/5">
+        <div className="flex flex-wrap items-center gap-3">
+          <FilterPill label="Tất cả" active />
+          <FilterPill label="Hành động" />
+          <FilterPill label="Kinh dị" />
+          <FilterPill label="Lãng mạn" />
+          <FilterPill label="Âm nhạc" />
+        </div>
+
+        <div className="relative w-full md:w-72">
+          <MagnifyingGlassIcon className="size-5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <input
+            type="text"
+            placeholder="Mã phòng, tên phim..."
+            value={searchTerm}
+            onChange={handleSearchChange} // <--- Sử dụng hàm change mới
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-full py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-zinc-600 focus:bg-zinc-800 transition"
+          />
         </div>
       </div>
 
@@ -108,5 +129,25 @@ export default function WatchPartyLobbyPage() {
 
       {showModal && <CreateRoomModal onClose={() => setShowModal(false)} />}
     </div>
+  );
+}
+
+function FilterPill({
+  label,
+  active = false,
+}: {
+  label: string;
+  active?: boolean;
+}) {
+  return (
+    <button
+      className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
+        active
+          ? "bg-white text-black border-white"
+          : "bg-transparent text-zinc-500 border-white/10 hover:border-white/30 hover:text-white"
+      }`}
+    >
+      {label}
+    </button>
   );
 }

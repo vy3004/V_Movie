@@ -111,6 +111,48 @@ export const shuffleMovies = (items: Movie[]): Movie[] => {
   return shuffled;
 };
 
+// Format tên phim: Tên chính + Tên phụ
+export const formatMovieTitle = (
+  name: string,
+  originName?: string,
+): [string, string] => {
+  if (!name) return ["", ""];
+
+  // Regex 1: Tìm cụm "(Phần X)" không phân biệt hoa thường
+  const seasonRegex: RegExp = /\s*\(phần\s*(\d+)\)/i;
+
+  // Regex 2: Tìm dấu ":" hoặc "," hoặc " - "
+  const separatorMatch: RegExpMatchArray | null = name.match(/[:,]|\s-\s/);
+
+  // TRƯỜNG HỢP 1: CÓ DẤU ":", ",", HOẶC " - "
+  // Kiểm tra thêm .index !== undefined để TypeScript hiểu đây chắc chắn là number
+  if (separatorMatch && separatorMatch.index !== undefined) {
+    const splitIdx: number = separatorMatch.index;
+    const separatorLength: number = separatorMatch[0].length;
+
+    // Cắt lấy phần trước và sau dấu phân cách
+    const part1: string = name.slice(0, splitIdx).trim();
+    let part2: string = name.slice(splitIdx + separatorLength).trim();
+
+    // Nếu chuỗi phụ có "(Phần X)", thay thế thành " X"
+    part2 = part2.replace(seasonRegex, " $1").trim();
+
+    return [part1, part2];
+  }
+
+  // TRƯỜNG HỢP 2: KHÔNG CÓ DẤU PHÂN CÁCH, NHƯNG CÓ "(PHẦN X)"
+  const seasonMatch: RegExpMatchArray | null = name.match(seasonRegex);
+  if (seasonMatch && seasonMatch.index !== undefined) {
+    const splitIdx: number = seasonMatch.index;
+    const part1: string = name.slice(0, splitIdx).trim();
+    const part2: string = `season ${seasonMatch[1]}`;
+    return [part1, part2];
+  }
+
+  // TRƯỜNG HỢP 3: BÌNH THƯỜNG
+  return [name.trim(), (originName || "").trim()];
+};
+
 const GUEST_HISTORY_KEY = "v_movie_guest_history";
 
 export const saveLocalHistory = (item: HistoryItem) => {

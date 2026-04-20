@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useMemo } from "react";
 import { User } from "@supabase/supabase-js";
 import { throttle } from "lodash-es";
 import { getDeviceId, getLocalHistory, saveLocalHistory } from "@/lib/utils";
@@ -33,61 +33,64 @@ export function useWatchHistory({
   }, []);
 
   // 2. Logic lưu LocalStorage an toàn
-  const syncLocal = useCallback(
-    throttle(() => {
-      const data = trackingData.current;
-      if (!data || data.current_time < 5) return;
+  const syncLocal = useMemo(
+    () =>
+      throttle(() => {
+        const data = trackingData.current;
+        if (!data || data.current_time < 5) return;
 
-      const existing = inMemoryLocalHistory.current.find(
-        (h) => h.movie_slug === movie.slug,
-      );
-      const existingProgress =
-        (existing?.episodes_progress as Record<string, EpisodeProgress>) || {};
+        const existing = inMemoryLocalHistory.current.find(
+          (h) => h.movie_slug === movie.slug,
+        );
+        const existingProgress =
+          (existing?.episodes_progress as Record<string, EpisodeProgress>) ||
+          {};
 
-      // Xác định trạng thái xem xong của tập hiện tại
-      const isCurrentEpFinished =
-        data.duration > 0 && data.current_time / data.duration > 0.9;
-      // Lấy trạng thái cũ HOẶC trạng thái mới tính toán
-      const finalEpIsFinished =
-        existingProgress[episodeSlug]?.ep_is_finished || isCurrentEpFinished;
+        const isCurrentEpFinished =
+          data.duration > 0 && data.current_time / data.duration > 0.9;
+        const finalEpIsFinished =
+          existingProgress[episodeSlug]?.ep_is_finished || isCurrentEpFinished;
 
-      // Xác định trạng thái xem xong của CẢ BỘ PHIM
-      // Nếu tập đang xem là tập cuối -> Lấy trạng thái của nó
-      // Nếu không, lấy trạng thái cũ của tập cuối (nếu có)
-      const isMovieCompletelyFinished =
-        episodeSlug === lastEpOfMovie
-          ? finalEpIsFinished
-          : existingProgress[lastEpOfMovie]?.ep_is_finished || false;
+        const isMovieCompletelyFinished =
+          episodeSlug === lastEpOfMovie
+            ? finalEpIsFinished
+            : existingProgress[lastEpOfMovie]?.ep_is_finished || false;
 
-      const newItem: HistoryItem = {
-        movie_slug: movie.slug,
-        movie_name: movie.name,
-        movie_poster: movie.poster_url,
-        last_episode_slug: episodeSlug,
-        last_episode_of_movie_slug: lastEpOfMovie,
-        updated_at: new Date().toISOString(),
-        is_finished: isMovieCompletelyFinished,
-        episodes_progress: {
-          ...existingProgress,
-          [episodeSlug]: {
-            ep_last_time: data.current_time,
-            ep_duration: data.duration,
-            ep_is_finished: finalEpIsFinished,
-            ep_updated_at: new Date().toISOString(),
+        const newItem: HistoryItem = {
+          movie_slug: movie.slug,
+          movie_name: movie.name,
+          movie_poster: movie.poster_url,
+          last_episode_slug: episodeSlug,
+          last_episode_of_movie_slug: lastEpOfMovie,
+          updated_at: new Date().toISOString(),
+          is_finished: isMovieCompletelyFinished,
+          episodes_progress: {
+            ...existingProgress,
+            [episodeSlug]: {
+              ep_last_time: data.current_time,
+              ep_duration: data.duration,
+              ep_is_finished: finalEpIsFinished,
+              ep_updated_at: new Date().toISOString(),
+            },
           },
-        },
-      };
+        };
 
-      const index = inMemoryLocalHistory.current.findIndex(
-        (h) => h.movie_slug === movie.slug,
-      );
-      if (index > -1) inMemoryLocalHistory.current[index] = newItem;
-      else inMemoryLocalHistory.current.push(newItem);
+        const index = inMemoryLocalHistory.current.findIndex(
+          (h) => h.movie_slug === movie.slug,
+        );
+        if (index > -1) inMemoryLocalHistory.current[index] = newItem;
+        else inMemoryLocalHistory.current.push(newItem);
 
-      saveLocalHistory(newItem);
-    }, 5000),
-    [movie, episodeSlug, lastEpOfMovie],
+        saveLocalHistory(newItem);
+      }, 5000),
+    [movie.slug, movie.name, movie.poster_url, episodeSlug, lastEpOfMovie],
   );
+
+  useEffect(() => {
+    return () => {
+      syncLocal.cancel();
+    };
+  }, [syncLocal]);
 
   // 3. Gửi tracking lên Redis
   const syncRedis = useCallback(() => {
@@ -116,7 +119,7 @@ export function useWatchHistory({
 
   // 4. Chốt DB khi thoát
   const syncSupabase = useCallback(() => {
-    syncLocal();
+    syncLocal.flush();
     if (!user) return;
 
     const data = trackingData.current;

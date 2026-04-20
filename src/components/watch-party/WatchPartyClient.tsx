@@ -368,8 +368,12 @@ export default function WatchPartyClient({
             </h1>
             <button
               onClick={() => {
-                navigator.clipboard.writeText(room.room_code);
-                toast.success("Đã copy mã phòng!");
+                navigator.clipboard
+                  .writeText(room.room_code)
+                  .then(() => toast.success("Đã copy mã phòng!"))
+                  .catch(() =>
+                    toast.error("Không thể copy. Vui lòng copy thủ công."),
+                  );
               }}
               className="text-[11px] text-zinc-500 flex items-center gap-1 transition-colors"
             >

@@ -146,13 +146,12 @@ export const MovieTags = ({
       {movie.tmdb.season && (
         <BorderedItem>Phần {movie.tmdb.season}</BorderedItem>
       )}
-      <BorderedItem>{movie.time}</BorderedItem>
       <BorderedItem>{movie.episode_current}</BorderedItem>
     </div>
   </div>
 );
 
-const CategoryAndCountry = ({
+export const CategoryAndCountry = ({
   movie,
   className = "",
 }: {

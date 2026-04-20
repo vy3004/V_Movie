@@ -4,8 +4,9 @@ import { LockClosedIcon } from "@heroicons/react/24/outline";
 
 import KnockDoorClient from "@/components/watch-party/KnockDoorClient";
 import AutoJoinClient from "@/components/watch-party/AutoJoinClient";
-import WatchPartyClient from "@/components/WatchPartyClient";
+import WatchPartyClient from "@/components/watch-party/WatchPartyClient";
 import WaitingRoomClient from "@/components/watch-party/WaitingRoomClient";
+import ErrorRoomClient from "@/components/watch-party/ErrorRoomClient";
 
 export default async function WatchPartyPage({
   params,
@@ -29,16 +30,7 @@ export default async function WatchPartyPage({
     .maybeSingle();
 
   if (!room || !room.is_active) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#141414] text-white">
-        <div className="text-center space-y-4">
-          <h1 className="text-4xl font-bold text-red-600">404</h1>
-          <p className="text-zinc-400">
-            Phòng xem chung không tồn tại hoặc đã bị đóng.
-          </p>
-        </div>
-      </div>
-    );
+    return <ErrorRoomClient />;
   }
 
   // 2. Fetch trạng thái của User hiện tại

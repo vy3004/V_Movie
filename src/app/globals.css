@@ -19,6 +19,9 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+  .stroke-text {
+    -webkit-text-stroke: 1px rgba(255, 255, 255, 0.4);
+  }
 }
 
 ::-webkit-scrollbar {

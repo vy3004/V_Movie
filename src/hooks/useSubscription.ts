@@ -154,7 +154,7 @@ export function useSubscription({ user, movie }: UseSubscriptionProps) {
 
   const clearBadge = useCallback(() => {
     clearBadgeMutation.mutate();
-  }, [clearBadgeMutation.mutate]);
+  }, [clearBadgeMutation]);
 
   return {
     isFollowed,

@@ -30,7 +30,10 @@ const EpisodeSelector = ({
   onServerChange,
 }: EpisodeSelectorProps) => {
   const activeServer = servers[activeServerIdx];
-  const episodes = activeServer?.server_data || [];
+  const episodes = useMemo(
+    () => activeServer?.server_data || [],
+    [activeServer?.server_data],
+  );
 
   const [searchTerm, setSearchTerm] = useState("");
   const [activeRangeIdx, setActiveRangeIdx] = useState(0);

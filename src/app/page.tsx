@@ -7,10 +7,11 @@ import { shuffleMovies } from "@/lib/utils";
 
 import Container from "@/components/Container";
 import HeroCarousel from "@/components/HeroCarousel";
-import MovieSection from "@/components/MovieSection";
 import ListMovieSection from "@/components/ListMovieSection";
 import HistorySection from "@/components/HistorySection";
 import SubscriptionSection from "@/components/SubscriptionSection";
+import WatchPartyBanner from "@/components/watch-party/WatchPartyBanner";
+import TopMovieSection from "@/components/TopMovieSection";
 const Banner = dynamicImport(() => import("@/components/Banner"), {
   ssr: false,
 });
@@ -18,8 +19,16 @@ const Banner = dynamicImport(() => import("@/components/Banner"), {
 export const revalidate = 3600;
 
 const getHomeData = cache(async () => {
-  return await MovieService.getList({ limit: 24 });
+  return await MovieService.getList({ limit: 16 });
 });
+
+const Skeleton = ({ children }: { children: React.ReactNode }) => (
+  <Suspense
+    fallback={<div className="h-200 animate-pulse bg-zinc-900 rounded-xl" />}
+  >
+    {children}
+  </Suspense>
+);
 
 /**
  * SEO Metadata
@@ -65,11 +74,19 @@ export default async function HomePage() {
           {/* Banner Hero: Lấy 6 phim đầu sau khi xáo trộn */}
           <HeroCarousel movies={shuffledItems.slice(0, 6)} />
 
-          <Container className="mt-4 lg:-mt-[8%] xl:-mt-[15%] relative z-10">
-            <MovieSection title="Đề xuất hot" movies={shuffledItems.slice(6)} />
+          <Container className="-mt-[5%] md:-mt-[6%] lg:-mt-[8%] xl:-mt-[16%] relative z-10">
+            <TopMovieSection movies={shuffledItems.slice(6)} />
           </Container>
         </>
       )}
+
+      <Container className="mt-6 sm:mt-12">
+        <Skeleton>
+          <HistorySection title="Tiếp tục xem" type="watching" />
+        </Skeleton>
+      </Container>
+
+      <WatchPartyBanner />
 
       <Container
         className={`${
@@ -82,7 +99,6 @@ export default async function HomePage() {
             <div className="h-20 animate-pulse bg-zinc-900 rounded-xl" />
           }
         >
-          <HistorySection title="Tiếp tục xem" type="watching" />
           <SubscriptionSection />
           <HistorySection title="Phim đã xem" type="finished" />
         </Suspense>
