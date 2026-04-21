@@ -118,3 +118,50 @@ CREATE POLICY "Authorized users can add to playlist" ON watch_party_playlist FOR
     AND (p.role = 'host' OR (p.permissions->>'can_change_movie')::boolean = true)
   )
 );
+
+-- 1. Tạo bảng lưu trữ tin nhắn
+CREATE TABLE IF NOT EXISTS watch_party_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    room_id UUID NOT NULL REFERENCES watch_party_rooms(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL,
+    user_name TEXT NOT NULL,
+    text TEXT NOT NULL,
+    type TEXT DEFAULT 'chat', -- 'chat', 'system', 'reaction'
+    metadata JSONB DEFAULT '{}'::jsonb, -- Lưu emoji hoặc thông tin phụ
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Thêm cột is_muted vào bảng participants để quản lý việc cấm chat
+-- Giả sử bảng của bạn tên là watch_party_participants
+ALTER TABLE watch_party_participants 
+ADD COLUMN IF NOT EXISTS is_muted BOOLEAN DEFAULT FALSE;
+
+-- 3. Tạo Index để khi vào phòng fetch tin nhắn cũ cho nhanh
+CREATE INDEX IF NOT EXISTS idx_messages_room_id ON watch_party_messages(room_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON watch_party_messages(created_at);
+
+-- 4. Bật Row Level Security (RLS) để bảo mật
+ALTER TABLE watch_party_messages ENABLE ROW LEVEL SECURITY;
+
+-- 5. Tạo chính sách: Ai trong phòng cũng được đọc tin nhắn
+CREATE POLICY "Users can view messages in their room" 
+ON watch_party_messages FOR SELECT 
+USING (
+    EXISTS (
+        SELECT 1 FROM watch_party_participants 
+        WHERE room_id = watch_party_messages.room_id 
+        AND user_id = auth.uid()
+    )
+);
+
+-- 6. Tạo chính sách: Chỉ người không bị muted mới được gửi tin nhắn
+CREATE POLICY "Non-muted users can insert messages" 
+ON watch_party_messages FOR INSERT 
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM watch_party_participants 
+        WHERE room_id = watch_party_messages.room_id 
+        AND user_id = auth.uid()
+        AND is_muted = FALSE
+    )
+);

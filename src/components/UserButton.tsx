@@ -8,12 +8,11 @@ import {
   UserIcon,
   ArrowLeftEndOnRectangleIcon,
 } from "@heroicons/react/24/solid";
-
-import ImageCustom from "@/components/ImageCustom";
+import NotificationBell from "@/components/NotificationBell";
+import UserAvatar from "@/components/UserAvatar";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useAuthModal } from "@/providers/AuthModalProvider";
 import { useData } from "@/providers/BaseDataContextProvider";
-import NotificationBell from "./NotificationBell";
 
 export default function UserButton() {
   const supabase = createSupabaseClient();
@@ -51,9 +50,7 @@ export default function UserButton() {
 
   // 3. Trường hợp đã đăng nhập (USER)
   const avatarUrl = user?.user_metadata?.avatar_url;
-  const isDiceBear = avatarUrl?.includes("dicebear.com");
   const fullName = user?.user_metadata?.full_name || user?.email || "User";
-  const initials = fullName.split(" ").pop()?.charAt(0).toUpperCase();
 
   return (
     <div className="flex items-center gap-2">
@@ -61,30 +58,13 @@ export default function UserButton() {
 
       <div className="relative group">
         {/* Nút Avatar */}
-        <button className="flex items-center gap-1 hover:opacity-80 transition-all outline-none">
-          <div className="size-8 sm:size-10 rounded-full overflow-hidden flex items-center justify-center bg-zinc-800 text-white font-medium border-1 border-transparent group-hover:border-zinc-400 transition-all shadow-lg">
-            {avatarUrl ? (
-              isDiceBear ? (
-                /* Nếu là ảnh hoạt hình DiceBear (SVG), hiện trực tiếp không qua Proxy cho nhẹ */
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={avatarUrl}
-                  alt="Avatar"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                /* Nếu là ảnh Google hoặc ảnh User Up lên, đi qua ImageCustom để nén */
-                <ImageCustom
-                  src={avatarUrl}
-                  alt="Avatar"
-                  widths={[80, 160]}
-                  className="w-full h-full object-cover"
-                />
-              )
-            ) : (
-              <span>{initials}</span>
-            )}
-          </div>
+        <button className="flex items-center gap-1 hover:opacity-80 transition-all outline-none group">
+          <UserAvatar
+            avatar_url={avatarUrl}
+            user_name={fullName}
+            size={40}
+            className="!w-8 !h-8 sm:!w-10 sm:!h-10"
+          />
         </button>
 
         {/* Menu Dropdown */}

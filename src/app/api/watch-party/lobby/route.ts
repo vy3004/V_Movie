@@ -15,12 +15,13 @@ export async function GET(request: Request) {
       .select(
         `
         id, room_code, title, current_movie_slug, current_episode_slug, 
-        is_private, created_at, movie_image, max_participants,
-        host:profiles!host_id(full_name, avatar_url),
-        participants:watch_party_participants(count)
+        is_private, created_at, movie_image, max_participants, participant_count,
+        host:profiles!host_id(full_name, avatar_url)
       `,
       )
       .eq("is_active", true)
+      // DỌN DẸP PHÒNG TRỐNG: Đảm bảo không hiện phòng ma nếu Trigger xóa chưa kịp chạy hết.
+      .gt("participant_count", 0)
       .order("created_at", { ascending: false })
       .limit(50);
 

@@ -2,13 +2,16 @@
 
 import { useEffect, useRef } from "react";
 import { QueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import {
   RealtimePostgresChangesPayload,
   SupabaseClient,
 } from "@supabase/supabase-js";
-import { ChatMessage } from "@/components/watch-party/ChatTab";
-import { WatchPartyRoom, WatchPartyParticipant, PlayerSyncRef } from "@/types";
+import {
+  WatchPartyRoom,
+  WatchPartyParticipant,
+  PlayerSyncRef,
+  ChatMessage,
+} from "@/types";
 
 interface RealtimeProps {
   room: WatchPartyRoom;
@@ -45,8 +48,25 @@ export function useRealtime(props: RealtimeProps) {
     });
 
     channel
-      .on("broadcast", { event: "chat" }, ({ payload }) =>
-        refs.current.setMessages((p) => [...p, payload as ChatMessage]),
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "watch_party_messages",
+          filter: `room_id=eq.${props.room.id}`,
+        },
+        (payload) => {
+          const newMessage = payload.new as ChatMessage;
+          refs.current.setMessages((prev) => {
+            if (prev.some((m) => m.id === newMessage.id)) return prev;
+            const updated = [...prev, newMessage];
+            if (updated.length > 150) {
+              return updated.slice(updated.length - 150);
+            }
+            return updated;
+          });
+        },
       )
       .on(
         "broadcast",
@@ -79,7 +99,6 @@ export function useRealtime(props: RealtimeProps) {
         if (!refs.current.isRealHost) {
           const state = refs.current.playerSyncRef.current?.getCurrentState?.();
           if (state) {
-            // Trả lời Host (Dùng hàm Random delay 0-1s để tránh dội bom mạng nếu có 100 Guest cùng trả lời)
             setTimeout(() => {
               if (channel.state === "joined") {
                 channel
@@ -99,7 +118,6 @@ export function useRealtime(props: RealtimeProps) {
       })
       .on("broadcast", { event: "room_sync_response" }, ({ payload }) => {
         if (refs.current.isRealHost) {
-          // Host dùng quyền tối cao ép video của chính mình nhảy tới đúng chỗ của Guest đang xem
           refs.current.playerSyncRef.current?.syncFromRemote(
             payload.action,
             payload.time,
@@ -125,7 +143,10 @@ export function useRealtime(props: RealtimeProps) {
           table: "watch_party_rooms",
           filter: `id=eq.${props.room.id}`,
         },
-        (p) => refs.current.setRoom(p.new as WatchPartyRoom),
+        (p) => {
+          const updatedRoom = p.new as WatchPartyRoom;
+          refs.current.setRoom(updatedRoom);
+        },
       )
       .on(
         "postgres_changes",
@@ -136,11 +157,7 @@ export function useRealtime(props: RealtimeProps) {
           filter: `room_id=eq.${props.room.id}`,
         },
         (payload: RealtimePostgresChangesPayload<WatchPartyParticipant>) => {
-          if (payload.eventType === "INSERT") {
-            if (refs.current.isRealHost)
-              toast.info("Có người mới đang xin vào phòng!", { icon: "👋" });
-            refs.current.refetchParticipants();
-          }
+          refs.current.refetchParticipants();
           if (payload.eventType === "DELETE") {
             refs.current.queryClient.setQueryData<WatchPartyParticipant[]>(
               ["wp-participants", props.room.id],
@@ -149,16 +166,6 @@ export function useRealtime(props: RealtimeProps) {
             if (payload.old?.id === refs.current.myParticipantId)
               refs.current.onKicked();
           }
-          if (payload.eventType === "UPDATE") {
-            refs.current.queryClient.setQueryData<WatchPartyParticipant[]>(
-              ["wp-participants", props.room.id],
-              (old = []) =>
-                old.map((p) =>
-                  p.id === payload.new.id ? { ...p, ...payload.new } : p,
-                ),
-            );
-            refs.current.refetchParticipants();
-          }
         },
       )
       .subscribe((status) => {
@@ -166,7 +173,6 @@ export function useRealtime(props: RealtimeProps) {
           if (!refs.current.isRealHost) {
             const requestSync = async () => {
               if (channel.state !== "joined") return;
-
               try {
                 await channel.send({
                   type: "broadcast",
@@ -175,14 +181,12 @@ export function useRealtime(props: RealtimeProps) {
                 });
               } catch {}
             };
-
             timeoutIds.push(setTimeout(requestSync, 1500));
             timeoutIds.push(setTimeout(requestSync, 3500));
             timeoutIds.push(setTimeout(requestSync, 6000));
           } else {
             const requestRecovery = async () => {
               if (channel.state !== "joined") return;
-
               try {
                 await channel.send({
                   type: "broadcast",
@@ -191,7 +195,6 @@ export function useRealtime(props: RealtimeProps) {
                 });
               } catch {}
             };
-
             timeoutIds.push(setTimeout(requestRecovery, 2000));
             timeoutIds.push(setTimeout(requestRecovery, 4000));
           }

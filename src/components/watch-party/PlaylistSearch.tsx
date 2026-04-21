@@ -101,7 +101,6 @@ export default function PlaylistSearch({ onAdd }: PlaylistSearchProps) {
                 </div>
               ))}
 
-              {/* 🌟 SỬ DỤNG LẠI SKELETON CHO LOAD MORE */}
               {isFetchingNextPage && (
                 <div className="flex flex-col">
                   {[1, 2].map((i) => (

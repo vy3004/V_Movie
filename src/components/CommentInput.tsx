@@ -4,13 +4,13 @@ import React, { useRef, useCallback, memo, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PaperAirplaneIcon } from "@heroicons/react/24/solid";
-import ImageCustom from "@/components/ImageCustom";
 import { useData } from "@/providers/BaseDataContextProvider";
 import { useAuthModal } from "@/providers/AuthModalProvider";
 import {
   commentSchema,
   CommentFormData,
 } from "@/lib/validations/comment.validation";
+import UserAvatar from "@/components/UserAvatar";
 
 interface CommentInputProps {
   onSubmit: (content: string) => Promise<void>;
@@ -54,9 +54,7 @@ const CommentInput = memo(function CommentInput({
   const isOverLimit = wordCount > 200;
 
   const avatarUrl = user?.user_metadata?.avatar_url;
-  const isDiceBear = avatarUrl?.includes("dicebear.com");
   const fullName = user?.user_metadata?.full_name || user?.email || "User";
-  const initials = fullName.split(" ").pop()?.charAt(0).toUpperCase();
 
   // ==========================================
   // XỬ LÝ ĐÓNG THÔNG MINH
@@ -136,29 +134,7 @@ const CommentInput = memo(function CommentInput({
       onSubmit={handleSubmit(submitForm)}
       className="flex gap-3 items-start w-full group transition-all"
     >
-      <div className="shrink-0 size-9 rounded-full bg-zinc-800 border border-zinc-700 mt-0.5 overflow-hidden flex items-center justify-center">
-        {avatarUrl ? (
-          isDiceBear ? (
-            /* Nếu là ảnh hoạt hình DiceBear (SVG), hiện trực tiếp không qua Proxy cho nhẹ */
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={avatarUrl}
-              alt={fullName}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            /* Nếu là ảnh Google hoặc ảnh User Up lên, đi qua ImageCustom để nén */
-            <ImageCustom
-              src={avatarUrl}
-              alt="Avatar"
-              widths={[80, 160]}
-              className="w-full h-full object-cover"
-            />
-          )
-        ) : (
-          <span>{initials}</span>
-        )}
-      </div>
+      <UserAvatar avatar_url={avatarUrl} user_name={fullName} size={36} />
 
       <div className="flex-1 min-w-0">
         <textarea

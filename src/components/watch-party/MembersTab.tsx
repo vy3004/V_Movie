@@ -1,52 +1,35 @@
-import { useEffect, useRef } from "react";
+"use client";
+
+import React, { useEffect, useRef, useMemo } from "react";
 import { CheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import ParticipantItem from "@/components/watch-party/ParticipantItem";
-import ImageCustom from "@/components/ImageCustom";
-import {
-  UserPresence,
-  WatchPartyParticipant,
-  WatchPartyRoom,
-} from "@/types/watch-party";
-import { User } from "@supabase/supabase-js";
+import UserAvatar from "@/components/UserAvatar";
+import { useWatchParty } from "@/providers/WatchPartyProvider";
 
-interface MembersTabProps {
-  participants: WatchPartyParticipant[];
-  presenceData: Record<string, UserPresence>;
-  isRealHost: boolean;
-  canManageUsers: boolean;
-  user: User;
-  room: WatchPartyRoom;
-  onAction: (
-    targetUserId: string,
-    action: "approve" | "reject" | "kick",
-  ) => Promise<void> | void;
-  onTogglePermission: (
-    targetUserId: string,
-    key: keyof WatchPartyParticipant["permissions"],
-  ) => Promise<void> | void;
-  openMenuId: string | null;
-  setOpenMenuId: (id: string | null) => void;
-}
+export default function MembersTab() {
+  const {
+    participants,
+    presenceData,
+    isRealHost,
+    hasModeratorAuth,
+    user,
+    room,
+    openMenuId,
+    setOpenMenuId,
+    handleParticipantAction,
+    togglePermission,
+    setKickTarget,
+  } = useWatchParty();
 
-export default function MembersTab({
-  participants,
-  presenceData,
-  isRealHost,
-  canManageUsers,
-  user,
-  room,
-  onAction,
-  onTogglePermission,
-  openMenuId,
-  setOpenMenuId,
-}: MembersTabProps) {
   const prevPendingCount = useRef<number>(0);
 
+  // --- LOGIC THÔNG BÁO ÂM THANH (TING TING) ---
   useEffect(() => {
-    if (!canManageUsers) return; // Mod cũng được nghe tiếng "Ting"
-    const pendingCount = participants.filter(
-      (p) => p.status === "pending",
-    ).length;
+    if (!hasModeratorAuth) return;
+
+    const pendingRequests = participants.filter((p) => p.status === "pending");
+    const pendingCount = pendingRequests.length;
+
     if (pendingCount > prevPendingCount.current) {
       const audio = new Audio(
         "https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3",
@@ -55,16 +38,23 @@ export default function MembersTab({
       audio.play().catch(() => {});
     }
     prevPendingCount.current = pendingCount;
-  }, [participants, canManageUsers]);
+  }, [participants, hasModeratorAuth]);
 
-  const approvedMembers = participants.filter((p) => p.status === "approved");
-  const pendingRequests = participants.filter((p) => p.status === "pending");
-  const isFull = approvedMembers.length >= room.max_participants;
+  // --- PHÂN LOẠI THÀNH VIÊN (Dùng useMemo để tối ưu hiệu năng) ---
+  const { approvedMembers, pendingRequests, isFull } = useMemo(() => {
+    const approved = participants.filter((p) => p.status === "approved");
+    const pending = participants.filter((p) => p.status === "pending");
+    return {
+      approvedMembers: approved,
+      pendingRequests: pending,
+      isFull: approved.length >= (room?.max_participants || 10),
+    };
+  }, [participants, room?.max_participants]);
 
   return (
     <div className="h-full overflow-y-auto space-y-6 custom-scrollbar pr-2">
-      {/* 1. KHỐI CHỜ DUYỆT (Host và Mod đều thấy) */}
-      {canManageUsers && pendingRequests.length > 0 && (
+      {/* 1. KHỐI CHỜ DUYỆT (Chỉ Host và Mod thấy) */}
+      {hasModeratorAuth && pendingRequests.length > 0 && (
         <div className="space-y-2 animate-in slide-in-from-top-4">
           <div className="flex justify-between items-center px-1">
             <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">
@@ -81,28 +71,34 @@ export default function MembersTab({
               key={p.id}
               className="flex items-center justify-between p-2.5 bg-red-500/5 rounded-2xl border border-red-500/20"
             >
-              <div className="flex items-center gap-3 min-w-0 pr-2">
-                <ImageCustom
-                  className="size-9 rounded-full object-cover border border-red-500/30 shrink-0"
-                  src={p.profiles?.avatar_url || "/default-avatar.png"}
-                  alt={p.profiles?.full_name || "Người dùng ẩn danh"}
-                  widths={[60]}
-                />
-                <span className="text-xs font-bold truncate text-white">
-                  {p.profiles?.full_name || "Người dùng ẩn danh"}
-                </span>
-              </div>
+              <UserAvatar
+                avatar_url={p.profiles?.avatar_url}
+                user_name={p.profiles?.full_name || ""}
+                size={36}
+              />
 
               <div className="flex gap-1.5 shrink-0">
                 <button
                   disabled={isFull}
-                  onClick={() => onAction(p.user_id, "approve")}
+                  onClick={() =>
+                    handleParticipantAction(
+                      p.user_id,
+                      "approve",
+                      p.profiles?.full_name || "Thành viên",
+                    )
+                  }
                   className="p-2 bg-emerald-600 rounded-xl hover:bg-emerald-500 transition disabled:opacity-30"
                 >
                   <CheckIcon className="w-4 h-4 text-white" />
                 </button>
                 <button
-                  onClick={() => onAction(p.user_id, "reject")}
+                  onClick={() =>
+                    handleParticipantAction(
+                      p.user_id,
+                      "reject",
+                      p.profiles?.full_name || "Thành viên",
+                    )
+                  }
                   className="p-2 bg-zinc-800 rounded-xl hover:bg-zinc-700 transition"
                 >
                   <XMarkIcon className="w-4 h-4 text-white" />
@@ -120,7 +116,7 @@ export default function MembersTab({
             Thành viên
           </p>
           <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-1 rounded-lg font-bold">
-            {approvedMembers.length}/{room.max_participants}
+            {approvedMembers.length}/{room?.max_participants}
           </span>
         </div>
         {approvedMembers.map((p) => (
@@ -128,13 +124,16 @@ export default function MembersTab({
             key={p.id}
             participant={p}
             presence={presenceData[p.user_id]}
-            isRealHost={isRealHost} // Chuyền xuống
-            canManageUsers={canManageUsers} // Chuyền xuống
+            isRealHost={isRealHost}
+            canManageUsers={hasModeratorAuth}
             isMe={p.user_id === user.id}
             isOpenMenu={openMenuId === p.id}
             setOpenMenu={setOpenMenuId}
-            onTogglePermission={onTogglePermission}
-            onKick={(uid) => onAction(uid, "kick")}
+            onTogglePermission={togglePermission}
+            onKick={(uid) => {
+              const target = participants.find((p) => p.user_id === uid);
+              if (target) setKickTarget(target);
+            }}
           />
         ))}
       </div>

@@ -2,6 +2,13 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { ParticipantPermissions } from "@/types/watch-party";
 
+export const runtime = "edge";
+
+type ParticipantUpdate = {
+  is_muted?: boolean;
+  permissions?: ParticipantPermissions;
+};
+
 export async function PATCH(request: Request) {
   try {
     const supabase = await createSupabaseServer();
@@ -23,8 +30,11 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // Validate key an toàn
-    const validPermissions = ["can_control_media", "can_manage_users"];
+    const validPermissions = [
+      "can_control_media",
+      "can_manage_users",
+      "is_muted",
+    ];
     if (!validPermissions.includes(permissionKey)) {
       return NextResponse.json(
         { error: "Quyền không hợp lệ" },
@@ -33,25 +43,36 @@ export async function PATCH(request: Request) {
     }
 
     // 2. Kiểm tra quyền của người ĐANG GỌI API (Caller)
-    // FIX BẢO MẬT: CHỈ CÓ HOST ĐÍCH THỰC MỚI ĐƯỢC QUYỀN GỌI API NÀY. Mod không được phép.
     const { data: caller } = await supabase
       .from("watch_party_participants")
-      .select("role")
+      .select("role, permissions")
       .eq("room_id", roomId)
       .eq("user_id", user.id)
       .single();
 
-    if (!caller || caller.role !== "host") {
+    // LOGIC QUYỀN LỰC:
+    // - Đổi quyền Control/Manage: CHỈ HOST
+    // - Mute chat: HOST hoặc MOD
+    const isHost = caller?.role === "host";
+    const isMod = caller?.permissions?.can_manage_users === true;
+
+    if (permissionKey !== "is_muted" && !isHost) {
       return NextResponse.json(
-        { error: "Chỉ Chủ phòng mới có quyền phân quyền thành viên" },
+        { error: "Chỉ Chủ phòng mới có quyền phân quyền hệ thống" },
+        { status: 403 },
+      );
+    } else if (permissionKey === "is_muted" && !isHost && !isMod) {
+      return NextResponse.json(
+        { error: "Bạn không có quyền cấm chat" },
         { status: 403 },
       );
     }
 
     // 3. Lấy thông tin người bị đổi quyền (TargetUser)
+    // Lấy thêm is_muted
     const { data: targetUser } = await supabase
       .from("watch_party_participants")
-      .select("role, permissions")
+      .select("role, permissions, is_muted")
       .eq("room_id", roomId)
       .eq("user_id", targetUserId)
       .single();
@@ -63,7 +84,6 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // FIX BẢO MẬT: Chặn không ai được phép sửa permissions của Host
     if (targetUser.role === "host") {
       return NextResponse.json(
         { error: "Không thể thay đổi quyền hạn của Chủ phòng" },
@@ -71,29 +91,37 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // 4. Toggle quyền mới
-    const currentPermissions =
-      (targetUser.permissions as ParticipantPermissions) || {
-        can_control_media: false,
-        can_manage_users: false,
-      };
+    // 4. Chuẩn bị dữ liệu cập nhật (Phân loại Cột vs JSONB)
+    let updateData: ParticipantUpdate = {};
 
-    const newPermissions = {
-      ...currentPermissions,
-      [permissionKey]:
-        !currentPermissions[permissionKey as keyof ParticipantPermissions],
-    };
+    if (permissionKey === "is_muted") {
+      updateData = { is_muted: !targetUser.is_muted };
+    } else {
+      const currentPermissions =
+        (targetUser.permissions as ParticipantPermissions) || {
+          can_control_media: false,
+          can_manage_users: false,
+        };
+
+      updateData = {
+        permissions: {
+          ...currentPermissions,
+          [permissionKey]:
+            !currentPermissions[permissionKey as keyof ParticipantPermissions],
+        },
+      };
+    }
 
     // 5. Cập nhật Database
     const { error } = await supabase
       .from("watch_party_participants")
-      .update({ permissions: newPermissions })
+      .update(updateData)
       .eq("room_id", roomId)
       .eq("user_id", targetUserId);
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, permissions: newPermissions });
+    return NextResponse.json({ success: true, updatedKey: permissionKey });
   } catch (error) {
     console.error("[WP_PERMISSIONS_ERROR]:", error);
     return NextResponse.json(

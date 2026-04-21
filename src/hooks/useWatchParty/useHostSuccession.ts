@@ -1,38 +1,73 @@
+"use client";
+
 import { useEffect, useRef } from "react";
-import { WatchPartyParticipant } from "@/types/watch-party";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { toast } from "sonner";
+import { WatchPartyParticipant, UserPresence } from "@/types";
 
-export function useHostSuccession(
-  participants: WatchPartyParticipant[],
-  myId: string,
-  myParticipantId: string | undefined,
-  supabase: SupabaseClient,
-  refetch: () => void,
-) {
-  // THÊM: Khóa chống chạy lại logic trong lúc chờ DB cập nhật
+interface HostSuccessionProps {
+  participants: WatchPartyParticipant[];
+  presenceData: Record<string, UserPresence>;
+  myId: string;
+  myParticipantId: string | undefined;
+  supabase: SupabaseClient;
+  refetch: () => void;
+  isActive: boolean;
+}
+
+const SUCCESSION_TOAST_ID = "host-succession-toast";
+
+export function useHostSuccession({
+  participants,
+  presenceData,
+  myId,
+  myParticipantId,
+  supabase,
+  refetch,
+  isActive,
+}: HostSuccessionProps) {
   const isPromoting = useRef(false);
 
   useEffect(() => {
-    // Reset lại cờ khóa nếu phòng đã có Host
-    const currentHost = participants.find((p) => p.role === "host");
+    // Nếu phòng đã đóng cửa thì ngưng ngay mọi hoạt động kế vị
+    // Ngăn chặn tình trạng vừa hiện thông báo "Phòng đóng" vừa được phong làm Vua
+    if (!isActive) {
+      isPromoting.current = false;
+      return;
+    }
+
+    // Nếu mình đã là Host rồi thì thoát ngay lập tức
+    const amIAlreadyHost = participants.some(
+      (p) => p.user_id === myId && p.role === "host",
+    );
+
+    if (amIAlreadyHost) {
+      isPromoting.current = false;
+      return;
+    }
+
+    // 3. Kiểm tra xem có Host nào khác đang Online không
+    const currentHost = participants.find(
+      (p) => p.role === "host" && presenceData[p.user_id],
+    );
+
     if (currentHost) {
       isPromoting.current = false;
       return;
     }
 
+    // Guard clause cơ bản
     if (!participants.length || !myParticipantId) return;
 
-    // Lúc này phòng ĐANG MẤT HOST và chưa ai gọi API promote
-    if (!currentHost && !isPromoting.current) {
-      // 1. FIX LỖI "KẺ LẠ MẶT": Chỉ những người đã được duyệt (approved) mới được kế thừa
+    // 4. Bầu chọn Tân Vương (Chỉ chạy khi không có ai đang thực hiện lock)
+    if (!isPromoting.current) {
       const validCandidates = participants.filter(
-        (p) => p.status === "approved",
+        (p) => p.status === "approved" && presenceData[p.user_id],
       );
 
-      if (!validCandidates.length) return; // Nếu phòng toàn người đang pending thì bỏ qua
+      if (!validCandidates.length) return;
 
-      // 2. Chấm điểm tìm Vua mới
+      // Sắp xếp theo điểm quyền hạn và thời gian tham gia
       const survivors = [...validCandidates].sort((a, b) => {
         const scoreA =
           (a.permissions?.can_manage_users ? 2 : 0) +
@@ -43,34 +78,73 @@ export function useHostSuccession(
 
         if (scoreA !== scoreB) return scoreB - scoreA;
 
-        // Nếu bằng điểm, ai vào phòng sớm nhất sẽ làm Vua
         return (
           new Date(a.created_at || 0).getTime() -
           new Date(b.created_at || 0).getTime()
         );
       });
 
-      // 3. Máy của người được chọn sẽ thực hiện nghi lễ đăng cơ
-      if (survivors[0]?.user_id === myId) {
-        // Đóng khóa lại ngay lập tức để không chạy 2 lần
+      const newKing = survivors[0];
+
+      // 5. Nếu mình đứng đầu danh sách, thực hiện nghi thức "Đăng cơ"
+      if (newKing?.user_id === myId) {
         isPromoting.current = true;
 
-        toast.success("Bạn đã trở thành Chủ phòng mới!", { icon: "👑" });
+        const promoteSelf = async () => {
+          // Lọc sẵn danh sách Host cũ (đã offline) cần dọn dẹp
+          const ghostHostIds = participants
+            .filter((p) => p.role === "host" && p.user_id !== myId)
+            .map((h) => h.id);
 
-        // FIX TS LỖI PROMISELIKE: Xử lý error bên trong then()
-        supabase
-          .from("watch_party_participants")
-          .update({ role: "host" })
-          .eq("id", myParticipantId)
-          .then(({ error }) => {
-            if (error) {
-              console.error("Lỗi khi phong Vua:", error);
-              isPromoting.current = false; // Mở khóa nếu bị lỗi mạng hoặc lỗi DB
-            } else {
-              refetch(); // Nếu không có lỗi thì refetch thành công
+          try {
+            // Chỉ cần update role của mình. SQL Trigger "SECURITY DEFINER" sẽ tự động lo bảng rooms!
+            const { error } = await supabase
+              .from("watch_party_participants")
+              .update({
+                role: "host",
+                permissions: {
+                  can_control_media: true,
+                  can_manage_users: true,
+                },
+              })
+              .eq("id", myParticipantId);
+
+            if (error) throw error;
+
+            // Hiển thị thông báo duy nhất (chặn trùng lặp bằng ID)
+            toast.success("Bạn đã trở thành Chủ phòng mới!", {
+              icon: "👑",
+              id: SUCCESSION_TOAST_ID,
+            });
+
+            // Xóa record các Host cũ đã offline (Ghost Hosts)
+            if (ghostHostIds.length > 0) {
+              await supabase
+                .from("watch_party_participants")
+                .delete()
+                .in("id", ghostHostIds);
             }
-          });
+
+            refetch();
+          } catch (error) {
+            console.error("[HOST_SUCCESSION_ERROR]:", error);
+            isPromoting.current = false;
+            toast.error("Không thể tiếp quản vị trí Chủ phòng", {
+              id: SUCCESSION_TOAST_ID,
+            });
+          }
+        };
+
+        promoteSelf();
       }
     }
-  }, [participants, myId, myParticipantId, supabase, refetch]);
+  }, [
+    participants,
+    presenceData,
+    myId,
+    myParticipantId,
+    supabase,
+    refetch,
+    isActive,
+  ]);
 }

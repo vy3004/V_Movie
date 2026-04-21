@@ -1,78 +1,122 @@
+"use client";
+
 import React, { useState, useEffect, useRef } from "react";
-import { PaperAirplaneIcon } from "@heroicons/react/24/outline";
-import { User } from "@supabase/supabase-js";
-import { WatchPartyRoom } from "@/types/watch-party";
+import ChatMessageItem from "@/components/watch-party/ChatMessageItem";
+import ChatInputForm from "@/components/watch-party/ChatInputForm";
+import { useWatchParty } from "@/providers/WatchPartyProvider";
 
-export interface ChatMessage {
-  user_id: string;
-  user_name: string;
-  text: string;
-}
+export default function ChatTab() {
+  const { messages, user, room, isRealHost, myParticipant, handleSendMessage } =
+    useWatchParty();
 
-interface ChatTabProps {
-  messages: ChatMessage[];
-  user: User;
-  room: WatchPartyRoom;
-  isHost: boolean;
-  onSendMessage: (msg: ChatMessage) => void;
-}
+  const [text, setText] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [showEmojis, setShowEmojis] = useState(false);
 
-export default function ChatTab({ messages, user, room, isHost, onSendMessage }: ChatTabProps) {
-  const [chatMessage, setChatMessage] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Tự động cuộn xuống tin nhắn mới nhất
+  // --- TỰ ĐỘNG CUỘN XUỐNG ---
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = chatContainerRef.current;
+    if (container) {
+      // Cuộn xuống đáy mỗi khi mảng messages thay đổi
+      container.scrollTop = container.scrollHeight;
+    }
   }, [messages]);
+
+  // --- KIỂM TRA QUYỀN CHAT ---
+  const isDisabled =
+    (!room?.settings?.guest_can_chat && !isRealHost) || myParticipant?.is_muted;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatMessage.trim() || (!room.settings?.guest_can_chat && !isHost)) return;
+    if (!text.trim() || isDisabled) return;
 
-    const newMsg: ChatMessage = {
-      user_id: user.id,
-      user_name: user.user_metadata?.full_name || "Guest",
-      text: chatMessage,
-    };
+    handleSendMessage(text);
 
-    onSendMessage(newMsg);
-    setChatMessage("");
+    setText("");
+    setShowEmojis(false);
   };
 
-  const isDisabled = !room.settings?.guest_can_chat && !isHost;
+  const insertEmoji = (emoji: string) => {
+    if (isDisabled) return;
+    setText((prev) => prev + emoji);
+    inputRef.current?.focus();
+  };
+
+  const formatTime = (isoString?: string) => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return "";
+    return date.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const stopProp = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+    if (
+      e.nativeEvent &&
+      typeof e.nativeEvent.stopImmediatePropagation === "function"
+    ) {
+      e.nativeEvent.stopImmediatePropagation();
+    }
+  };
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+    <div className="h-full flex flex-col relative">
+      {/* KHU VỰC HIỂN THỊ TIN NHẮN */}
+      <div
+        ref={chatContainerRef}
+        className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar"
+      >
         {messages.length === 0 && (
-          <div className="h-full flex items-center justify-center text-zinc-700 text-xs italic">
-            Bắt đầu cuộc trò chuyện...
+          <div className="h-full flex flex-col items-center justify-center text-zinc-600 gap-2">
+            <span className="text-3xl">🍿</span>
+            <p className="text-xs italic">Bắt đầu cuộc trò chuyện...</p>
           </div>
         )}
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex flex-col ${msg.user_id === user.id ? "items-end" : "items-start"}`}>
-            <span className="text-[10px] text-zinc-500 mb-1 px-1">{msg.user_name}</span>
-            <div className={`px-4 py-2.5 rounded-2xl text-sm max-w-[85%] ${msg.user_id === user.id ? "bg-red-600 text-white rounded-tr-none" : "bg-zinc-800 text-zinc-300 rounded-tl-none border border-zinc-700/50"}`}>
-              {msg.text}
-            </div>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
+
+        {messages.map((msg, i) => {
+          if (msg.type === "system") {
+            return (
+              <div key={msg.id || i} className="flex justify-center my-4">
+                <span className="bg-zinc-800/40 text-zinc-400 text-[10px] px-4 py-1.5 rounded-full italic border border-zinc-700/30 text-center max-w-[90%]">
+                  {msg.text}
+                </span>
+              </div>
+            );
+          }
+
+          return (
+            <ChatMessageItem
+              key={msg.id || i}
+              msg={msg}
+              isMe={msg.user_id === user.id}
+              timeString={formatTime(msg.created_at)}
+            />
+          );
+        })}
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
-        <input
-          value={chatMessage}
-          onChange={(e) => setChatMessage(e.target.value)}
-          placeholder={isDisabled ? "Chat đang bị khóa" : "Nhắn gì đó..."}
-          disabled={isDisabled}
-          className="flex-1 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 text-xs focus:outline-none focus:border-red-600 disabled:opacity-50"
+      {/* Ô NHẬP TIN NHẮN */}
+      <div className="mt-3 relative">
+        <ChatInputForm
+          text={text}
+          setText={setText}
+          isMuted={isDisabled}
+          isTyping={isTyping}
+          setIsTyping={setIsTyping}
+          showEmojis={showEmojis}
+          setShowEmojis={setShowEmojis}
+          onSubmit={handleSubmit}
+          onEmojiClick={insertEmoji}
+          stopProp={stopProp}
+          inputRef={inputRef}
         />
-        <button disabled={isDisabled} type="submit" className="bg-red-600 p-3 rounded-2xl hover:bg-red-700 transition active:scale-95 disabled:opacity-50">
-          <PaperAirplaneIcon className="w-5 h-5 text-white" />
-        </button>
-      </form>
+      </div>
     </div>
   );
 }

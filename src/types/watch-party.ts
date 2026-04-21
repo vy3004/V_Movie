@@ -15,13 +15,13 @@ export interface WatchPartyRoom {
   movie_image: string | null;
   title: string;
   is_private: boolean;
+  participant_count: number;
   max_participants: number;
   is_active: boolean;
   settings: RoomSettings;
   created_at: string;
   updated_at: string;
   host?: UserProfile;
-  participants?: { count: number }[];
 }
 
 // 3. Định nghĩa Quyền hạn chi tiết (Cột JSONB trong bảng participants)
@@ -117,4 +117,20 @@ export interface PlaylistItem {
     full_name: string;
     avatar_url: string;
   };
+}
+
+export interface ChatMessage {
+  id?: string;
+  room_id: string;
+  user_id: string;
+  user_name: string;
+  avatar_url?: string;
+  text: string;
+  type: "chat" | "system" | "reaction";
+  metadata?: {
+    emoji?: string;
+    action?: string; // Ví dụ: 'pause', 'play' cho tin nhắn hệ thống
+  };
+  created_at: string; // ISO string từ DB
+  status?: "sending" | "error";
 }

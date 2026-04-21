@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { WatchPartyRoom } from "@/types";
 
+export const runtime = "edge";
+
 export async function PATCH(request: Request) {
   try {
     const supabase = await createSupabaseServer();

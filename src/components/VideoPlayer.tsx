@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import videojs from "video.js";
 import Player from "video.js/dist/types/player";
 import Component from "video.js/dist/types/component";
@@ -31,6 +32,7 @@ interface Props {
   onPlayerReady?: () => void;
   playerSyncRef?: React.MutableRefObject<PlayerSyncRef | null>;
   onChangeEpisode?: (slug: string) => void;
+  children?: React.ReactNode;
 }
 
 interface NextEpisodeOptions {
@@ -38,6 +40,7 @@ interface NextEpisodeOptions {
   children?: unknown[];
   onAutoNext?: () => void;
 }
+
 const Button = videojs.getComponent("Button");
 class NextEpisodeButton extends Button {
   constructor(player: Player, options: NextEpisodeOptions) {
@@ -66,6 +69,8 @@ export default function VideoPlayer(props: Props) {
   const router = useRouter();
 
   const [isLightsOff, setIsLightsOff] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [playerNode, setPlayerNode] = useState<Element | null>(null);
   const [isAutoNext, setIsAutoNext] = useState(() => {
     if (typeof window === "undefined") return true;
     return localStorage.getItem("v_movie_auto_next") !== "false";
@@ -83,6 +88,29 @@ export default function VideoPlayer(props: Props) {
     onSeekSyncRef.current = props.onSeekSync;
   }, [props.canControl, props.onPlaySync, props.onPauseSync, props.onSeekSync]);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const doc = document as Document & { webkitFullscreenElement?: Element };
+      const fullscreenEl = doc.fullscreenElement || doc.webkitFullscreenElement;
+
+      const isFull = !!(
+        fullscreenEl && videoRef.current?.contains(fullscreenEl)
+      );
+      setIsFullscreen(isFull);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        handleFullscreenChange,
+      );
+    };
+  }, []);
+
   const handlePlaySync = useCallback((time: number) => {
     if (canControlRef.current && onPlaySyncRef.current)
       onPlaySyncRef.current(time);
@@ -97,6 +125,16 @@ export default function VideoPlayer(props: Props) {
     if (canControlRef.current && onSeekSyncRef.current)
       onSeekSyncRef.current(time);
   }, []);
+
+  const { onPlayerReady, isWatchParty, canControl } = props;
+
+  const handlePlayerReady = useCallback(() => {
+    if (videoRef.current) {
+      const node = videoRef.current.querySelector(".video-js");
+      if (node) setPlayerNode(node);
+    }
+    if (onPlayerReady) onPlayerReady();
+  }, [onPlayerReady]);
 
   const {
     isFollowed,
@@ -119,7 +157,7 @@ export default function VideoPlayer(props: Props) {
     onPlaySync: handlePlaySync,
     onPauseSync: handlePauseSync,
     onSeekSync: handleSeekSync,
-    onPlayerReady: props.onPlayerReady,
+    onPlayerReady: handlePlayerReady,
   });
 
   useEffect(() => {
@@ -137,7 +175,12 @@ export default function VideoPlayer(props: Props) {
 
   const handleKeyDownCapture = useCallback(
     (e: React.KeyboardEvent) => {
-      if (props.isWatchParty && !props.canControl) {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
+        return;
+      }
+
+      if (isWatchParty && !canControl) {
         const blockedKeys = [
           " ",
           "Spacebar",
@@ -156,7 +199,7 @@ export default function VideoPlayer(props: Props) {
         }
       }
     },
-    [props.isWatchParty, props.canControl],
+    [isWatchParty, canControl],
   );
 
   const guestModeClasses =
@@ -193,6 +236,16 @@ export default function VideoPlayer(props: Props) {
           onKeyDownCapture={handleKeyDownCapture}
         >
           <div ref={videoRef} />
+
+          {playerNode &&
+            isFullscreen &&
+            props.children &&
+            createPortal(
+              <div className="absolute inset-0 z-[100] pointer-events-none overflow-hidden">
+                {props.children}
+              </div>,
+              playerNode,
+            )}
         </div>
 
         <VideoControls

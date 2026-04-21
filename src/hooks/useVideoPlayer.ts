@@ -187,7 +187,13 @@ export function useVideoPlayer({
 
       if (action === "play") {
         isHostPaused.current = false;
-        if (diff > 1.5) setPlayerTime(player, time);
+        if (diff > 1.5) {
+          setIsSyncing(true);
+          setPlayerTime(player, time);
+          setTimeout(() => {
+            if (!isComponentUnmounted.current) setIsSyncing(false);
+          }, 1500);
+        }
 
         if (typeof player.paused === "function" && player.paused()) {
           const playPromise = player.play();
@@ -212,8 +218,21 @@ export function useVideoPlayer({
 
         if (typeof player.paused === "function" && !player.paused())
           player.pause();
-        if (diff > 1.5) setPlayerTime(player, time);
+        if (diff > 1.5) {
+          setIsSyncing(true);
+          setPlayerTime(player, time);
+          setTimeout(() => {
+            if (!isComponentUnmounted.current) setIsSyncing(false);
+          }, 1000);
+        }
       } else if (action === "seek") {
+        if (diff > 1.0) {
+          setIsSyncing(true);
+          setTimeout(() => {
+            if (!isComponentUnmounted.current) setIsSyncing(false);
+          }, 1000);
+        }
+
         setPlayerTime(player, time);
 
         if (!isHostPaused.current) {
@@ -315,15 +334,15 @@ export function useVideoPlayer({
           syncFromRemote(action, time);
           isInitialSeekDone.current = true;
           pendingInitialSync.current = null;
-        } else if (initialTime > 0 && !isInitialSeekDone.current) {
+        } else if (!isInitialSeekDone.current) {
           if (isWatchParty) {
             setIsSyncing(true);
-            remoteLockUntil.current = Date.now() + 3000;
+            remoteLockUntil.current = Date.now() + 2500;
             setTimeout(() => {
               if (!isComponentUnmounted.current) setIsSyncing(false);
-            }, 3000);
+            }, 2500);
           }
-          player.currentTime(initialTime);
+          player.currentTime(initialTime || 0);
           isInitialSeekDone.current = true;
         }
         refs.current.onPlayerReady?.();

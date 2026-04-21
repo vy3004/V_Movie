@@ -93,7 +93,7 @@ export default function WatchPartyLobbyPage() {
             type="text"
             placeholder="Mã phòng, tên phim..."
             value={searchTerm}
-            onChange={handleSearchChange} // <--- Sử dụng hàm change mới
+            onChange={handleSearchChange}
             className="w-full bg-zinc-900 border border-zinc-800 rounded-full py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-zinc-600 focus:bg-zinc-800 transition"
           />
         </div>

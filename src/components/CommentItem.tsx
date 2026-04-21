@@ -20,8 +20,8 @@ import {
 } from "@heroicons/react/24/outline";
 import CommentInput from "@/components/CommentInput";
 import ReplyThread from "@/components/ReplyThread";
-import ImageCustom from "@/components/ImageCustom";
 import ExpandableText from "@/components/ExpandableText";
+import UserAvatar from "@/components/UserAvatar";
 import { useData } from "@/providers/BaseDataContextProvider";
 import { useCommentMutations } from "@/hooks/useComments";
 import { useConfirm } from "@/providers/ConfirmProvider";
@@ -171,22 +171,12 @@ const CommentItem = memo(
           />
         )}
 
-        <div
-          className={`shrink-0 size-9 rounded-full overflow-hidden bg-zinc-900 border-2 transition-colors duration-500 mt-0.5 z-10 ${isActive ? "border-red-500" : "border-zinc-800"}`}
-        >
-          {comment.profiles?.avatar_url ? (
-            <ImageCustom
-              src={comment.profiles.avatar_url}
-              alt="avatar"
-              widths={[80]}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-zinc-600 text-[10px] font-bold">
-              {(comment.profiles?.full_name || "U").charAt(0)}
-            </div>
-          )}
-        </div>
+        <UserAvatar
+          className={`shrink-0 rounded-full border-2 transition-colors duration-500 mt-0.5 z-10 ${isActive ? "border-red-500" : "border-zinc-800"}`}
+          avatar_url={comment.profiles?.avatar_url}
+          user_name={comment.profiles?.full_name}
+          size={36}
+        />
 
         <div className="flex-1 min-w-0">
           <div

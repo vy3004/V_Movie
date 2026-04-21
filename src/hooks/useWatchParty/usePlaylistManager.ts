@@ -3,9 +3,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { Movie, PlaylistItem, WatchPartyRoom } from "@/types";
-import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
+import { RealtimePostgresChangesPayload, User } from "@supabase/supabase-js";
 
-export function usePlaylistManager(room: WatchPartyRoom) {
+export function usePlaylistManager(
+  room: WatchPartyRoom,
+  user: User,
+  sendSystemMessage?: (text: string) => void,
+) {
   const queryClient = useQueryClient();
   const supabase = createSupabaseClient();
 
@@ -106,7 +110,7 @@ export function usePlaylistManager(room: WatchPartyRoom) {
     });
     if (res.ok) {
       toast.success("Đã thêm vào danh sách chờ");
-      onSuccess(); // Chạy hàm đóng menu
+      onSuccess();
     }
   };
 
@@ -122,7 +126,9 @@ export function usePlaylistManager(room: WatchPartyRoom) {
         .eq("id", room.id);
 
       if (error) throw error;
+
       toast.success(`Đang chuyển sang: ${item.movie_name}`);
+
       await fetch(`/api/watch-party/playlist?id=${item.id}`, {
         method: "DELETE",
       });
@@ -132,17 +138,11 @@ export function usePlaylistManager(room: WatchPartyRoom) {
         event: "change_episode_sync",
         payload: { slug: item.episode_slug },
       });
-      supabase.channel(`wp_ui_${room.id}`).send({
-        type: "broadcast",
-        event: "chat",
-        payload: {
-          id: crypto.randomUUID(),
-          user_id: "system",
-          message: `🎬 Đã chuyển sang phim: ${item.movie_name}`,
-          created_at: new Date().toISOString(),
-          is_system: true,
-        },
-      });
+
+      if (sendSystemMessage) {
+        const actorName = user.user_metadata?.full_name || "Thành viên";
+        sendSystemMessage(`🍿 ${actorName} đã phát phim: ${item.movie_name}`);
+      }
     } catch (err: unknown) {
       const errorMessage =
         err instanceof Error ? err.message : "Đã có lỗi xảy ra";

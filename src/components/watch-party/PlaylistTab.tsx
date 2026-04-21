@@ -5,18 +5,12 @@ import { PlusIcon, QueueListIcon } from "@heroicons/react/24/outline";
 import ImageCustom from "@/components/ImageCustom";
 import PlaylistSearch from "@/components/watch-party/PlaylistSearch";
 import PlaylistItemRow from "@/components/watch-party/PlaylistItemRow";
-import { usePlaylistManager } from "@/hooks/useWatchParty";
-import { WatchPartyRoom } from "@/types";
+import { useWatchParty } from "@/providers/WatchPartyProvider";
 
-interface PlaylistTabProps {
-  room: WatchPartyRoom;
-  canManage: boolean;
-}
-
-export default function PlaylistTab({ room, canManage }: PlaylistTabProps) {
-  const [isAdding, setIsAdding] = useState(false);
-
+export default function PlaylistTab() {
   const {
+    room,
+    canControl,
     playlist,
     handleAddMovie,
     handlePlayNow,
@@ -24,7 +18,9 @@ export default function PlaylistTab({ room, canManage }: PlaylistTabProps) {
     handleDragStart,
     handleDragEnter,
     handleDragEnd,
-  } = usePlaylistManager(room);
+  } = useWatchParty();
+
+  const [isAdding, setIsAdding] = useState(false);
 
   return (
     <div className="h-full flex flex-col">
@@ -33,7 +29,7 @@ export default function PlaylistTab({ room, canManage }: PlaylistTabProps) {
         <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
           Danh sách phát
         </h3>
-        {canManage && (
+        {canControl && (
           <button
             onClick={() => setIsAdding(!isAdding)}
             aria-label={isAdding ? "Đóng tìm kiếm" : "Thêm phim vào playlist"}
@@ -49,7 +45,7 @@ export default function PlaylistTab({ room, canManage }: PlaylistTabProps) {
         )}
       </div>
 
-      {/* --- KHUNG TÌM KIẾM (Chỉ hiện khi bấm nút +) --- */}
+      {/* --- KHUNG TÌM KIẾM --- */}
       {isAdding && (
         <PlaylistSearch
           onAdd={(m) => handleAddMovie(m, () => setIsAdding(false))}
@@ -58,15 +54,15 @@ export default function PlaylistTab({ room, canManage }: PlaylistTabProps) {
 
       {/* --- KHU VỰC DANH SÁCH CHÍNH --- */}
       <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1 pb-10">
-        {/* 1. THẺ ĐANG CHIẾU (NOW PLAYING) */}
-        {room.current_movie_slug && (
+        {/* 1. THẺ ĐANG CHIẾU */}
+        {room?.current_movie_slug && (
           <div className="group relative flex items-center gap-3 p-3 bg-red-950/20 rounded-2xl border border-red-900/30">
             <div className="relative shrink-0 overflow-hidden rounded-xl border border-red-500/20">
               <ImageCustom
-                className="w-12 h-16 object-cover opacity-90"
+                className="w-12 h-16 object-cover"
                 src={room.movie_image || ""}
                 alt="Đang chiếu"
-                widths={[72]}
+                widths={[96]}
               />
             </div>
             <div className="flex-1 min-w-0">
@@ -84,7 +80,7 @@ export default function PlaylistTab({ room, canManage }: PlaylistTabProps) {
           </div>
         )}
 
-        {/* 2. ĐƯỜNG PHÂN CÁCH (Chỉ hiện nếu có phim trong hàng đợi) */}
+        {/* 2. ĐƯỜNG PHÂN CÁCH */}
         {playlist.length > 0 && (
           <div className="flex items-center gap-2 py-1 opacity-50">
             <div className="h-px bg-zinc-800 flex-1" />
@@ -98,18 +94,18 @@ export default function PlaylistTab({ room, canManage }: PlaylistTabProps) {
         {/* 3. TRẠNG THÁI RỖNG */}
         {playlist.length === 0 && !isAdding && (
           <div className="h-32 flex flex-col items-center justify-center text-zinc-700 text-xs italic text-center">
-            <QueueListIcon className="w-8 h-8 mb-2 opacity-20" /> Hàng đợi
-            trống...
+            <QueueListIcon className="w-8 h-8 mb-2 opacity-20" />
+            Hàng đợi trống...
           </div>
         )}
 
-        {/* 4. VÒNG LẶP RENDER HÀNG ĐỢI KÉO THẢ */}
+        {/* 4. DANH SÁCH HÀNG ĐỢI KÉO THẢ */}
         {playlist.map((item, index) => (
           <PlaylistItemRow
             key={item.id}
             item={item}
             index={index}
-            canManage={canManage}
+            canManage={canControl}
             onPlay={handlePlayNow}
             onDelete={handleDeleteItem}
             onDragStart={handleDragStart}

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { ParticipantPermissions } from "@/types/watch-party";
 
+export const runtime = "edge";
+
 export async function POST(request: Request) {
   try {
     const supabase = await createSupabaseServer();

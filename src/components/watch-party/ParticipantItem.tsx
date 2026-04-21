@@ -1,11 +1,15 @@
-import React from "react";
+"use client";
+
+import React, { useMemo } from "react";
 import {
   VideoCameraIcon,
   ShieldCheckIcon,
   XMarkIcon,
   EllipsisVerticalIcon,
+  NoSymbolIcon, // Icon cấm chat
+  ChatBubbleLeftEllipsisIcon, // Icon mở chat
 } from "@heroicons/react/24/outline";
-import ImageCustom from "@/components/ImageCustom";
+import UserAvatar from "@/components/UserAvatar";
 import { UserPresence, WatchPartyParticipant } from "@/types/watch-party";
 
 // ----------------------------------------------------------------------
@@ -15,12 +19,13 @@ import { UserPresence, WatchPartyParticipant } from "@/types/watch-party";
 interface ParticipantItemProps {
   participant: WatchPartyParticipant;
   presence?: UserPresence;
-  isRealHost: boolean; // Chỉ Host thật mới có quyền phong tước
-  canManageUsers: boolean; // Mod & Host đều có thể mở Menu để Kick
+  isRealHost: boolean;
+  canManageUsers: boolean;
   isMe: boolean;
+  // Cập nhật Type: Chấp nhận cả key của permissions và key "is_muted"
   onTogglePermission: (
     userId: string,
-    key: keyof WatchPartyParticipant["permissions"],
+    key: keyof WatchPartyParticipant["permissions"] | "is_muted",
   ) => void;
   onKick: (userId: string) => void;
   isOpenMenu: boolean;
@@ -32,6 +37,7 @@ interface PermissionToggleProps {
   icon: React.ReactNode;
   enabled: boolean;
   onClick: () => void;
+  variant?: "default" | "danger";
 }
 
 // ----------------------------------------------------------------------
@@ -49,45 +55,34 @@ export default function ParticipantItem({
   isOpenMenu,
   setOpenMenu,
 }: ParticipantItemProps) {
-  // --- TÍNH TOÁN TRẠNG THÁI HIỂN THỊ ---
   const isOnline = !!presence;
   const isAway = presence?.status === "away";
+  const currentStatus = useMemo(() => {
+    if (!isOnline) return "offline";
+    if (isAway) return "away";
+    return "online";
+  }, [isOnline, isAway]);
 
-  const statusColor = !isOnline
-    ? "bg-zinc-600"
-    : isAway
-      ? "bg-yellow-500"
-      : "bg-emerald-500";
-
-  // --- ĐIỀU KIỆN BẢO MẬT HIỂN THỊ MENU ---
-  // 1. Phải có quyền quản lý (Mod hoặc Host)
-  // 2. Không được tự mở menu cho chính mình (để tránh tự kick)
-  // 3. Người bị bấm KHÔNG PHẢI LÀ HOST (Luật bất thành văn: Không ai đụng được Host)
   const canShowMenu = canManageUsers && !isMe && participant.role !== "host";
 
-  // Bảo vệ an toàn: Ngay cả khi hiển thị menu, Mod cũng không thể thấy nút Toggle Quyền
   const permissions = participant.permissions || {
     can_manage_users: false,
     can_control_media: false,
   };
 
+  const isMuted = participant.is_muted;
+
   return (
     <div className="group flex items-center gap-3 p-3 hover:bg-zinc-800/40 rounded-2xl transition border border-transparent hover:border-zinc-800 relative">
-      {/* --- CỘT 1: AVATAR & TRẠNG THÁI ONLINE --- */}
-      <div className="relative shrink-0">
-        <ImageCustom
-          className="w-10 h-10 rounded-full border-2 border-zinc-800 object-cover shadow-md"
-          src={participant.profiles?.avatar_url || "/default-avatar.png"}
-          alt={`${participant.profiles?.full_name}'s avatar`}
-          widths={[60]}
-        />
-        <div
-          className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 ${statusColor} border-[3px] border-[#18181b] rounded-full`}
-          title={!isOnline ? "Offline" : isAway ? "Away" : "Online"}
-        />
-      </div>
+      {/* --- CỘT 1: AVATAR --- */}
+      <UserAvatar
+        avatar_url={participant.profiles?.avatar_url}
+        user_name={participant.profiles?.full_name || ""}
+        size={36}
+        status={currentStatus}
+      />
 
-      {/* --- CỘT 2: THÔNG TIN (TÊN & CÁC TAG QUYỀN HẠN) --- */}
+      {/* --- CỘT 2: THÔNG TIN --- */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p
@@ -104,54 +99,55 @@ export default function ParticipantItem({
           )}
         </div>
 
-        {/* Khu vực hiển thị Tags */}
         <div className="flex flex-wrap gap-1.5 mt-1">
-          {/* Tag MOD */}
+          {participant.role === "host" && (
+            <span className="text-[8px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded border border-red-500/20 font-black tracking-widest uppercase">
+              Host
+            </span>
+          )}
+
           {permissions.can_manage_users && (
-            <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-black tracking-widest uppercase flex items-center gap-1">
+            <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-black tracking-widest uppercase">
               Mod
             </span>
           )}
 
-          {/* Tag REMOTE */}
-          {permissions.can_control_media && (
-            <span className="text-[8px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20 font-black tracking-widest uppercase flex items-center gap-1">
-              Remote
+          {isMuted && (
+            <span className="text-[8px] bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/20 font-black tracking-widest uppercase">
+              Muted
             </span>
           )}
 
-          {/* Tag KHÁCH (Nếu không có quyền gì) */}
-          {!permissions.can_manage_users &&
-            !permissions.can_control_media &&
-            participant.role !== "host" && (
-              <span className="text-[9px] text-zinc-600 font-medium italic">
-                Thành viên
-              </span>
-            )}
+          {permissions.can_control_media && (
+            <span className="text-[8px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20 font-black tracking-widest uppercase">
+              Remote
+            </span>
+          )}
         </div>
       </div>
 
-      {/* --- CỘT 3: NÚT 3 CHẤM (THAO TÁC QUẢN LÝ) --- */}
+      {/* --- CỘT 3: NÚT THAO TÁC --- */}
       {canShowMenu && (
         <div className="relative">
           <button
             onClick={() => setOpenMenu(isOpenMenu ? null : participant.id)}
-            className="p-2 text-zinc-500 hover:text-white rounded-xl transition outline-none"
-            aria-label={`Quản lý ${participant.profiles?.full_name}`}
+            className={`p-2 rounded-xl transition outline-none ${
+              isOpenMenu
+                ? "bg-zinc-800 text-white"
+                : "text-zinc-500 hover:text-white"
+            }`}
           >
             <EllipsisVerticalIcon className="w-5 h-5" />
           </button>
 
-          {/* DROPDOWN MENU */}
           {isOpenMenu && (
             <div className="absolute right-0 top-full mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl z-[100] p-3 space-y-4 animate-in fade-in zoom-in-95 origin-top-right border-t-red-600/50 border-t-2">
-              {/* KHU VỰC PHONG TƯỚC (CHỈ HOST MỚI THẤY) */}
+              {/* KHU VỰC PHÂN QUYỀN (CHỈ HOST MỚI THẤY) */}
               {isRealHost && (
                 <>
                   <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest px-1">
-                    Cấp quyền nhanh
+                    Hệ thống
                   </p>
-
                   <PermissionToggle
                     label="Quản trị viên"
                     icon={
@@ -165,7 +161,6 @@ export default function ParticipantItem({
                       )
                     }
                   />
-
                   <PermissionToggle
                     label="Điều khiển Video"
                     icon={<VideoCameraIcon className="w-4 h-4 text-blue-400" />}
@@ -181,11 +176,31 @@ export default function ParticipantItem({
                 </>
               )}
 
-              {/* NÚT TRỤC XUẤT (HOST & MOD ĐỀU THẤY) */}
+              {/* KHU VỰC ĐIỀU KIỂM SOÁT (HOST & MOD ĐỀU THẤY) */}
+              <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest px-1">
+                Kiểm soát
+              </p>
+
+              <PermissionToggle
+                label={isMuted ? "Mở khóa chat" : "Cấm chat"}
+                icon={
+                  isMuted ? (
+                    <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <NoSymbolIcon className="w-4 h-4 text-amber-500" />
+                  )
+                }
+                enabled={isMuted}
+                variant={isMuted ? "default" : "danger"}
+                onClick={() =>
+                  onTogglePermission(participant.user_id, "is_muted")
+                }
+              />
+
               <button
                 onClick={() => {
                   onKick(participant.user_id);
-                  setOpenMenu(null); // Đóng menu sau khi kick
+                  setOpenMenu(null);
                 }}
                 className="w-full text-left py-2 px-1 text-xs text-red-500 hover:text-red-400 transition flex items-center gap-2 font-bold group"
               >
@@ -209,32 +224,49 @@ function PermissionToggle({
   icon,
   enabled,
   onClick,
+  variant = "default",
 }: PermissionToggleProps) {
   return (
     <div
       className="flex items-center justify-between cursor-pointer group/toggle px-1 py-1"
-      onClick={onClick}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          onClick();
+        }
+      }}
+      tabIndex={0}
       role="switch"
       aria-checked={enabled}
     >
       <div className="flex items-center gap-3">
         <div
           className={`p-2 rounded-lg transition-colors ${
-            enabled ? "bg-white/10" : "bg-zinc-800"
+            enabled && variant === "default"
+              ? "bg-emerald-500/10"
+              : enabled && variant === "danger"
+                ? "bg-amber-500/10"
+                : "bg-zinc-800"
           }`}
         >
           {icon}
         </div>
         <p className="text-xs text-zinc-200 font-bold">{label}</p>
       </div>
-
-      {/* Thanh gạt Switch */}
       <div
         className={`w-8 h-4 rounded-full relative transition-colors ${
-          enabled ? "bg-emerald-500" : "bg-zinc-700"
+          enabled
+            ? variant === "danger"
+              ? "bg-amber-600"
+              : "bg-emerald-500"
+            : "bg-zinc-700"
         }`}
       >
-        {/* Nút tròn di chuyển */}
         <div
           className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${
             enabled ? "translate-x-4" : "translate-x-0.5"

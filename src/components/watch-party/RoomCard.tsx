@@ -8,13 +8,14 @@ import {
 } from "@heroicons/react/24/outline";
 import Link from "next/link";
 import ImageCustom from "@/components/ImageCustom";
+import UserAvatar from "@/components/UserAvatar";
 import { WatchPartyRoom } from "@/types";
 
 export default function RoomCard({ room }: { room: WatchPartyRoom }) {
   const bgImage =
     room.movie_image ||
     "https://images.unsplash.com/photo-1574267432553-4b4628081c31?q=80&w=1000&auto=format&fit=crop";
-  const participantsCount = room.participants?.[0]?.count || 1;
+  const participantsCount = room.participant_count || 0;
   const maxLimit = room.max_participants || 50;
   const isFull = participantsCount >= maxLimit;
 
@@ -71,14 +72,7 @@ export default function RoomCard({ room }: { room: WatchPartyRoom }) {
 
         <div className="flex items-center gap-3">
           {/* Host Avatar */}
-          <div className="relative">
-            <ImageCustom
-              className="w-8 h-8 rounded-full border border-white/10 object-cover"
-              src={room.host?.avatar_url || "/default-avatar.png"}
-              alt="Host"
-              widths={[32]}
-            />
-          </div>
+          <UserAvatar avatar_url={room.host?.avatar_url} size={32} />
 
           <div className="flex-1">
             <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest leading-none mb-0.5">

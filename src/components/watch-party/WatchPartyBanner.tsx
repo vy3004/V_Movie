@@ -93,7 +93,7 @@ export default function WatchPartyBanner() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
               </span>
-              Tính năng mới
+              Đừng bỏ lỡ
             </div>
 
             <h1 className="text-4xl md:text-6xl font-black leading-[0.9] tracking-tighter mb-8 uppercase italic">
