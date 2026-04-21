@@ -105,11 +105,14 @@ export interface SyncApiPayload {
 
 export interface PlaylistItem {
   id: string;
+  room_id: string;
   movie_name: string;
   movie_slug: string;
   thumb_url: string;
   episode_slug: string;
-  user_id: string;
+  sort_order: number;
+  added_by: string;
+  created_at?: string;
   profiles?: {
     full_name: string;
     avatar_url: string;

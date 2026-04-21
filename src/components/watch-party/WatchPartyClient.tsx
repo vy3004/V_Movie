@@ -83,6 +83,7 @@ export default function WatchPartyClient({
   // --- REFS ---
   const playerSyncRef = useRef<PlayerSyncRef | null>(null);
   const prevEpisodeRef = useRef(initialRoom.current_episode_slug);
+  const isProcessingAutoNext = useRef(false);
 
   const handlePlayerReady = useCallback(() => {}, []);
 
@@ -322,6 +323,111 @@ export default function WatchPartyClient({
       .send({ type: "broadcast", event: "chat", payload: msg });
   };
 
+  // --- XỬ LÝ AUTO-NEXT (CHUYỂN TẬP HOẶC CHUYỂN PHIM) ---
+  const handleWatchPartyAutoNext = async () => {
+    if (!isRealHost) return;
+
+    if (isProcessingAutoNext.current) return;
+    isProcessingAutoNext.current = true;
+
+    try {
+      let nextEpisode = null;
+
+      // 🌟 1. Dùng `activeEpisode.slug` (Tập đang chiếu thật trên màn hình) để dò tìm!
+      if (movie && movie.episodes.length > 0 && activeEpisode) {
+        // Tìm Server chứa cái tập đang chiếu
+        const currentServer =
+          movie.episodes.find((server) =>
+            server.server_data.some((ep) => ep.slug === activeEpisode.slug),
+          ) || movie.episodes[0];
+
+        const serverEpisodes = currentServer.server_data;
+
+        // Tìm vị trí của tập đang chiếu
+        const currentIndex = serverEpisodes.findIndex(
+          (e) => e.slug === activeEpisode.slug,
+        );
+
+        // Nếu còn tập -> Lấy tập tiếp theo
+        if (currentIndex !== -1 && currentIndex < serverEpisodes.length - 1) {
+          nextEpisode = serverEpisodes[currentIndex + 1];
+        }
+      }
+
+      // 🌟 2. CÒN TẬP -> CHUYỂN TẬP
+      if (nextEpisode) {
+        console.log(
+          "⏭️ [AUTO-NEXT] Vẫn còn tập, chuyển sang:",
+          nextEpisode.name,
+        );
+        toast.info(`Đang tự động chuyển sang: ${nextEpisode.name}...`);
+        await handleSelectEpisode(nextEpisode); // Gọi hàm chuyển tập
+        return; // Bắt buộc return ở đây để không chạy xuống phần Playlist
+      }
+
+      // 🌟 3. HẾT TẬP -> BỐC PHIM PLAYLIST
+      console.log("🎬 [AUTO-NEXT] Đã hết tập, tiến hành bốc Playlist...");
+      const { data: nextItems } = await supabase
+        .from("watch_party_playlist")
+        .select("*")
+        .eq("room_id", room.id)
+        .order("sort_order", { ascending: true })
+        .limit(1);
+
+      const nextItem = nextItems?.[0];
+
+      if (nextItem) {
+        toast.info(`Tự động chuyển sang phim: ${nextItem.movie_name}...`);
+
+        setRoom((prev) => ({
+          ...prev,
+          current_movie_slug: nextItem.movie_slug,
+          current_episode_slug: nextItem.episode_slug,
+          movie_image: nextItem.thumb_url,
+        }));
+
+        await supabase
+          .from("watch_party_rooms")
+          .update({
+            current_movie_slug: nextItem.movie_slug,
+            current_episode_slug: nextItem.episode_slug,
+            movie_image: nextItem.thumb_url,
+          })
+          .eq("id", room.id);
+
+        await fetch(`/api/watch-party/playlist?id=${nextItem.id}`, {
+          method: "DELETE",
+        });
+
+        supabase.channel(`wp_ui_${room.id}`).send({
+          type: "broadcast",
+          event: "change_episode_sync",
+          payload: { slug: nextItem.episode_slug },
+        });
+
+        supabase.channel(`wp_ui_${room.id}`).send({
+          type: "broadcast",
+          event: "chat",
+          payload: {
+            id: crypto.randomUUID(),
+            user_id: "system",
+            message: `🎬 Tự động chuyển sang phim: ${nextItem.movie_name}`,
+            created_at: new Date().toISOString(),
+            is_system: true,
+          },
+        });
+      } else {
+        toast.info("Đã phát hết danh sách chờ!");
+      }
+    } catch (error) {
+      console.error("Lỗi Auto-Next:", error);
+    } finally {
+      setTimeout(() => {
+        isProcessingAutoNext.current = false;
+      }, 3000);
+    }
+  };
+
   // --- UI CONFIG ---
   const activeEpisode = useMemo(() => {
     if (!movie?.episodes) return null;
@@ -412,20 +518,7 @@ export default function WatchPartyClient({
               onProgress={() => {}}
               onPlayerReady={handlePlayerReady}
               onChangeEpisode={(slug) => handleSelectEpisode({ slug })}
-              onAutoNext={() => {
-                if (!hasMediaAuth) return;
-                const allEpisodes = movie.episodes.flatMap(
-                  (ep) => ep.server_data,
-                );
-                const currentIndex = allEpisodes.findIndex(
-                  (e) => e.slug === room.current_episode_slug,
-                );
-                const nextEpisode = allEpisodes[currentIndex + 1];
-                if (nextEpisode) {
-                  toast.info("Đang tự động chuyển sang tập tiếp theo...");
-                  handleSelectEpisode(nextEpisode);
-                }
-              }}
+              onAutoNext={handleWatchPartyAutoNext}
             />
           )}
 

@@ -90,6 +90,7 @@ export function useVideoPlayer({
     canControl,
     isHost,
     onPlayerReady,
+    isWatchParty,
   });
 
   const runSoftSync = useCallback(() => {
@@ -137,6 +138,7 @@ export function useVideoPlayer({
       canControl,
       isHost,
       onPlayerReady,
+      isWatchParty,
     };
 
     if (!canControl && !isHostPaused.current) {
@@ -156,6 +158,7 @@ export function useVideoPlayer({
     isHost,
     onPlayerReady,
     runSoftSync,
+    isWatchParty,
   ]);
 
   const syncFromRemote = useCallback(
@@ -364,8 +367,15 @@ export function useVideoPlayer({
           refs.current.onProgress(curr, dur);
         }
 
+        // --- 2. ĐOẠN NÀY ĐÃ ĐƯỢC THAY MỚI (Logic hiện nút bấm 15s) ---
+        const mightHaveNextContent =
+          refs.current.nextEpisodeSlug || refs.current.isWatchParty;
+        const hasPermission =
+          !refs.current.isWatchParty || refs.current.canControl;
+
         if (
-          refs.current.nextEpisodeSlug &&
+          mightHaveNextContent &&
+          hasPermission &&
           dur > 0 &&
           refs.current.isAutoNext
         ) {
@@ -376,12 +386,16 @@ export function useVideoPlayer({
             nextBtn.hide();
             nextBtn.removeClass("is-active");
           }
+        } else {
+          nextBtn.hide();
+          nextBtn.removeClass("is-active");
         }
       });
 
       player.on("ended", () => {
-        if (refs.current.nextEpisodeSlug && refs.current.isAutoNext)
+        if (refs.current.isAutoNext) {
           refs.current.onAutoNext();
+        }
       });
 
       player.on("volumechange", () => {
