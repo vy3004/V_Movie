@@ -177,12 +177,13 @@ export default function AuthModal() {
           >
             {isSignUp && (
               <div className="space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                <div className="relative flex items-center rounded-xl sm:rounded-2xl bg-zinc-900/50 border border-zinc-800 focus-within:border-red-600 transition-all">
-                  <UserIcon className="ml-4 h-5 w-5 text-zinc-600" />
+                <div className="relative flex items-center overflow-hidden rounded-xl sm:rounded-2xl bg-zinc-900 border border-zinc-800 focus-within:border-red-600 focus-within:ring-1 focus-within:ring-red-600 transition-all">
+                  <UserIcon className="ml-4 h-5 w-5 shrink-0 text-zinc-600" />
                   <input
                     {...register("username")}
                     placeholder="Tên hiển thị"
-                    className="w-full bg-transparent p-3.5 sm:p-4 text-sm text-white outline-none"
+                    autoComplete="username"
+                    className="w-full min-w-0 flex-1 bg-transparent p-3.5 sm:p-4 text-sm text-white outline-none"
                   />
                 </div>
                 {errors.username && (
@@ -194,14 +195,15 @@ export default function AuthModal() {
             )}
 
             <div className="space-y-1">
-              <div className="relative flex items-center rounded-xl sm:rounded-2xl bg-zinc-900/50 border border-zinc-800 focus-within:border-red-600 transition-all">
-                <EnvelopeIcon className="ml-4 h-5 w-5 text-zinc-600" />
+              <div className="relative flex items-center overflow-hidden rounded-xl sm:rounded-2xl bg-zinc-900 border border-zinc-800 focus-within:border-red-600 focus-within:ring-1 focus-within:ring-red-600 transition-all">
+                <EnvelopeIcon className="ml-4 h-5 w-5 shrink-0 text-zinc-600" />
                 <input
                   {...register("email")}
                   type="email"
                   inputMode="email"
                   placeholder="Email"
-                  className="w-full bg-transparent p-3.5 sm:p-4 text-sm text-white outline-none"
+                  autoComplete="email"
+                  className="w-full min-w-0 flex-1 bg-transparent p-3.5 sm:p-4 text-sm text-white outline-none"
                 />
               </div>
               {errors.email && (
@@ -212,13 +214,14 @@ export default function AuthModal() {
             </div>
 
             <div className="space-y-1">
-              <div className="relative flex items-center rounded-xl sm:rounded-2xl bg-zinc-900/50 border border-zinc-800 focus-within:border-red-600 transition-all">
-                <LockClosedIcon className="ml-4 h-5 w-5 text-zinc-600" />
+              <div className="relative flex items-center overflow-hidden rounded-xl sm:rounded-2xl bg-zinc-900 border border-zinc-800 focus-within:border-red-600 focus-within:ring-1 focus-within:ring-red-600 transition-all">
+                <LockClosedIcon className="ml-4 h-5 w-5 shrink-0 text-zinc-600" />
                 <input
                   {...register("password")}
                   type="password"
                   placeholder="Mật khẩu"
-                  className="w-full bg-transparent p-3.5 sm:p-4 text-sm text-white outline-none"
+                  autoComplete={isSignUp ? "new-password" : "current-password"}
+                  className="w-full min-w-0 flex-1 bg-transparent p-3.5 sm:p-4 text-sm text-white outline-none"
                 />
               </div>
               {errors.password && (
@@ -237,7 +240,7 @@ export default function AuthModal() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-xl sm:rounded-2xl bg-red-600 py-3.5 sm:py-4 font-bold text-white hover:bg-red-700 disabled:opacity-50 transition-all active:scale-[0.98] shadow-lg shadow-red-600/20 uppercase tracking-widest text-sm"
+              className="w-full rounded-xl sm:rounded-2xl bg-red-600 py-3.5 sm:py-4 font-bold text-white hover:bg-red-700 disabled:opacity-50 transition-all active:scale-[0.98] shadow-lg shadow-red-600/20 uppercase tracking-widest text-sm mt-2"
             >
               {isSubmitting ? (
                 <div className="flex items-center justify-center gap-2">

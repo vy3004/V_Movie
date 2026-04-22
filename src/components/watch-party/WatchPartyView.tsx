@@ -36,6 +36,18 @@ const VideoPlayer = dynamic(() => import("@/components/VideoPlayer"), {
 
 type TabType = "chat" | "members" | "playlist" | "settings";
 
+// Cấu hình nội dung linh hoạt cho 2 trường hợp
+const DISCONNECT_CONFIG = {
+  kicked: {
+    title: "Thông báo trục xuất",
+    description: "Rất tiếc, chủ phòng đã mời bạn rời khỏi phiên xem chung này.",
+  },
+  closed: {
+    title: "Phòng đã đóng",
+    description: "Phiên xem chung đã kết thúc. Hẹn gặp lại bạn lần sau nhé!",
+  },
+};
+
 export default function WatchPartyView() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>("chat");
@@ -74,22 +86,9 @@ export default function WatchPartyView() {
     return null;
   }, [isKicked, room, isRealHost]);
 
-  // Cấu hình nội dung linh hoạt cho 2 trường hợp
-  const disconnectConfig = {
-    kicked: {
-      title: "Thông báo trục xuất",
-      description:
-        "Rất tiếc, chủ phòng đã mời bạn rời khỏi phiên xem chung này.",
-    },
-    closed: {
-      title: "Phòng đã đóng",
-      description: "Phiên xem chung đã kết thúc. Hẹn gặp lại bạn lần sau nhé!",
-    },
-  };
-
   // Lấy config hiện tại
   const activeConfig = disconnectReason
-    ? disconnectConfig[disconnectReason]
+    ? DISCONNECT_CONFIG[disconnectReason]
     : null;
 
   // --- FETCH DỮ LIỆU PHIM ---
@@ -231,6 +230,7 @@ export default function WatchPartyView() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ roomId: room.id }),
+        keepalive: true,
       });
 
       if (!res.ok) throw new Error();

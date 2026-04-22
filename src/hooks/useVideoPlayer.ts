@@ -115,7 +115,7 @@ export function useVideoPlayer({
     if (Math.abs(gap) > 3.0) {
       setPlayerTime(player, actualHostTime);
     } else if (Math.abs(gap) > 0.1) {
-      const newRate = Math.max(0.85, Math.min(1.15, 1.0 + gap * 0.3));
+      const newRate = Math.max(0.9, Math.min(1.1, 1.0 + gap * 0.1));
       if (typeof player.playbackRate === "function")
         player.playbackRate(newRate);
     } else {
@@ -123,7 +123,7 @@ export function useVideoPlayer({
     }
 
     syncAnimFrame.current = requestAnimationFrame(runSoftSync);
-  }, []); // runSoftSync độc lập
+  }, []);
 
   useEffect(() => {
     refs.current = {
@@ -181,7 +181,7 @@ export function useVideoPlayer({
 
       if (isSameAction && diff <= 1.5) return;
 
-      remoteLockUntil.current = Date.now() + 15000;
+      remoteLockUntil.current = Date.now() + 1500;
       targetHostTime.current = time;
       lastSyncReceivedAt.current = Date.now();
 
@@ -386,7 +386,6 @@ export function useVideoPlayer({
           refs.current.onProgress(curr, dur);
         }
 
-        // --- 2. ĐOẠN NÀY ĐÃ ĐƯỢC THAY MỚI (Logic hiện nút bấm 15s) ---
         const mightHaveNextContent =
           refs.current.nextEpisodeSlug || refs.current.isWatchParty;
         const hasPermission =
@@ -432,7 +431,6 @@ export function useVideoPlayer({
         player.src({ src: movieSrc, type: "application/x-mpegURL" });
         player.load();
 
-        // Ngay khi tập mới tải xong Metadata, ép nó về initialTime (là 0)
         player.one("loadedmetadata", () => {
           player.currentTime(initialTime);
           isInitialSeekDone.current = true;

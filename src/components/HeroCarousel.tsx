@@ -67,12 +67,12 @@ const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
                   <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl">
                     {title}
                   </h1>
-                  <h3
-                    className="text-xl sm:text-2xl md:text-3xl lg:text-4xl text-transparent stroke-text"
+                  <h2
+                    className="text-xl sm:text-2xl md:text-3xl lg:text-4xl text-transparent stroke-text truncate"
                     style={{ WebkitTextStroke: "1px rgba(255,255,255,0.6)" }}
                   >
                     {subtitle}
-                  </h3>
+                  </h2>
                 </div>
                 <div className="space-y-2">
                   <MovieTags className="space-y-2" movie={movie} />

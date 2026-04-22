@@ -305,6 +305,10 @@ export function useCommentMutations({
       }
       toast.error("Không thể thực hiện thao tác.");
     },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["comments", movieSlug] });
+      queryClient.invalidateQueries({ queryKey: ["comment-lineage"] });
+    }
   });
 
   return {

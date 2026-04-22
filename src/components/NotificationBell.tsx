@@ -26,6 +26,7 @@ export default function NotificationBell() {
       {/* Icon Bell */}
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-label="Thông báo"
         className="relative flex items-center justify-center size-8 sm:size-10 rounded-full transition-all bg-zinc-800 hover:bg-zinc-700"
       >
         <BellIcon className="size-5 sm:size-6" />
@@ -40,11 +41,11 @@ export default function NotificationBell() {
 
       {/* Dropdown Menu */}
       <div
-        className={`absolute right-0 top-full pt-2 w-80 sm:w-96 transition-all duration-200 z-50 ${
+        className={`absolute -right-[40px] md:right-0 top-full pt-2 w-80 sm:w-96 transition-all duration-300 z-50 ${
           isOpen ? "opacity-100 visible" : "opacity-0 invisible"
         }`}
       >
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-y-scroll py-1 flex flex-col">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl py-1 flex flex-col">
           <div className="px-4 py-2 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
             <span className="text-sm font-semibold text-white">Thông báo</span>
             {unreadCount > 0 && (

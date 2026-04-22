@@ -52,6 +52,7 @@ const ArtisticFeature = ({
 }) => (
   <div className="group relative flex flex-col gap-3 transition-all duration-300 hover:-translate-y-1">
     <div
+      aria-hidden="true"
       className="absolute -top-10 -left-4 text-8xl font-black text-white/[0.03] select-none pointer-events-none group-hover:text-red-600/5 transition-colors duration-500 text-transparent stroke-text"
       style={{ WebkitTextStroke: "1px rgba(255,255,255,0.05)" }}
     >
@@ -79,8 +80,14 @@ export default function WatchPartyBanner() {
       className="relative w-full min-h-[600px] lg:min-h-[700px] flex items-center justify-center overflow-hidden bg-[#0a0a0a] py-12 px-4 sm:px-14 lg:px-20"
     >
       {/* Background Ambient Glow */}
-      <div className="absolute top-[-10%] right-[-10%] w-[600px] h-[600px] bg-red-600/20 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-red-600/10 rounded-full blur-[100px] pointer-events-none" />
+      <div
+        aria-hidden="true"
+        className="absolute top-[-10%] right-[-10%] w-[600px] h-[600px] bg-red-600/20 rounded-full blur-[120px] pointer-events-none"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-red-600/10 rounded-full blur-[100px] pointer-events-none"
+      />
 
       {/* Content Container */}
       <div className="container relative z-10 mx-auto max-w-7xl">
@@ -155,24 +162,24 @@ export default function WatchPartyBanner() {
               </div>
 
               {/* Chat Bubbles */}
-              <div className="absolute bottom-16 right-5 flex flex-col gap-3 items-end">
-                <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md p-2 rounded-full border border-white/10">
+              <div className="absolute bottom-14 sm:bottom-16 right-2 sm:right-5 flex flex-col gap-3 items-end">
+                <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md p-1 sm:p-2 rounded-full border border-white/10">
                   <Avatar
                     initials="K"
                     color="from-yellow-400 to-green-500"
                     size={8}
                   />
-                  <span className="text-[10px] pr-2">
+                  <span className="text-[8px] sm:text-[10px] pr-2">
                     &ldquo;Phim này đỉnh quá!&rdquo;
                   </span>
                 </div>
-                <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md p-2 rounded-full border border-white/10">
+                <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md p-1 sm:p-2 rounded-full border border-white/10">
                   <Avatar
                     initials="V"
                     color="from-orange-400 to-cyan-500"
                     size={8}
                   />
-                  <span className="text-[10px] pr-2 uppercase font-bold text-yellow-400">
+                  <span className="text-[10px] sm:text-[12px] pr-2 uppercase font-bold text-yellow-400">
                     😂 x 24
                   </span>
                 </div>

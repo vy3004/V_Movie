@@ -50,7 +50,7 @@ export async function generateMetadata({
       type: "video.movie",
     },
     alternates: {
-      canonical: `${seoOnPage.og_url}${tap ? `?tap=${tap}` : ""}`,
+      canonical: seoOnPage.og_url,
     },
   };
 }

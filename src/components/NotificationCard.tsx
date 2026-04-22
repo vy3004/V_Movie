@@ -77,9 +77,7 @@ export default function NotificationCard({ noti, variant, onClick }: Props) {
         {/* 3. KHỐI NỘI DUNG */}
         <div className="flex-1 min-w-0 flex flex-col justify-center">
           <p className="text-[14px] leading-snug text-zinc-100">
-            <span className="font-bold text-white whitespace-nowrap">
-              {noti.actor_name}
-            </span>{" "}
+            <span className="font-bold text-white">{noti.actor_name}</span>{" "}
             <span className="text-zinc-300">{noti.content}</span>
           </p>
 

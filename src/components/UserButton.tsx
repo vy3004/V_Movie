@@ -58,7 +58,10 @@ export default function UserButton() {
 
       <div className="relative group">
         {/* Nút Avatar */}
-        <button className="flex items-center gap-1 hover:opacity-80 transition-all outline-none group">
+        <button
+          aria-label="Thông tin người dùng"
+          className="flex items-center gap-1 hover:opacity-80 transition-all outline-none group"
+        >
           <UserAvatar
             avatar_url={avatarUrl}
             user_name={fullName}
@@ -71,7 +74,7 @@ export default function UserButton() {
         <div className="absolute right-0 top-full pt-2 w-56 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden py-2">
             {/* Thông tin User */}
-            <div className="px-4 py-3 border-b border-zinc-800">
+            <div className="px-4 py-2 border-b border-zinc-800">
               <p className="text-sm font-semibold text-white truncate">
                 {fullName}
               </p>

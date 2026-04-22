@@ -1,55 +1,69 @@
-import { test, expect } from '@playwright/test';
+// tests/e2e/watch-party.spec.ts
+import { test, expect } from "@playwright/test";
+import path from "path";
 
-test.describe('Watch Party Master Flow', () => {
+// 🌟 Thay bằng mã phòng thật đang có trong Database của bạn
+const TEST_ROOM_URL = "http://localhost:3000/xem-chung/KRIFZG";
 
-  test('Host tạo phòng, Guest xin vào và được duyệt qua aria-label', async ({ browser }) => {
-    // 1. Setup Context
-    const hostContext = await browser.newContext({ storageState: 'tests/e2e/auth/host.json' });
-    const guestContext = await browser.newContext({ storageState: 'tests/e2e/auth/guest.json' });
+test.describe("Video Sync Test (Pre-existing Room)", () => {
+  test("Guest phải đồng bộ Soft Sync với Host trong phòng có sẵn", async ({
+    browser,
+  }) => {
+    const hostContext = await browser.newContext({
+      storageState: path.resolve(process.cwd(), "tests/e2e/auth/host.json"),
+    });
+    const guestContext = await browser.newContext({
+      storageState: path.resolve(process.cwd(), "tests/e2e/auth/guest.json"),
+    });
 
     const hostPage = await hostContext.newPage();
     const guestPage = await guestContext.newPage();
 
-    // --- BƯỚC 1: HOST TẠO PHÒNG ---
-    await hostPage.goto('http://localhost:3000/xem-chung');
-    await hostPage.getByRole('button', { name: 'Tạo phòng' }).click();
-    
-    const searchInput = hostPage.getByRole('textbox', { name: 'Nhập tên phim để tìm kiếm...' });
-    await searchInput.fill('conan');
-    await hostPage.locator('div').filter({ hasText: /^Thám Tử Lừng Danh ConanDetective Conan • 2005$/ }).first().click();
-    
-    await hostPage.getByRole('button', { name: 'Private' }).click();
-    await hostPage.getByRole('button', { name: '🍿 Mở phòng ngay' }).click();
+    // 1. Cả hai cùng vào thẳng phòng
+    await Promise.all([
+      hostPage.goto(TEST_ROOM_URL),
+      guestPage.goto(TEST_ROOM_URL),
+    ]);
 
-    // Lấy URL phòng
-    await hostPage.waitForURL(/\/xem-chung\/.+/, { timeout: 15000 });
-    const roomUrl = hostPage.url();
+    // 2. Đợi Video hiển thị (không bị redirect về login)
+    await expect(hostPage.locator("video")).toBeVisible({ timeout: 15000 });
+    await expect(guestPage.locator("video")).toBeVisible({ timeout: 15000 });
 
-    // --- BƯỚC 2: GUEST XIN VÀO PHÒNG ---
-    await guestPage.goto(roomUrl);
-    const knockBtn = guestPage.getByRole('button', { name: /Gõ cửa xin vào/i });
-    await expect(knockBtn).toBeVisible();
-    await knockBtn.click();
-    await expect(guestPage.getByText(/Đang đợi phê duyệt/i)).toBeVisible();
+    // 3. --- TEST SOFT SYNC (GUEST CHẬM 1.5S) ---
+    // Host Play
+    await hostPage.locator("video").evaluate((v: HTMLVideoElement) => v.play());
+    await hostPage.waitForTimeout(2000);
 
-    // --- BƯỚC 3: HOST DUYỆT GUEST BẰNG ARIA-LABEL ---
-    // Sử dụng getByLabel để click chính xác Tab Member, không lo click nhầm thanh tìm kiếm
-    const memberTab = hostPage.getByLabel('Thành viên');
-    await memberTab.click();
+    // Guest bị lag lùi lại 1.5s
+    await guestPage.locator("video").evaluate((v: HTMLVideoElement) => {
+      v.currentTime -= 1.5;
+    });
 
-    // Đợi danh sách yêu cầu hiện lên
-    await expect(hostPage.getByText('Yêu cầu tham gia')).toBeVisible();
+    // Đợi Player tính toán gap * 0.1
+    await guestPage.waitForTimeout(1000);
 
-    // Bấm nút "Đồng ý" (nút có aria-label="Đồng ý")
-    const approveBtn = hostPage.getByLabel('Đồng ý').first();
-    await expect(approveBtn).toBeVisible();
-    await approveBtn.click();
+    // Kiểm tra rate (phải trong khoảng 1.0 < rate <= 1.10)
+    const catchUpRate = await guestPage
+      .locator("video")
+      .evaluate((v: HTMLVideoElement) => v.playbackRate);
+    console.log(`Guest đang tăng tốc: ${catchUpRate}x`);
+    expect(catchUpRate).toBeGreaterThan(1.0);
+    expect(catchUpRate).toBeLessThanOrEqual(1.1);
 
-    // --- BƯỚC 4: KIỂM TRA KẾT QUẢ ---
-    // Guest phải vào được phòng và thấy Player
-    await expect(guestPage.locator('.video-js')).toBeVisible({ timeout: 15000 });
-    
-    // Host thấy số lượng thành viên là 2
-    await expect(hostPage.getByText('Thành viên (2)')).toBeVisible();
+    // 4. --- TEST HARD SEEK (LỆCH > 3S) ---
+    await guestPage.locator("video").evaluate((v: HTMLVideoElement) => {
+      v.currentTime -= 5.0;
+    });
+
+    await guestPage.waitForTimeout(1500);
+
+    // Guest phải bị "vả" về đúng thời gian của Host (lệch < 1s)
+    const hTime = await hostPage
+      .locator("video")
+      .evaluate((v: HTMLVideoElement) => v.currentTime);
+    const gTime = await guestPage
+      .locator("video")
+      .evaluate((v: HTMLVideoElement) => v.currentTime);
+    expect(Math.abs(hTime - gTime)).toBeLessThan(1.0);
   });
 });

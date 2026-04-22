@@ -114,7 +114,12 @@ export function useWatchHistory({
       last_episode_of_movie_slug: lastEpOfMovie,
     };
 
-    navigator.sendBeacon("/api/history/track", JSON.stringify(payload));
+    fetch("/api/history/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    }).catch(console.error);
   }, [user, movie, episodeSlug, lastEpOfMovie]);
 
   // 4. Chốt DB khi thoát
@@ -149,7 +154,12 @@ export function useWatchHistory({
       },
     };
 
-    navigator.sendBeacon("/api/history", JSON.stringify(historyItem));
+    fetch("/api/history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(historyItem),
+      keepalive: true,
+    }).catch(console.error);
   }, [user, movie, episodeSlug, lastEpOfMovie, syncLocal]);
 
   const handleTimeUpdate = (currentTime: number, duration: number) => {
