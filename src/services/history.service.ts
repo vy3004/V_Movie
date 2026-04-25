@@ -173,7 +173,7 @@ export const HistoryService = {
           };
         } catch {
           console.warn(`Dọn dẹp cache bị lỗi tại: ${cacheKey}`);
-       redis.del(cacheKey).catch(() => {});
+          redis.del(cacheKey).catch(() => {});
         }
       }
     }
@@ -460,11 +460,13 @@ export const HistoryService = {
       .in("movie_slug", movieSlugs);
 
     const existingMap = new Map(existingRecords?.map((r) => [r.movie_slug, r]));
-    const upsertPayloads = [];
+
+    // Tách riêng 2 mảng Insert và Update để tránh xung đột Schema của Supabase
+    const itemsToInsert = [];
+    const itemsToUpdate = [];
     const cachePayloads: HistoryItem[] = [];
 
     for (const item of localItems) {
-      // (Logic Merge của bạn... giữ nguyên)
       const existing = existingMap.get(item.movie_slug);
       const existingProgress =
         (existing?.episodes_progress as Record<string, EpisodeProgress>) || {};
@@ -501,8 +503,8 @@ export const HistoryService = {
         }
       }
 
-      const finalItem = {
-        id: existing?.id,
+      // Khởi tạo object dữ liệu nền (KHÔNG chứa trường id)
+      const baseItem = {
         user_id: userId,
         movie_slug: item.movie_slug,
         movie_name: item.movie_name,
@@ -514,15 +516,34 @@ export const HistoryService = {
         updated_at: new Date().toISOString(),
       };
 
-      upsertPayloads.push(finalItem);
-      cachePayloads.push(finalItem as HistoryItem);
+      // Phân loại logic
+      if (existing?.id) {
+        // Đã có trên DB -> Ném vào mảng Update (bắt buộc kèm id)
+        itemsToUpdate.push({ id: existing.id, ...baseItem });
+        cachePayloads.push({ id: existing.id, ...baseItem } as HistoryItem);
+      } else {
+        // Chưa có trên DB -> Ném vào mảng Insert (bỏ id để DB tự sinh UUID)
+        itemsToInsert.push(baseItem);
+        cachePayloads.push(baseItem as HistoryItem);
+      }
     }
 
-    const { error } = await supabase
-      .from("watch_history")
-      .upsert(upsertPayloads, { onConflict: "id" });
-    if (error) throw error;
+    // Thực thi tuần tự để đảm bảo an toàn, dễ bắt lỗi riêng biệt
+    if (itemsToInsert.length > 0) {
+      const { error: insertErr } = await supabase
+        .from("watch_history")
+        .insert(itemsToInsert);
+      if (insertErr) throw insertErr;
+    }
 
+    if (itemsToUpdate.length > 0) {
+      const { error: updateErr } = await supabase
+        .from("watch_history")
+        .upsert(itemsToUpdate, { onConflict: "id" });
+      if (updateErr) throw updateErr;
+    }
+
+    // Xử lý Redis Cache
     if (redis) {
       const key = getHistoryKey(userId);
       if (key) {
@@ -533,7 +554,7 @@ export const HistoryService = {
         pipeline.expire(key, 604800);
         await pipeline.exec();
 
-        // Vì số lượng cập nhật lớn, ta dùng Invalidate để đảm bảo an toàn mảng thay vì gọi mutate quá nhiều lần
+        // Xóa cache danh sách để UI load lại mượt mà
         await HistoryService.invalidateHistoryCache(userId);
       }
     }

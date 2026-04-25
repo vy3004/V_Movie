@@ -94,11 +94,13 @@ export function useSubscriptionAction({ user, movie }: UseSubscriptionProps) {
       );
 
       // LÀM MỚI CACHE NGAY LẬP TỨC ĐỂ TRANG CHỦ CẬP NHẬT
-      queryClient.invalidateQueries({ queryKey: listQueryKey });
-      queryClient.invalidateQueries({ queryKey: statsQueryKey });
-
-      // Phát sự kiện cho các Tab khác
-      window.dispatchEvent(new Event("subscription-updated"));
+      queryClient.invalidateQueries({
+        queryKey: listQueryKey,
+        refetchType: "all",
+      });
+      queryClient.invalidateQueries({
+        queryKey: statsQueryKey,
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: subStatusKey });
@@ -127,9 +129,13 @@ export function useSubscriptionAction({ user, movie }: UseSubscriptionProps) {
       if (!res.ok) throw new Error("Failed to clear badge");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: listQueryKey });
-      queryClient.invalidateQueries({ queryKey: statsQueryKey });
-      window.dispatchEvent(new Event("subscription-updated"));
+      queryClient.invalidateQueries({
+        queryKey: listQueryKey,
+        refetchType: "all",
+      });
+      queryClient.invalidateQueries({
+        queryKey: statsQueryKey,
+      });
     },
   });
 

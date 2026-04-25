@@ -78,7 +78,6 @@ export default function SubscriptionsPage() {
       // Cập nhật lại list và stats tức thì
       queryClient.invalidateQueries({ queryKey: ["subscriptions-list"] });
       queryClient.invalidateQueries({ queryKey: ["subscriptions-stats"] });
-      window.dispatchEvent(new Event("subscription-updated"));
       setDeletingMovie(null);
     },
     onError: () => {

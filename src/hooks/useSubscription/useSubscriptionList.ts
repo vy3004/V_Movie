@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
 import {
   useInfiniteQuery,
   useQuery,
-  useQueryClient,
   keepPreviousData,
 } from "@tanstack/react-query";
 import { useData } from "@/providers/BaseDataContextProvider";
@@ -24,7 +22,6 @@ export function useSubscriptionList({
   withStats = false,
 }: UseSubscriptionListProps = {}) {
   const { user, authLoading } = useData();
-  const queryClient = useQueryClient();
 
   // 1. QUERY DANH SÁCH (INFINITE SCROLL)
   const listQuery = useInfiniteQuery({
@@ -87,18 +84,6 @@ export function useSubscriptionList({
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
   });
-
-  // Lắng nghe sự kiện để làm mới dữ liệu toàn cục
-  useEffect(() => {
-    const handleRefresh = () => {
-      queryClient.invalidateQueries({ queryKey: ["subscriptions-list"] });
-      queryClient.invalidateQueries({ queryKey: ["subscriptions-stats"] });
-    };
-
-    window.addEventListener("subscription-updated", handleRefresh);
-    return () =>
-      window.removeEventListener("subscription-updated", handleRefresh);
-  }, [queryClient]);
 
   const subscriptions = listQuery.data?.pages.flatMap((p) => p.data) || [];
 

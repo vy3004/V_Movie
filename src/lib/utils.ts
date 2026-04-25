@@ -380,11 +380,7 @@ export const toggleLocalSubscription = (item: SubscriptionItem): boolean => {
       newSubs = [newItem, ...currentSubs];
     }
 
-    // 1. Ghi xuống đĩa
     localStorage.setItem(GUEST_SUBS_KEY, JSON.stringify(newSubs));
-
-    // 2. BẮN EVENT ĐỒNG BỘ UI
-    window.dispatchEvent(new Event("subscription-updated"));
 
     return !isCurrentlyFollowed;
   } catch (error) {

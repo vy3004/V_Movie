@@ -146,7 +146,7 @@ export function useHistoryTracker({
     syncLocal.flush();
     if (!user) {
       // Nếu là Guest, ép cập nhật ngay lúc này
-      queryClient.invalidateQueries({ queryKey: ["movie-history"] });
+      queryClient.invalidateQueries({ queryKey: ["history-list"] });
       queryClient.invalidateQueries({ queryKey: ["history-stats"] });
       return;
     }
@@ -204,7 +204,7 @@ export function useHistoryTracker({
       keepalive: true,
     })
       .then(() => {
-        queryClient.invalidateQueries({ queryKey: ["movie-history"] });
+        queryClient.invalidateQueries({ queryKey: ["history-list"] });
         queryClient.invalidateQueries({ queryKey: ["history-stats"] });
       })
       .catch(console.error);

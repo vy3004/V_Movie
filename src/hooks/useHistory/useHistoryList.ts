@@ -29,7 +29,7 @@ export function useHistoryList({
 
   // 1. QUERY: LẤY DANH SÁCH (INFINITE SCROLL)
   const query = useInfiniteQuery({
-    queryKey: ["movie-history", user?.id, limit, filter, keyword],
+    queryKey: ["history-list", user?.id, limit, filter, keyword],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
       if (user) {
@@ -103,7 +103,7 @@ export function useHistoryList({
     },
     onSuccess: () => {
       toast.success("Đã xóa khỏi lịch sử");
-      queryClient.invalidateQueries({ queryKey: ["movie-history"] });
+      queryClient.invalidateQueries({ queryKey: ["history-list"] });
       queryClient.invalidateQueries({ queryKey: ["history-stats"] });
     },
     onError: () => {
@@ -120,7 +120,7 @@ export function useHistoryList({
     },
     onSuccess: () => {
       toast.success("Đã xóa toàn bộ lịch sử");
-      queryClient.invalidateQueries({ queryKey: ["movie-history"] });
+      queryClient.invalidateQueries({ queryKey: ["history-list"] });
       queryClient.invalidateQueries({ queryKey: ["history-stats"] });
     },
     onError: () => {

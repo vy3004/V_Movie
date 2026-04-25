@@ -11,6 +11,7 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import BreadCrumb from "@/components/BreadCrumb";
 import MovieDetail from "@/components/MovieDetail";
 import WatchMovie from "@/components/WatchMovie";
+import TrailerPlayer from "@/components/TrailerPlayer";
 
 interface PageProps {
   params: { slug: string };
@@ -65,18 +66,22 @@ export default async function MoviePage({ params }: PageProps) {
   const { data: authData } = await supabase.auth.getUser();
   const user = authData?.user;
 
-  // 2. Gọi song song Dữ liệu phim và Lịch sử xem (Parallel Data Fetching)
-  const movieDataPromise = getMovieDetail(slug);
-  const historyPromise = user
-    ? HistoryService.getLatest(user.id, slug)
-    : Promise.resolve(null);
-
-  const [data, history] = await Promise.all([movieDataPromise, historyPromise]);
-
+  // 2. Gọi API Dữ liệu phim
+  const data = await getMovieDetail(slug);
   const movie = data?.item;
 
-  // 3. Xử lý trường hợp không tìm thấy phim
   if (!movie) return notFound();
+
+  // 3. KIỂM TRA XEM PHIM CÓ TẬP NÀO HỢP LỆ KHÔNG (CÓ SLUG & LINK M3U8)
+  const hasValidEpisodes = movie.episodes?.some((server) =>
+    server.server_data?.some((ep) => ep.slug !== "" && ep.link_m3u8 !== ""),
+  );
+
+  // 4. Chỉ tải lịch sử xem nếu có tập hợp lệ (đỡ tốn request db)
+  let history = null;
+  if (hasValidEpisodes && user) {
+    history = await HistoryService.getLatest(user.id, slug);
+  }
 
   return (
     <div className="col-span-12 xl:col-span-8 py-4 space-y-4 sm:space-y-8 animate-in fade-in duration-500">
@@ -84,7 +89,12 @@ export default async function MoviePage({ params }: PageProps) {
 
       <MovieDetail movie={movie} />
 
-      <WatchMovie movie={movie} history={history} user={user} />
+      {/* RENDER ĐIỀU KIỆN TỪ SERVER */}
+      {hasValidEpisodes ? (
+        <WatchMovie movie={movie} history={history} user={user} />
+      ) : (
+        <TrailerPlayer movie={movie} user={user} />
+      )}
 
       {data.seoOnPage.seoSchema && (
         <script

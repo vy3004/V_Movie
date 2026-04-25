@@ -146,7 +146,7 @@ export default function WatchPartyBanner() {
               <div
                 className="absolute inset-0 bg-cover bg-center"
                 style={{
-                  backgroundImage: `url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=600&q=70')`,
+                  backgroundImage: `url('/vd_banner.avif')`,
                 }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40" />
