@@ -1,11 +1,19 @@
 "use client";
 
-import React from "react";
-import WatchPartyView from "@/components/watch-party/WatchPartyView";
-import WatchPartyVoiceWrapper from "@/components/watch-party/WatchPartyVoiceWrapper";
+import dynamic from "next/dynamic";
 import { WatchPartyProvider } from "@/providers/WatchPartyProvider";
 import { User } from "@supabase/supabase-js";
 import { WatchPartyRoom, WatchPartyParticipant } from "@/types";
+
+const WatchPartyVoiceWrapper = dynamic(
+  () => import("@/components/watch-party/WatchPartyVoiceWrapper"),
+  { ssr: false },
+);
+
+const WatchPartyView = dynamic(
+  () => import("@/components/watch-party/WatchPartyView"),
+  { ssr: false },
+);
 
 interface WatchPartyClientProps {
   room: WatchPartyRoom;

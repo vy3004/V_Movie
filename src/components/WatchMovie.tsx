@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import NProgress from "nprogress";
 import { User } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
-import EpisodeSelector from "@/components/EpisodeSelector";
+import EpisodeSelectorSkeleton from "@/components/EpisodeSelectorSkeleton";
 import {
   Movie,
   HistoryItem,
@@ -24,6 +24,10 @@ const VideoPlayer = dynamic(() => import("@/components/VideoPlayer"), {
   loading: () => (
     <div className="aspect-video bg-zinc-900 animate-pulse rounded-2xl" />
   ),
+});
+const EpisodeSelector = dynamic(() => import("@/components/EpisodeSelector"), {
+  ssr: false,
+  loading: () => <EpisodeSelectorSkeleton />,
 });
 const CommentSection = dynamic(() => import("@/components/CommentSection"), {
   ssr: false,

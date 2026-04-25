@@ -1,15 +1,23 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState, useRef, useEffect } from "react";
 import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { debounce } from "lodash-es";
 import RoomCard from "@/components/watch-party/RoomCard";
-import CreateRoomModal from "@/components/watch-party/CreateRoomModal";
+import RoomCardSkeleton from "@/components/watch-party/RoomCardSkeleton";
 import { WatchPartyRoom } from "@/types";
 import { useData } from "@/providers/BaseDataContextProvider";
 import { useAuthModal } from "@/providers/AuthModalProvider";
+
+const CreateRoomModal = dynamic(
+  () => import("@/components/watch-party/CreateRoomModal"),
+  {
+    ssr: false,
+  },
+);
 
 export default function WatchPartyLobbyPage() {
   const { user } = useData();
@@ -123,10 +131,7 @@ export default function WatchPartyLobbyPage() {
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-              <div
-                key={n}
-                className="aspect-video bg-zinc-900 animate-pulse rounded-xl"
-              />
+              <RoomCardSkeleton key={n} />
             ))}
           </div>
         ) : rooms.length > 0 ? (

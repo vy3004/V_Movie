@@ -13,26 +13,51 @@ import {
   PlayIcon,
 } from "@heroicons/react/24/outline";
 
-// Components
-import EpisodeSelector from "@/components/EpisodeSelector";
-import PlaylistTab from "@/components/watch-party/PlaylistTab";
-import SettingsTab from "@/components/watch-party/SettingsTab";
-import MembersTab from "@/components/watch-party/MembersTab";
-import ChatTab from "@/components/watch-party/ChatTab";
-import ChatOverlay from "@/components/watch-party/ChatOverlay";
-import ConfirmModal from "@/components/ConfirmModal";
-import { RoomAudioRenderer } from "@livekit/components-react";
-
 // Context & Hooks
 import { useWatchParty } from "@/providers/WatchPartyProvider";
 import { useQuery } from "@tanstack/react-query";
 import { Movie } from "@/types";
 
+// Components
+import EpisodeSelectorSkeleton from "@/components/EpisodeSelectorSkeleton";
+// Bắt buộc ssr: false. Sử dụng .then() để trích xuất Named Export
+const RoomAudioRenderer = dynamic(
+  () =>
+    import("@livekit/components-react").then((mod) => mod.RoomAudioRenderer),
+  { ssr: false },
+);
+
+const ChatTab = dynamic(() => import("@/components/watch-party/ChatTab"), {
+  ssr: false,
+});
+const MembersTab = dynamic(
+  () => import("@/components/watch-party/MembersTab"),
+  { ssr: false },
+);
+const PlaylistTab = dynamic(
+  () => import("@/components/watch-party/PlaylistTab"),
+  { ssr: false },
+);
+const SettingsTab = dynamic(
+  () => import("@/components/watch-party/SettingsTab"),
+  { ssr: false },
+);
+const ChatOverlay = dynamic(
+  () => import("@/components/watch-party/ChatOverlay"),
+  { ssr: false },
+);
+const ConfirmModal = dynamic(() => import("@/components/ConfirmModal"), {
+  ssr: false,
+});
 const VideoPlayer = dynamic(() => import("@/components/VideoPlayer"), {
   ssr: false,
   loading: () => (
     <div className="aspect-video bg-zinc-900 animate-pulse rounded-2xl" />
   ),
+});
+const EpisodeSelector = dynamic(() => import("@/components/EpisodeSelector"), {
+  ssr: false,
+  loading: () => <EpisodeSelectorSkeleton />,
 });
 
 type TabType = "chat" | "members" | "playlist" | "settings";
