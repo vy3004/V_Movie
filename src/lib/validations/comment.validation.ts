@@ -16,3 +16,6 @@ export const commentSchema = z.object({
 });
 
 export type CommentFormData = z.infer<typeof commentSchema>;
+
+export const inputSchema = commentSchema.pick({ content: true });
+export type InputFormValues = z.infer<typeof inputSchema>;

@@ -1,14 +1,15 @@
 "use client";
 
 import React, { useRef, useCallback, memo, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PaperAirplaneIcon } from "@heroicons/react/24/solid";
 import { useData } from "@/providers/BaseDataContextProvider";
 import { useAuthModal } from "@/providers/AuthModalProvider";
 import {
-  commentSchema,
-  CommentFormData,
+  inputSchema,
+  InputFormValues,
 } from "@/lib/validations/comment.validation";
 import UserAvatar from "@/components/UserAvatar";
 
@@ -42,16 +43,16 @@ const CommentInput = memo(function CommentInput({
     reset,
     clearErrors,
     formState: { isSubmitting, errors },
-  } = useForm<CommentFormData>({
-    resolver: zodResolver(commentSchema),
+  } = useForm<InputFormValues>({
+    resolver: zodResolver(inputSchema),
     defaultValues: { content: "" },
     // CHỈ validate khi submit để tránh lỗi hiện lên lúc vừa mở form
     mode: "onSubmit",
   });
 
   const currentContent = watch("content") || "";
-  const wordCount = currentContent.trim().split(/\s+/).filter(Boolean).length;
-  const isOverLimit = wordCount > 200;
+  const charCount = currentContent.length;
+  const isOverLimit = charCount > 200;
 
   const avatarUrl = user?.user_metadata?.avatar_url;
   const fullName = user?.user_metadata?.full_name || user?.email || "User";
@@ -105,8 +106,7 @@ const CommentInput = memo(function CommentInput({
     [rhfOnChange],
   );
 
-  const submitForm = async (data: CommentFormData) => {
-    if (!user) return onOpen();
+  const submitForm = async (data: InputFormValues) => {
     try {
       await onSubmit(data.content);
       reset();
@@ -118,10 +118,22 @@ const CommentInput = memo(function CommentInput({
     }
   };
 
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!user) {
+      toast.error("Vui lòng đăng nhập!");
+      onOpen();
+      return;
+    }
+
+    handleSubmit(submitForm)(e);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(submitForm)();
+      handleFormSubmit(e);
     }
   };
 
@@ -131,7 +143,7 @@ const CommentInput = memo(function CommentInput({
   return (
     <form
       ref={containerRef}
-      onSubmit={handleSubmit(submitForm)}
+      onSubmit={handleFormSubmit}
       className="flex gap-3 items-start w-full group transition-all"
     >
       <UserAvatar avatar_url={avatarUrl} user_name={fullName} size={36} />
@@ -162,7 +174,7 @@ const CommentInput = memo(function CommentInput({
                 <span
                   className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${isOverLimit ? "text-primary border-red-500/20 bg-red-500/5" : "text-zinc-500 border-zinc-800"}`}
                 >
-                  {wordCount}/200
+                  {charCount}/200
                 </span>
               )}
               {errors.content && (

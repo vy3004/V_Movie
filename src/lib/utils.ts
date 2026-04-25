@@ -1,6 +1,6 @@
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
-import DOMPurify from "isomorphic-dompurify";
+import sanitizeHtmlLib from "sanitize-html";
 import { redis } from "@/lib/redis";
 import {
   Movie,
@@ -396,13 +396,42 @@ export const toggleLocalSubscription = (item: SubscriptionItem): boolean => {
   }
 };
 
-export const sanitizeHtml = (dirtyHtml: string) => {
+/**
+ * Làm sạch chuỗi HTML, chống XSS Attack
+ */
+export function sanitizeHtml(dirtyHtml: string): string {
   if (!dirtyHtml) return "";
 
-  return DOMPurify.sanitize(dirtyHtml, {
-    // Chỉ cho phép các thẻ text format cơ bản
-    ALLOWED_TAGS: ["b", "i", "em", "strong", "u", "br", "p", "span"],
-    // Xóa sạch TOÀN BỘ thuộc tính (class, id, style, href, onclick...) để chặn XSS tuyệt đối
-    ALLOWED_ATTR: [],
+  return sanitizeHtmlLib(dirtyHtml, {
+    // Chỉ cho phép các thẻ định dạng cơ bản trong Comment
+    allowedTags: [
+      "b",
+      "i",
+      "em",
+      "strong",
+      "a",
+      "p",
+      "br",
+      "span",
+      "ul",
+      "ol",
+      "li",
+    ],
+
+    // Chỉ cho phép các thuộc tính an toàn
+    allowedAttributes: {
+      a: ["href", "target", "rel"],
+    },
+
+    // Cấu hình an toàn cho thẻ a
+    transformTags: {
+      a: sanitizeHtmlLib.simpleTransform("a", {
+        target: "_blank",
+        rel: "noopener noreferrer",
+      }),
+    },
+
+    // KHÔNG cho phép iframe (chống chèn video lạ/mã độc)
+    allowedIframeHostnames: [],
   });
-};
+}

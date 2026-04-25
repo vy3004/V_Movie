@@ -175,8 +175,8 @@ const CommentItem = memo(
 
         <UserAvatar
           className={`shrink-0 rounded-full border-2 transition-colors duration-500 mt-0.5 z-10 ${isActive ? "border-red-500" : "border-zinc-800"}`}
-          avatar_url={comment.profiles?.avatar_url}
-          user_name={comment.profiles?.full_name}
+          avatar_url={comment.profiles.avatar_url}
+          user_name={comment.profiles.full_name}
           size={36}
         />
 

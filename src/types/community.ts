@@ -44,7 +44,7 @@ export interface CommentItem {
   is_edited: boolean;
   created_at: string;
   updated_at: string;
-  profiles?: {
+  profiles: {
     full_name: string;
     avatar_url: string;
   };
