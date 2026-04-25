@@ -1,14 +1,18 @@
 "use client";
 
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import NProgress from "nprogress";
 import {
   UserGroupIcon,
   LockClosedIcon,
   PlayCircleIcon,
   GlobeAltIcon,
 } from "@heroicons/react/24/outline";
-import Link from "next/link";
 import ImageCustom from "@/components/ImageCustom";
 import UserAvatar from "@/components/UserAvatar";
+import { useData } from "@/providers/BaseDataContextProvider";
+import { useAuthModal } from "@/providers/AuthModalProvider";
 import { WatchPartyRoom } from "@/types";
 
 export default function RoomCard({ room }: { room: WatchPartyRoom }) {
@@ -19,11 +23,30 @@ export default function RoomCard({ room }: { room: WatchPartyRoom }) {
   const maxLimit = room.max_participants || 50;
   const isFull = participantsCount >= maxLimit;
 
+  const router = useRouter();
+  const { user } = useData();
+  const { onOpen: openLogin } = useAuthModal();
+
+  const handleJoinRoom = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isFull) {
+      toast.info("Phòng đang đầy!");
+      return;
+    }
+
+    if (!user) {
+      toast.info("Vui lòng đăng nhập để tham gia phòng!");
+      openLogin();
+      return;
+    }
+    NProgress.start();
+    router.push(`/xem-chung/${room.room_code}`);
+  };
   return (
-    <Link
-      href={isFull ? "#" : `/xem-chung/${room.room_code}`}
+    <div
+      onClick={handleJoinRoom}
       className={`group relative bg-[#111] rounded-xl overflow-hidden border border-white/5 hover:border-red-600/30 transition-all duration-500 block ${
-        isFull ? "opacity-50 pointer-events-none" : ""
+        isFull ? "opacity-50 pointer-events-none" : "cursor-pointer"
       }`}
     >
       {/* --- PHẦN BADGES TRÊN CÙNG --- */}
@@ -94,6 +117,6 @@ export default function RoomCard({ room }: { room: WatchPartyRoom }) {
       <div className="absolute -bottom-4 -left-2 text-6xl font-black text-white/[0.02] select-none pointer-events-none group-hover:text-red-600/[0.05] transition-colors">
         #{room.room_code}
       </div>
-    </Link>
+    </div>
   );
 }

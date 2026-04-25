@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useRef, useEffect, memo } from "react";
+import React, { useState, useRef, useEffect, memo, useMemo } from "react";
+import { sanitizeHtml } from "@/lib/utils";
+import { debounce } from "lodash-es";
 
 interface Props {
   content: string;
@@ -10,42 +12,55 @@ interface Props {
 const ExpandableText = memo(({ content, maxLines = 4 }: Props) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const textRef = useRef<HTMLParagraphElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
 
-  // Kiểm tra xem nội dung có bị cắt (truncate) hay không
+  const safeHTML = useMemo(() => sanitizeHtml(content), [content]);
+
   useEffect(() => {
+    // 2. TÁCH LOGIC KIỂM TRA
     const checkTruncation = () => {
-      if (textRef.current) {
+      if (textRef.current && !isExpanded) {
         const { scrollHeight, clientHeight } = textRef.current;
-        // Nếu chiều cao thực tế lớn hơn chiều cao hiển thị -> Cần nút "Xem thêm"
         setHasMore(scrollHeight > clientHeight);
       }
     };
 
-    // Kiểm tra ngay khi mount và khi content thay đổi
+    // 3. BỌC BẰNG LODASH DEBOUNCE (Chờ 150ms)
+    const debouncedCheck = debounce(checkTruncation, 150);
+
     checkTruncation();
 
-    // Lắng nghe sự kiện resize màn hình vì chiều rộng đổi sẽ làm số dòng đổi
-    window.addEventListener("resize", checkTruncation);
-    return () => window.removeEventListener("resize", checkTruncation);
-  }, [content]);
+    // Lắng nghe sự kiện resize
+    window.addEventListener("resize", debouncedCheck);
+
+    return () => {
+      debouncedCheck.cancel();
+      window.removeEventListener("resize", debouncedCheck);
+    };
+  }, [safeHTML, isExpanded]);
 
   return (
     <div className="relative">
-      <p
+      <div
         ref={textRef}
-        className={`text-[14px] text-zinc-300 leading-relaxed break-words whitespace-pre-wrap transition-all duration-300 ${
-          !isExpanded ? "line-clamp-4" : ""
-        }`}
-        style={!isExpanded ? { WebkitLineClamp: maxLines } : {}}
-      >
-        {content}
-      </p>
+        className="text-[14px] text-zinc-300 leading-relaxed break-words whitespace-pre-wrap transition-all duration-300"
+        style={
+          !isExpanded
+            ? {
+                display: "-webkit-box",
+                WebkitLineClamp: maxLines,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }
+            : {}
+        }
+        dangerouslySetInnerHTML={{ __html: safeHTML }}
+      />
 
       {hasMore && (
         <button
           onClick={(e) => {
-            e.stopPropagation(); // Ngăn chặn trigger click vào cha (activePath)
+            e.stopPropagation();
             setIsExpanded(!isExpanded);
           }}
           className="text-[13px] text-zinc-500 hover:text-white mt-1 transition-colors outline-none"

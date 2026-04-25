@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { User } from "@supabase/supabase-js";
 import { throttle } from "lodash-es";
 import { getDeviceId, getLocalHistory, saveLocalHistory } from "@/lib/utils";
@@ -11,7 +12,7 @@ import {
   EpisodeProgress,
 } from "@/types";
 
-export function useWatchHistory({
+export function useHistoryTracker({
   user,
   movie,
   episodeSlug,
@@ -24,6 +25,13 @@ export function useWatchHistory({
   const inMemoryLocalHistory = useRef<HistoryItem[]>([]);
   const lastSyncedTimeRef = useRef<number>(-1);
 
+  const queryClient = useQueryClient();
+
+  // KHAI BÁO Ổ KHÓA ĐỂ CHỐNG GỌI TRÙNG LẶP API
+  const lastSavedDBStateRef = useRef<{ slug: string; time: number } | null>(
+    null,
+  );
+
   // 1. Tính tập cuối của phim
   const lastEpOfMovie =
     movie.episodes.flatMap((e) => e.server_data).pop()?.slug || "";
@@ -32,7 +40,7 @@ export function useWatchHistory({
     inMemoryLocalHistory.current = getLocalHistory();
   }, []);
 
-  // 2. Logic lưu LocalStorage an toàn
+  // 2. Logic lưu LocalStorage an toàn (Chống spam bằng Throttle 5s)
   const syncLocal = useMemo(
     () =>
       throttle(() => {
@@ -92,45 +100,77 @@ export function useWatchHistory({
     };
   }, [syncLocal]);
 
-  // 3. Gửi tracking lên Redis
-  const syncRedis = useCallback(() => {
-    const data = trackingData.current;
-    if (
-      !data ||
-      data.current_time < 30 ||
-      data.current_time === lastSyncedTimeRef.current
-    )
-      return;
+  // 3. Logic Gửi Tracking Lên Redis
+  const handleTimeUpdate = useCallback(
+    (currentTime: number, duration: number) => {
+      trackingData.current = {
+        movie_slug: movie.slug,
+        last_episode_slug: episodeSlug,
+        last_episode_of_movie_slug: lastEpOfMovie,
+        current_time: currentTime,
+        duration,
+      };
 
-    lastSyncedTimeRef.current = data.current_time;
+      syncLocal();
 
-    const payload = {
-      ...data,
-      user_id: user?.id,
-      device_id: user ? undefined : getDeviceId(),
-      movie_name: movie.name,
-      movie_poster: movie.poster_url,
-      last_episode_slug: episodeSlug,
-      last_episode_of_movie_slug: lastEpOfMovie,
-    };
+      const currentSecond = Math.floor(currentTime);
 
-    fetch("/api/history/track", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      keepalive: true,
-    }).catch(console.error);
-  }, [user, movie, episodeSlug, lastEpOfMovie]);
+      if (
+        currentSecond >= 30 &&
+        currentSecond % 30 === 0 &&
+        currentSecond !== lastSyncedTimeRef.current
+      ) {
+        lastSyncedTimeRef.current = currentSecond;
 
-  // 4. Chốt DB khi thoát
+        const payload = {
+          ...trackingData.current,
+          user_id: user?.id,
+          device_id: user ? undefined : getDeviceId(),
+          movie_name: movie.name,
+          movie_poster: movie.poster_url,
+        };
+
+        fetch("/api/history/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          keepalive: true,
+        }).catch(console.error);
+      }
+    },
+    [movie, episodeSlug, lastEpOfMovie, syncLocal, user],
+  );
+
+  // 4. Chốt DB khi thoát (Dùng Blob để chống lỗi rớt Header)
   const syncSupabase = useCallback(() => {
     syncLocal.flush();
-    if (!user) return;
+    if (!user) {
+      // Nếu là Guest, ép cập nhật ngay lúc này
+      queryClient.invalidateQueries({ queryKey: ["movie-history"] });
+      queryClient.invalidateQueries({ queryKey: ["history-stats"] });
+      return;
+    }
 
     const data = trackingData.current;
-    if (!data || data.current_time < 30) return; // Nếu chưa được 30s thì khỏi gửi DB
+    if (!data || data.current_time < 30) return;
 
-    // Để đảm bảo DB update đúng trạng thái is_finished, ta lấy từ in-memory ra
+    // Khi chuyển tập, tập mới chưa play nhưng lại lấy data.current_time của tập cũ để lưu
+    if (data.last_episode_slug !== episodeSlug) return;
+
+    // Nếu tập phim và thời gian không hề thay đổi so với lần gọi ngay trước đó -> Block
+    if (
+      lastSavedDBStateRef.current?.slug === episodeSlug &&
+      lastSavedDBStateRef.current?.time === data.current_time
+    ) {
+      return;
+    }
+
+    // Khóa lại trạng thái hiện tại
+    lastSavedDBStateRef.current = {
+      slug: episodeSlug,
+      time: data.current_time,
+    };
+
     const existing = inMemoryLocalHistory.current.find(
       (h) => h.movie_slug === movie.slug,
     );
@@ -154,36 +194,33 @@ export function useWatchHistory({
       },
     };
 
+    const blobPayload = new Blob([JSON.stringify(historyItem)], {
+      type: "application/json",
+    });
+
     fetch("/api/history", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(historyItem),
+      body: blobPayload,
       keepalive: true,
-    }).catch(console.error);
-  }, [user, movie, episodeSlug, lastEpOfMovie, syncLocal]);
+    })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ["movie-history"] });
+        queryClient.invalidateQueries({ queryKey: ["history-stats"] });
+      })
+      .catch(console.error);
+  }, [user, movie, episodeSlug, lastEpOfMovie, syncLocal, queryClient]);
 
-  const handleTimeUpdate = (currentTime: number, duration: number) => {
-    trackingData.current = {
-      movie_slug: movie.slug,
-      last_episode_slug: episodeSlug,
-      last_episode_of_movie_slug: lastEpOfMovie,
-      current_time: currentTime,
-      duration,
-    };
-    syncLocal();
-  };
-
+  // Gắn event cho việc đóng tab / chuyển trang
   useEffect(() => {
-    const interval = setInterval(syncRedis, 30000);
     window.addEventListener("beforeunload", syncSupabase);
     window.addEventListener("pagehide", syncSupabase);
+
     return () => {
-      clearInterval(interval);
       window.removeEventListener("beforeunload", syncSupabase);
       window.removeEventListener("pagehide", syncSupabase);
       syncSupabase(); // Đảm bảo lưu lần cuối khi component unmount
     };
-  }, [syncRedis, syncSupabase]);
+  }, [syncSupabase]);
 
   return { handleTimeUpdate, syncToSupabase: syncSupabase };
 }

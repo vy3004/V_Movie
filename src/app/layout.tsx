@@ -2,6 +2,7 @@ import dynamic from "next/dynamic";
 import type { Metadata, Viewport } from "next";
 import { Roboto } from "next/font/google";
 import { Toaster } from "sonner";
+import NextTopLoader from "nextjs-toploader";
 import "./globals.css";
 
 import ReactQueryClientProvider from "@/providers/ReactQueryClientProvider";
@@ -9,12 +10,8 @@ import BaseDataContextProvider from "@/providers/BaseDataContextProvider";
 import AuthModalProvider from "@/providers/AuthModalProvider";
 import NotificationProvider from "@/providers/NotificationProvider";
 import ConfirmProvider from "@/providers/ConfirmProvider";
+import ScrollToTop from "@/components/ScrollToTop";
 
-import Header from "@/components/Header";
-const Footer = dynamic(() => import("@/components/Footer"), {
-  ssr: false,
-  loading: () => <div className="h-20 w-full bg-zinc-950" />, // Tránh nhảy layout khi Footer load
-});
 const AuthModal = dynamic(() => import("@/components/AuthModal"), {
   ssr: false,
 });
@@ -77,13 +74,15 @@ export default function RootLayout({
             <NotificationProvider>
               <AuthModalProvider>
                 <ConfirmProvider>
-                  <div className="flex flex-col min-h-screen">
-                    <Header />
-                    {/* min-h-screen giúp tránh hiện tượng "footer nhảy lên trên" khi chưa có nội dung */}
-                    <main className="flex-grow">{children}</main>
-                    <Footer />
-                  </div>
+                  <NextTopLoader
+                    color="#cc223c"
+                    showSpinner={false}
+                    crawlSpeed={200}
+                    height={3}
+                  />
+                  {children}
                   <AuthModal />
+                  <ScrollToTop />
                   <Toaster position="bottom-right" richColors />
                 </ConfirmProvider>
               </AuthModalProvider>

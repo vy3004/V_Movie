@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import NProgress from "nprogress";
 import { toast } from "sonner";
 import { LockClosedIcon, GlobeAltIcon } from "@heroicons/react/24/outline";
 import { useWatchParty } from "@/providers/WatchPartyProvider";
@@ -67,6 +68,7 @@ export default function SettingsTab() {
       setIsEndModalOpen(false);
 
       // Host rời đi trước, Trigger SQL sẽ dọn dẹp khi Member cũng văng ra
+      NProgress.start();
       router.push("/xem-chung");
     } catch {
       toast.error("Lỗi khi đóng phòng");

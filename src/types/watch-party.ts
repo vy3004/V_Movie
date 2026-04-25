@@ -48,6 +48,7 @@ export interface WatchPartyParticipant {
   status: ParticipantStatus;
   permissions: ParticipantPermissions;
   is_muted: boolean;
+  is_voice_muted: boolean;
   created_at: string;
   profiles?: UserProfile;
 }

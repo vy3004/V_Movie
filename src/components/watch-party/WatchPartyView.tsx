@@ -21,6 +21,7 @@ import MembersTab from "@/components/watch-party/MembersTab";
 import ChatTab from "@/components/watch-party/ChatTab";
 import ChatOverlay from "@/components/watch-party/ChatOverlay";
 import ConfirmModal from "@/components/ConfirmModal";
+import { RoomAudioRenderer } from "@livekit/components-react";
 
 // Context & Hooks
 import { useWatchParty } from "@/providers/WatchPartyProvider";
@@ -273,6 +274,8 @@ export default function WatchPartyView() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-zinc-300 p-4 lg:p-6 pb-20 selection:bg-red-500/30 relative">
+      <RoomAudioRenderer />
+
       {/* HEADER: Thông tin phòng & Mã phòng */}
       <div className="max-w-[1600px] mx-auto mb-6 flex items-center justify-between bg-zinc-900/40 backdrop-blur-md p-4 rounded-xl border border-zinc-800 shadow-xl">
         <div className="flex items-center gap-3">
@@ -311,7 +314,7 @@ export default function WatchPartyView() {
         <div className="xl:col-span-8 2xl:col-span-9 space-y-4">
           {activeEpisode && movie && (
             <VideoPlayer
-              key={activeEpisode.slug}
+              key={`${room.current_movie_slug}-${activeEpisode.slug}`}
               playerSyncRef={playerSyncRef}
               movieSrc={activeEpisode.link_m3u8}
               user={user}

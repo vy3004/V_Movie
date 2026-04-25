@@ -107,8 +107,7 @@ export default function BaseDataContextProvider({
         });
         if (res.ok) {
           localStorage.removeItem(storageKey);
-          if (storageKey === "v_movie_guest_history")
-            window.dispatchEvent(new Event("history-synced"));
+
           queryClient.invalidateQueries({ queryKey });
         }
       } catch (error) {
@@ -141,11 +140,26 @@ export default function BaseDataContextProvider({
 
         if (event === "SIGNED_IN") {
           queryClient.setQueryData(["auth-user"], currentUser);
+
+          // --- ĐỒNG BỘ DỮ LIỆU KHI ĐĂNG NHẬP ---
+          window.dispatchEvent(new Event("subscription-updated"));
+          window.dispatchEvent(new Event("local-history-updated"));
+
           if (!previousUser) router.refresh();
         }
+
         if (event === "SIGNED_OUT") {
           queryClient.setQueryData(["auth-user"], null);
+
+          // Xóa cache các query liên quan đến người dùng cũ
           queryClient.removeQueries({ queryKey: ["movie-history"] });
+          queryClient.removeQueries({ queryKey: ["subscriptions-list"] });
+
+          // --- ĐỒNG BỘ DỮ LIỆU KHI ĐĂNG XUẤT ---
+          // Báo cho các Hook biết để quay về đọc dữ liệu từ LocalStorage (Guest)
+          window.dispatchEvent(new Event("subscription-updated"));
+          window.dispatchEvent(new Event("local-history-updated"));
+
           if (previousUser) router.refresh();
         }
         if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
@@ -153,6 +167,7 @@ export default function BaseDataContextProvider({
         }
       },
     );
+
     return () => authListener.subscription.unsubscribe();
   }, [supabase, queryClient, router]);
 

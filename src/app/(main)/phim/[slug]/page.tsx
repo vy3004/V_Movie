@@ -33,6 +33,8 @@ export async function generateMetadata({
   if (!data?.item) return { title: "Không tìm thấy phim" };
 
   const { seoOnPage } = data;
+  if (!seoOnPage) return { title: data.item.name || "Chi tiết phim" };
+
   const tap = searchParams.tap;
 
   const title = tap
@@ -88,7 +90,10 @@ export default async function MoviePage({ params }: PageProps) {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(data.seoOnPage.seoSchema),
+            __html: JSON.stringify(data.seoOnPage.seoSchema).replace(
+              /<\/script/gi,
+              "<\\/script",
+            ),
           }}
         />
       )}

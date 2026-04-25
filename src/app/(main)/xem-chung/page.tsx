@@ -2,13 +2,19 @@
 
 import { useState, useRef, useEffect } from "react";
 import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline";
+import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { debounce } from "lodash-es";
 import RoomCard from "@/components/watch-party/RoomCard";
 import CreateRoomModal from "@/components/watch-party/CreateRoomModal";
 import { WatchPartyRoom } from "@/types";
+import { useData } from "@/providers/BaseDataContextProvider";
+import { useAuthModal } from "@/providers/AuthModalProvider";
 
 export default function WatchPartyLobbyPage() {
+  const { user } = useData();
+  const { onOpen: openLogin } = useAuthModal();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [querySearch, setQuerySearch] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -36,10 +42,23 @@ export default function WatchPartyLobbyPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["wp-lobby", querySearch], // Dùng querySearch đã được debounce
     queryFn: async () => {
-      const res = await fetch(`/api/watch-party/lobby?search=${querySearch}`);
+      const params = new URLSearchParams({ search: querySearch });
+      const res = await fetch(`/api/watch-party/lobby?${params}`);
+      if (!res.ok) {
+        throw new Error("Failed to fetch rooms");
+      }
       return res.json();
     },
   });
+
+  const handleCreateRoomClick = () => {
+    if (!user) {
+      toast.info("Vui lòng đăng nhập để tạo phòng!");
+      openLogin();
+      return;
+    }
+    setShowModal(true);
+  };
 
   const rooms = data?.rooms || [];
 
@@ -69,7 +88,7 @@ export default function WatchPartyLobbyPage() {
 
         <div className="flex gap-4">
           <button
-            onClick={() => setShowModal(true)}
+            onClick={handleCreateRoomClick}
             className="flex items-center gap-2 px-6 py-4 bg-red-600 hover:bg-[#b20710] text-white font-black text-xs uppercase tracking-widest rounded transition-all shadow-xl shadow-red-600/10 group"
           >
             <PlusIcon className="size-5" />

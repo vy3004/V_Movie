@@ -3,7 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { BellIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
 import NotificationCard from "@/components/NotificationCard";
-import { useNotifications } from "@/providers/NotificationProvider"; // Gọi từ Provider
+import { useNotifications } from "@/providers/NotificationProvider";
+import Link from "next/link";
 
 export default function NotificationBell() {
   const { notifications, unreadCount, markAsRead, navigateToNotification } =
@@ -80,9 +81,12 @@ export default function NotificationBell() {
           </div>
 
           <div className="p-2 border-t border-zinc-800 text-center bg-zinc-900/50">
-            <button className="text-xs text-zinc-500 hover:text-zinc-300 w-full py-1">
+            <Link
+              href="/dashboard/notifications"
+              className="text-xs text-zinc-500 hover:text-zinc-300 w-full py-1"
+            >
               Xem tất cả
-            </button>
+            </Link>
           </div>
         </div>
       </div>

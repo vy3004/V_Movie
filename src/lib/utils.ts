@@ -1,5 +1,6 @@
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
+import DOMPurify from "isomorphic-dompurify";
 import { redis } from "@/lib/redis";
 import {
   Movie,
@@ -356,6 +357,7 @@ export const getLocalSubscriptions = (): SubscriptionItem[] => {
 /**
  * 2. Thêm/Xóa phim khỏi danh sách theo dõi trong LocalStorage
  * Trả về: true (nếu mới thêm), false (nếu vừa xóa)
+ * Đồng thời bắn ra event "subscription-updated" để đồng bộ UI
  */
 export const toggleLocalSubscription = (item: SubscriptionItem): boolean => {
   if (typeof window === "undefined") return false;
@@ -369,10 +371,8 @@ export const toggleLocalSubscription = (item: SubscriptionItem): boolean => {
     let newSubs: SubscriptionItem[];
 
     if (isCurrentlyFollowed) {
-      // Hủy theo dõi: Lọc bỏ item đó ra khỏi mảng (Immutable approach)
       newSubs = currentSubs.filter((s) => s.movie_slug !== item.movie_slug);
     } else {
-      // Theo dõi: Thêm lên đầu mảng
       const newItem: SubscriptionItem = {
         ...item,
         updated_at: new Date().toISOString(),
@@ -380,8 +380,11 @@ export const toggleLocalSubscription = (item: SubscriptionItem): boolean => {
       newSubs = [newItem, ...currentSubs];
     }
 
-    // Ghi xuống đĩa
+    // 1. Ghi xuống đĩa
     localStorage.setItem(GUEST_SUBS_KEY, JSON.stringify(newSubs));
+
+    // 2. BẮN EVENT ĐỒNG BỘ UI
+    window.dispatchEvent(new Event("subscription-updated"));
 
     return !isCurrentlyFollowed;
   } catch (error) {
@@ -391,4 +394,15 @@ export const toggleLocalSubscription = (item: SubscriptionItem): boolean => {
     );
     return false;
   }
+};
+
+export const sanitizeHtml = (dirtyHtml: string) => {
+  if (!dirtyHtml) return "";
+
+  return DOMPurify.sanitize(dirtyHtml, {
+    // Chỉ cho phép các thẻ text format cơ bản
+    ALLOWED_TAGS: ["b", "i", "em", "strong", "u", "br", "p", "span"],
+    // Xóa sạch TOÀN BỘ thuộc tính (class, id, style, href, onclick...) để chặn XSS tuyệt đối
+    ALLOWED_ATTR: [],
+  });
 };

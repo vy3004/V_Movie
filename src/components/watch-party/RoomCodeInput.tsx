@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import NProgress from "nprogress";
 import { ArrowRightIcon, KeyIcon, PlayIcon } from "@heroicons/react/24/solid";
 
 export default function RoomCodeInput() {
@@ -29,6 +30,7 @@ export default function RoomCodeInput() {
       return;
     }
 
+    NProgress.start();
     router.push(`/xem-chung/${roomCode}`);
   };
 

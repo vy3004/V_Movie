@@ -5,8 +5,9 @@ export const messageSchema = z.object({
   roomId: z.string().min(1, "Thiếu Room ID"),
   text: z
     .string()
-    .min(1, "Tin nhắn trống")
-    .max(200, "Tin nhắn không được vượt quá 200 ký tự"),
+    .trim()
+    .min(1, "Tin nhắn không được để trống")
+    .max(150, "Tin nhắn quá dài (tối đa 150 ký tự)"),
   type: z.enum(["chat", "system", "reaction"]).default("chat"),
   metadata: z.record(z.string(), z.unknown()).default({}),
 });

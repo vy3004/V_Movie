@@ -31,9 +31,9 @@ const getMoviesData = cache(
     searchParams: Record<string, string | undefined>,
   ) => {
     const keyword = searchParams.keyword;
-    const page = parseInt(searchParams.page || "1");
+    const parsedPage = parseInt(searchParams.page || "1", 10);
+    const page = Number.isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
     const limit = 24;
-
     // Nếu có keyword hoặc slug là tim-kiem -> Gọi service Search
     if (keyword || movieType === "tim-kiem") {
       return await MovieService.search(keyword || "", page, limit);
@@ -90,12 +90,11 @@ export default async function MoviesPage({ params, searchParams }: PageProps) {
 
   if (!data || !data.items) return notFound();
 
-  const { pagination } = data.params;
+  const pagination = data.params?.pagination;
   const currentPage = pagination?.currentPage || 1;
   const totalItems = pagination?.totalItems || 0;
   const totalItemsPerPage = pagination?.totalItemsPerPage || 24;
   const totalPages = Math.ceil(totalItems / totalItemsPerPage);
-
   return (
     <div className="col-span-12 xl:col-span-8 py-4 space-y-4 sm:space-y-8 animate-in fade-in duration-500">
       {/* Thanh lọc phim và Breadcrumb */}

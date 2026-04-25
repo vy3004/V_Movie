@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import NProgress from "nprogress";
 import { User } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
 import EpisodeSelector from "@/components/EpisodeSelector";
@@ -15,8 +16,8 @@ import {
   SubscriptionItem,
 } from "@/types";
 import { getLocalHistory } from "@/lib/utils";
-import { useWatchHistory } from "@/hooks/useWatchHistory";
-import { useSubscription } from "@/hooks/useSubscription";
+import { useHistoryTracker } from "@/hooks/useHistory";
+import { useSubscriptionAction } from "@/hooks/useSubscription";
 
 const VideoPlayer = dynamic(() => import("@/components/VideoPlayer"), {
   ssr: false,
@@ -41,7 +42,7 @@ export default function WatchMovie({ movie, history, user }: Props) {
   const queryClient = useQueryClient();
   const tap = searchParams.get("tap");
 
-  const { clearBadge } = useSubscription({ user, movie });
+  const { clearBadge } = useSubscriptionAction({ user, movie });
 
   const [sessionProgress, setSessionProgress] = useState<
     Record<string, EpisodeProgress>
@@ -59,7 +60,7 @@ export default function WatchMovie({ movie, history, user }: Props) {
   );
 
   // 1. Sử dụng hook watch history để tracking
-  const { handleTimeUpdate, syncToSupabase } = useWatchHistory({
+  const { handleTimeUpdate, syncToSupabase } = useHistoryTracker({
     user,
     movie,
     episodeSlug: tap || "",
@@ -144,6 +145,7 @@ export default function WatchMovie({ movie, history, user }: Props) {
   const handleSelectEpisode = useCallback(
     (sv: ServerData) => {
       syncToSupabase();
+      NProgress.start();
       router.push(`?tap=${sv.slug}#video`, { scroll: false });
     },
     [syncToSupabase, router],
@@ -151,7 +153,10 @@ export default function WatchMovie({ movie, history, user }: Props) {
 
   const handleAutoNext = useCallback(() => {
     syncToSupabase();
-    if (nextEpSlug) router.push(`?tap=${nextEpSlug}#video`, { scroll: false });
+    if (nextEpSlug) {
+      NProgress.start();
+      router.push(`?tap=${nextEpSlug}#video`, { scroll: false });
+    }
   }, [syncToSupabase, nextEpSlug, router]);
 
   const activeEpisode = useMemo(() => {

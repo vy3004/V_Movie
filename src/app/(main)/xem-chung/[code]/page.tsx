@@ -1,5 +1,4 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { LockClosedIcon } from "@heroicons/react/24/outline";
 
 import KnockDoorClient from "@/components/watch-party/KnockDoorClient";
@@ -7,6 +6,7 @@ import AutoJoinClient from "@/components/watch-party/AutoJoinClient";
 import WatchPartyClient from "@/components/watch-party/WatchPartyClient";
 import WaitingRoomClient from "@/components/watch-party/WaitingRoomClient";
 import ErrorRoomClient from "@/components/watch-party/ErrorRoomClient";
+import WatchPartyGuestClient from "@/components/watch-party/WatchPartyGuestClient";
 
 export default async function WatchPartyPage({
   params,
@@ -17,10 +17,6 @@ export default async function WatchPartyPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect(`/dang-nhap?next=/xem-chung/${params.code}`);
-  }
 
   // 1. Fetch thông tin phòng
   const { data: room } = await supabase
@@ -33,13 +29,16 @@ export default async function WatchPartyPage({
     return <ErrorRoomClient />;
   }
 
+  if (!user) {
+    return <WatchPartyGuestClient room={room} />;
+  }
   // 2. Fetch trạng thái của User hiện tại
   const { data: participant } = await supabase
     .from("watch_party_participants")
     .select("*")
     .eq("room_id", room.id)
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
   // 3. LOGIC PHÂN LUỒNG MÀN HÌNH
   if (participant) {

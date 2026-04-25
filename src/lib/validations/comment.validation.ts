@@ -5,15 +5,14 @@ export const commentSchema = z.object({
     .string()
     .trim()
     .min(1, "Không được để trống")
-    .max(2000, "Vượt quá giới hạn ký tự hệ thống") // Bảo vệ Database chống spam chuỗi dài
-    .refine(
-      (val) => {
-        // Đếm số "từ" (chữ) dựa trên khoảng trắng
-        const words = val.split(/\s+/).filter(Boolean);
-        return words.length <= 200;
-      },
-      { message: "Chỉ được phép nhập tối đa 200 chữ (từ)" },
-    ),
+    .max(200, "Chỉ được phép nhập tối đa 200 ký tự"),
+  movieSlug: z
+    .string({ message: "Bắt buộc phải có movieSlug" })
+    .min(1, "Bắt buộc phải có movieSlug"),
+  movieName: z.string().optional(),
+  parentId: z.string().uuid().optional().nullable(),
+  replyToId: z.string().uuid().optional().nullable(),
+  rootId: z.string().uuid().optional().nullable(),
 });
 
 export type CommentFormData = z.infer<typeof commentSchema>;

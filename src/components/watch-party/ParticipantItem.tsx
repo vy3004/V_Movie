@@ -1,20 +1,20 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   VideoCameraIcon,
   ShieldCheckIcon,
   XMarkIcon,
   EllipsisVerticalIcon,
-  NoSymbolIcon, // Icon cấm chat
-  ChatBubbleLeftEllipsisIcon, // Icon mở chat
+  NoSymbolIcon,
+  ChatBubbleLeftEllipsisIcon,
+  MicrophoneIcon,
 } from "@heroicons/react/24/outline";
 import UserAvatar from "@/components/UserAvatar";
+import SpeakingEffect from "@/components/watch-party/SpeakingEffect";
+import { VideoTrack, useTracks } from "@livekit/components-react";
+import { Track } from "livekit-client";
 import { UserPresence, WatchPartyParticipant } from "@/types/watch-party";
-
-// ----------------------------------------------------------------------
-// 1. ĐỊNH NGHĨA TYPES
-// ----------------------------------------------------------------------
 
 interface ParticipantItemProps {
   participant: WatchPartyParticipant;
@@ -22,28 +22,19 @@ interface ParticipantItemProps {
   isRealHost: boolean;
   canManageUsers: boolean;
   isMe: boolean;
-  // Cập nhật Type: Chấp nhận cả key của permissions và key "is_muted"
   onTogglePermission: (
     userId: string,
-    key: keyof WatchPartyParticipant["permissions"] | "is_muted",
+    key:
+      | keyof WatchPartyParticipant["permissions"]
+      | "is_muted"
+      | "is_voice_muted",
   ) => void;
   onKick: (userId: string) => void;
   isOpenMenu: boolean;
   setOpenMenu: (id: string | null) => void;
+  isSpeaking?: boolean;
+  isMicEnabled?: boolean;
 }
-
-interface PermissionToggleProps {
-  label: string;
-  icon: React.ReactNode;
-  enabled: boolean;
-  onClick: () => void;
-  variant?: "default" | "danger";
-}
-
-// ----------------------------------------------------------------------
-// 2. COMPONENT CHÍNH
-// ----------------------------------------------------------------------
-
 export default function ParticipantItem({
   participant,
   presence,
@@ -54,41 +45,73 @@ export default function ParticipantItem({
   onKick,
   isOpenMenu,
   setOpenMenu,
+  isSpeaking = false,
+  isMicEnabled = false,
 }: ParticipantItemProps) {
   const isOnline = !!presence;
   const isAway = presence?.status === "away";
-  const currentStatus = useMemo(() => {
-    if (!isOnline) return "offline";
-    if (isAway) return "away";
-    return "online";
-  }, [isOnline, isAway]);
+  const currentStatus = useMemo(
+    () => (!isOnline ? "offline" : isAway ? "away" : "online"),
+    [isOnline, isAway],
+  );
+
+  // --- LOGIC CAMERA SIÊU NHẠY ---
+  // Hook này sẽ tự động update khi có bất kỳ ai bật/tắt cam
+  const cameraTracks = useTracks([Track.Source.Camera]);
+
+  // Tìm đúng cái track của người này dựa trên identity
+  const myVideoTrack = useMemo(() => {
+    return cameraTracks.find(
+      (t) => t.participant.identity === participant.user_id,
+    );
+  }, [cameraTracks, participant.user_id]);
+
+  const hasCamera = !!myVideoTrack;
+  // ------------------------------
 
   const canShowMenu = canManageUsers && !isMe && participant.role !== "host";
+  const [menuPosition, setMenuPosition] = useState<"down" | "up">("down");
 
-  const permissions = participant.permissions || {
-    can_manage_users: false,
-    can_control_media: false,
+  const handleMenuToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (isOpenMenu) {
+      setOpenMenu(null);
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setMenuPosition(spaceBelow < 280 ? "up" : "down");
+      setOpenMenu(participant.id);
+    }
   };
-
-  const isMuted = participant.is_muted;
 
   return (
     <div className="group flex items-center gap-3 p-3 hover:bg-zinc-800/40 rounded-2xl transition border border-transparent hover:border-zinc-800 relative">
-      {/* --- CỘT 1: AVATAR --- */}
-      <UserAvatar
-        avatar_url={participant.profiles?.avatar_url}
-        user_name={participant.profiles?.full_name || ""}
-        size={36}
-        status={currentStatus}
-      />
+      <SpeakingEffect
+        isSpeaking={isSpeaking && !participant.is_voice_muted}
+        isMicEnabled={isMicEnabled}
+        pulseColor={isMe ? "rose" : "emerald"}
+        size={40}
+      >
+        {hasCamera ? (
+          <div className="w-full h-full rounded-full overflow-hidden border-2 border-emerald-500 shadow-sm bg-zinc-900">
+            <VideoTrack
+              trackRef={myVideoTrack}
+              className={`w-full h-full object-cover ${isMe ? "transform -scale-x-100" : ""}`}
+            />
+          </div>
+        ) : (
+          <UserAvatar
+            avatar_url={participant.profiles?.avatar_url}
+            user_name={participant.profiles?.full_name || ""}
+            size={40}
+            status={currentStatus}
+          />
+        )}
+      </SpeakingEffect>
 
-      {/* --- CỘT 2: THÔNG TIN --- */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p
-            className={`text-sm font-bold truncate ${
-              participant.role === "host" ? "text-red-500" : "text-zinc-200"
-            }`}
+            className={`text-sm font-bold truncate ${participant.role === "host" ? "text-red-500" : "text-zinc-200"}`}
           >
             {participant.profiles?.full_name}
           </p>
@@ -101,48 +124,37 @@ export default function ParticipantItem({
 
         <div className="flex flex-wrap gap-1.5 mt-1">
           {participant.role === "host" && (
-            <span className="text-[8px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded border border-red-500/20 font-black tracking-widest uppercase">
-              Host
-            </span>
+            <StatusBadge variant="host">Host</StatusBadge>
           )}
-
-          {permissions.can_manage_users && (
-            <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-black tracking-widest uppercase">
-              Mod
-            </span>
+          {participant.permissions.can_manage_users && (
+            <StatusBadge variant="mod">Mod</StatusBadge>
           )}
-
-          {isMuted && (
-            <span className="text-[8px] bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/20 font-black tracking-widest uppercase">
-              Muted
-            </span>
+          {participant.is_muted && (
+            <StatusBadge variant="mutedChat">Muted Chat</StatusBadge>
           )}
-
-          {permissions.can_control_media && (
-            <span className="text-[8px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20 font-black tracking-widest uppercase">
-              Remote
-            </span>
+          {participant.is_voice_muted && (
+            <StatusBadge
+              variant="mutedVoice"
+              icon={<MicrophoneIcon className="w-2 h-2" />}
+            >
+              Muted Voice
+            </StatusBadge>
           )}
         </div>
       </div>
 
-      {/* --- CỘT 3: NÚT THAO TÁC --- */}
       {canShowMenu && (
         <div className="relative">
           <button
-            onClick={() => setOpenMenu(isOpenMenu ? null : participant.id)}
-            className={`p-2 rounded-xl transition outline-none ${
-              isOpenMenu
-                ? "bg-zinc-800 text-white"
-                : "text-zinc-500 hover:text-white"
-            }`}
+            onClick={handleMenuToggle}
+            className={`p-2 rounded-xl transition outline-none ${isOpenMenu ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-white"}`}
           >
             <EllipsisVerticalIcon className="w-5 h-5" />
           </button>
-
           {isOpenMenu && (
-            <div className="absolute right-0 top-full mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl z-[100] p-3 space-y-4 animate-in fade-in zoom-in-95 origin-top-right border-t-red-600/50 border-t-2">
-              {/* KHU VỰC PHÂN QUYỀN (CHỈ HOST MỚI THẤY) */}
+            <div
+              className={`absolute right-0 w-56 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl z-[100] p-3 space-y-4 animate-in fade-in zoom-in-95 ${menuPosition === "up" ? "bottom-full mb-2 origin-bottom-right border-b-red-600/50 border-b-2" : "top-full mt-2 origin-top-right border-t-red-600/50 border-t-2"}`}
+            >
               {isRealHost && (
                 <>
                   <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest px-1">
@@ -153,7 +165,7 @@ export default function ParticipantItem({
                     icon={
                       <ShieldCheckIcon className="w-4 h-4 text-emerald-400" />
                     }
-                    enabled={permissions.can_manage_users}
+                    enabled={participant.permissions.can_manage_users}
                     onClick={() =>
                       onTogglePermission(
                         participant.user_id,
@@ -164,7 +176,7 @@ export default function ParticipantItem({
                   <PermissionToggle
                     label="Điều khiển Video"
                     icon={<VideoCameraIcon className="w-4 h-4 text-blue-400" />}
-                    enabled={permissions.can_control_media}
+                    enabled={participant.permissions.can_control_media}
                     onClick={() =>
                       onTogglePermission(
                         participant.user_id,
@@ -175,28 +187,38 @@ export default function ParticipantItem({
                   <div className="h-px bg-zinc-800 my-1" />
                 </>
               )}
-
-              {/* KHU VỰC ĐIỀU KIỂM SOÁT (HOST & MOD ĐỀU THẤY) */}
               <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest px-1">
                 Kiểm soát
               </p>
-
               <PermissionToggle
-                label={isMuted ? "Mở khóa chat" : "Cấm chat"}
+                label={participant.is_muted ? "Mở khóa chat" : "Cấm chat"}
                 icon={
-                  isMuted ? (
+                  participant.is_muted ? (
                     <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-emerald-400" />
                   ) : (
                     <NoSymbolIcon className="w-4 h-4 text-amber-500" />
                   )
                 }
-                enabled={isMuted}
-                variant={isMuted ? "default" : "danger"}
+                enabled={participant.is_muted}
+                variant={participant.is_muted ? "default" : "danger"}
                 onClick={() =>
                   onTogglePermission(participant.user_id, "is_muted")
                 }
               />
-
+              <PermissionToggle
+                label={participant.is_voice_muted ? "Cho phép Mic" : "Cấm Mic"}
+                icon={
+                  <MicrophoneIcon
+                    className={`w-4 h-4 ${participant.is_voice_muted ? "text-rose-500" : "text-emerald-400"}`}
+                  />
+                }
+                enabled={participant.is_voice_muted}
+                variant={participant.is_voice_muted ? "default" : "danger"}
+                onClick={() =>
+                  onTogglePermission(participant.user_id, "is_voice_muted")
+                }
+              />
+              <div className="h-px bg-zinc-800 my-1" />
               <button
                 onClick={() => {
                   onKick(participant.user_id);
@@ -215,9 +237,30 @@ export default function ParticipantItem({
   );
 }
 
-// ----------------------------------------------------------------------
-// 3. COMPONENT PHỤ (CÔNG TẮC BẬT TẮT)
-// ----------------------------------------------------------------------
+function StatusBadge({
+  variant,
+  children,
+  icon,
+}: {
+  variant: "host" | "mod" | "mutedChat" | "mutedVoice";
+  children: React.ReactNode;
+  icon?: React.ReactNode;
+}) {
+  const styles = {
+    host: "bg-red-500/10 text-red-500 border-red-500/20",
+    mod: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    mutedChat: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+    mutedVoice: "bg-rose-500/10 text-rose-500 border-rose-500/20",
+  };
+  return (
+    <span
+      className={`text-[8px] px-1.5 py-0.5 rounded border font-black tracking-widest uppercase flex items-center gap-1 ${styles[variant]}`}
+    >
+      {icon}
+      {children}
+    </span>
+  );
+}
 
 function PermissionToggle({
   label,
@@ -225,7 +268,13 @@ function PermissionToggle({
   enabled,
   onClick,
   variant = "default",
-}: PermissionToggleProps) {
+}: {
+  label: string;
+  icon: React.ReactNode;
+  enabled: boolean;
+  onClick: () => void;
+  variant?: "default" | "danger";
+}) {
   return (
     <div
       className="flex items-center justify-between cursor-pointer group/toggle px-1 py-1"
@@ -233,44 +282,20 @@ function PermissionToggle({
         e.stopPropagation();
         onClick();
       }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          e.stopPropagation();
-          onClick();
-        }
-      }}
-      tabIndex={0}
-      role="switch"
-      aria-checked={enabled}
     >
       <div className="flex items-center gap-3">
         <div
-          className={`p-2 rounded-lg transition-colors ${
-            enabled && variant === "default"
-              ? "bg-emerald-500/10"
-              : enabled && variant === "danger"
-                ? "bg-amber-500/10"
-                : "bg-zinc-800"
-          }`}
+          className={`p-2 rounded-lg transition-colors ${enabled && variant === "default" ? "bg-emerald-500/10" : enabled && variant === "danger" ? "bg-amber-500/10" : "bg-zinc-800"}`}
         >
           {icon}
         </div>
         <p className="text-xs text-zinc-200 font-bold">{label}</p>
       </div>
       <div
-        className={`w-8 h-4 rounded-full relative transition-colors ${
-          enabled
-            ? variant === "danger"
-              ? "bg-amber-600"
-              : "bg-emerald-500"
-            : "bg-zinc-700"
-        }`}
+        className={`w-8 h-4 rounded-full relative transition-colors ${enabled ? (variant === "danger" ? "bg-amber-600" : "bg-emerald-500") : "bg-zinc-700"}`}
       >
         <div
-          className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${
-            enabled ? "translate-x-4" : "translate-x-0.5"
-          }`}
+          className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${enabled ? "translate-x-4" : "translate-x-0.5"}`}
         />
       </div>
     </div>

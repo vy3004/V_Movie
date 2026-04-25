@@ -75,26 +75,28 @@ export default function UserButton() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden py-2">
             {/* Thông tin User */}
             <div className="px-4 py-2 border-b border-zinc-800">
-              <p className="text-sm font-semibold text-white truncate">
-                {fullName}
-              </p>
-              <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
+              <Link href="/dashboard">
+                <p className="text-sm font-semibold text-white truncate">
+                  {fullName}
+                </p>
+                <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
+              </Link>
             </div>
 
             {/* Các lựa chọn Menu */}
             <div className="p-1">
               <MenuLink
-                href="/watchlist"
+                href="/dashboard/subscriptions"
                 icon={<HeartIcon className="w-5 h-5" />}
                 label="Yêu thích"
               />
               <MenuLink
-                href="/history"
+                href="/dashboard/history"
                 icon={<ClockIcon className="w-5 h-5" />}
                 label="Lịch sử"
               />
               <MenuLink
-                href="/profile"
+                href="/dashboard/profile"
                 icon={<UserIcon className="w-5 h-5" />}
                 label="Hồ sơ"
               />

@@ -49,11 +49,11 @@ const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
               <ImageCustom
                 alt={movie.origin_name}
                 src={`${movie.poster_url}`}
-                widths={[1280, 1024, 768, 640, 432]}
+                widths={[640, 828, 1280, 1600, 1920]}
                 sizes="100vw"
                 loading={i === 0 ? "eager" : "lazy"}
                 fetchPriority={i === 0 ? "high" : undefined}
-                quality={85}
+                quality={75}
                 className="absolute inset-0 size-full object-cover"
               />
               {/* Overlay gradients */}

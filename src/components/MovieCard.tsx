@@ -18,12 +18,16 @@ export default function MovieCard({
   episode_current,
 }: MovieCardProps) {
   return (
-    <Link href={`/phim/${movie_slug}`} className="space-y-2 relative group">
+    <Link
+      href={`/phim/${movie_slug}`}
+      prefetch={false}
+      className="space-y-2 relative group"
+    >
       <div className="relative aspect-[3/4] h-5/6 w-full rounded-lg overflow-hidden">
         <ImageCustom
           src={thumb_url}
           alt={name}
-          widths={[320, 256, 200, 160]}
+          widths={[256, 384, 512, 640]}
           sizes="(max-width: 640px) 46vw, (max-width: 768px) 33.33vw, (max-width: 1024px) 25vw, 16.67vw"
           loading="lazy"
           className="absolute inset-0 object-cover size-full hover:scale-110 transition duration-500 ease-in-out"

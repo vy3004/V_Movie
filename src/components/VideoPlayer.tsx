@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import NProgress from "nprogress";
 import { createPortal } from "react-dom";
 import videojs from "video.js";
 import Player from "video.js/dist/types/player";
@@ -9,9 +10,10 @@ import { User } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useVideoPlayer } from "@/hooks/useVideoPlayer";
-import { useSubscription } from "@/hooks/useSubscription";
+import { useSubscriptionAction } from "@/hooks/useSubscription";
 import { Movie, PlayerSyncRef } from "@/types";
 import VideoControls from "@/components/VideoControls";
+import AudioDuckingManager from "@/components/watch-party/AudioDuckingManager";
 
 interface Props {
   user: User | null | undefined;
@@ -140,25 +142,26 @@ export default function VideoPlayer(props: Props) {
     isFollowed,
     toggleFollow,
     isLoading: isFollowLoading,
-  } = useSubscription({ user: props.user, movie: props.movie });
+  } = useSubscriptionAction({ user: props.user, movie: props.movie });
 
-  const { syncFromRemote, getCurrentState, isSyncing } = useVideoPlayer({
-    videoRef,
-    movieSrc: props.movieSrc,
-    initialTime: props.initialTime || 0,
-    nextEpisodeSlug: props.nextEpisodeSlug,
-    isAutoNext,
-    onProgress: props.onProgress,
-    onAutoNext: props.onAutoNext,
-    onPause: props.onPause,
-    isWatchParty: props.isWatchParty,
-    canControl: props.canControl,
-    isHost: props.isHost,
-    onPlaySync: handlePlaySync,
-    onPauseSync: handlePauseSync,
-    onSeekSync: handleSeekSync,
-    onPlayerReady: handlePlayerReady,
-  });
+  const { playerRef, syncFromRemote, getCurrentState, isSyncing } =
+    useVideoPlayer({
+      videoRef,
+      movieSrc: props.movieSrc,
+      initialTime: props.initialTime || 0,
+      nextEpisodeSlug: props.nextEpisodeSlug,
+      isAutoNext,
+      onProgress: props.onProgress,
+      onAutoNext: props.onAutoNext,
+      onPause: props.onPause,
+      isWatchParty: props.isWatchParty,
+      canControl: props.canControl,
+      isHost: props.isHost,
+      onPlaySync: handlePlaySync,
+      onPauseSync: handlePauseSync,
+      onSeekSync: handleSeekSync,
+      onPlayerReady: handlePlayerReady,
+    });
 
   useEffect(() => {
     if (props.playerSyncRef) {
@@ -204,11 +207,21 @@ export default function VideoPlayer(props: Props) {
 
   const guestModeClasses =
     !props.canControl && props.isWatchParty
-      ? "[&_.vjs-tech]:pointer-events-none [&_.vjs-play-control]:pointer-events-none [&_.vjs-progress-control]:pointer-events-none [&_.vjs-play-control]:opacity-50 [&_.vjs-progress-control]:opacity-50"
+      ? [
+          "[&_.vjs-tech]:pointer-events-none", // Khóa click trực tiếp vào video
+          "[&_.vjs-play-control]:pointer-events-none [&_.vjs-play-control]:opacity-50", // Khóa nút Play nhỏ ở thanh dưới
+          "[&_.vjs-progress-control]:pointer-events-none [&_.vjs-progress-control]:opacity-50", // Khóa tua video
+          "[&_.vjs-big-play-button]:pointer-events-none [&_.vjs-big-play-button]:opacity-50", // KHÓA NÚT PLAY KHỔNG LỒ
+        ].join(" ")
       : "";
 
   return (
     <div className="relative">
+      {/* NẾU ĐANG XEM CHUNG -> BẬT DUCKING MANAGER LÊN */}
+      {props.isWatchParty && playerRef.current && (
+        <AudioDuckingManager player={playerRef.current} />
+      )}
+
       {isLightsOff && (
         <div
           className="fixed inset-0 bg-black/95 z-[60]"
@@ -263,6 +276,7 @@ export default function VideoPlayer(props: Props) {
                 props.onChangeEpisode(props.prevEpisodeSlug);
               }
             } else {
+              NProgress.start();
               router.push(`?tap=${props.prevEpisodeSlug}#video`, {
                 scroll: false,
               });
@@ -275,6 +289,7 @@ export default function VideoPlayer(props: Props) {
                 props.onChangeEpisode(props.nextEpisodeSlug);
               }
             } else {
+              NProgress.start();
               router.push(`?tap=${props.nextEpisodeSlug}#video`, {
                 scroll: false,
               });

@@ -1,4 +1,5 @@
 import "server-only";
+
 import { redis } from "@/lib/redis";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { HistoryItem, HistoryUpdatePayload, EpisodeProgress } from "@/types";
@@ -11,7 +12,87 @@ const getHistoryKey = (userId?: string, deviceId?: string) => {
 
 export const HistoryService = {
   /**
-   * Lấy lịch sử của MỘT bộ phim cụ thể (Dùng cho trang phim)
+   * 1. HỦY CACHE TRANG ĐẦU (Dùng khi Xóa hoặc Sync số lượng lớn)
+   */
+  invalidateHistoryCache: async (userId?: string, deviceId?: string) => {
+    if (!redis) return;
+    const key = getHistoryKey(userId, deviceId);
+    if (!key) return;
+
+    const pipeline = redis.pipeline();
+    pipeline.del(`${key}:top:all`);
+    pipeline.del(`${key}:top:watching`);
+    pipeline.del(`${key}:top:finished`);
+    await pipeline.exec();
+  },
+
+  /**
+   * 2. SỬA CACHE TRANG ĐẦU TẠI CHỖ (Mutation - Nhanh như chớp)
+   * Dùng khi cập nhật tiến trình xem (trackProgress)
+   */
+  mutateTopCache: async (
+    userId?: string,
+    deviceId?: string,
+    updatedItem?: HistoryItem,
+  ) => {
+    if (!redis || !updatedItem) return;
+    const key = getHistoryKey(userId, deviceId);
+    if (!key) return;
+
+    const updateSpecificCache = async (
+      filter: string,
+      shouldInclude: boolean,
+    ) => {
+      const cacheKey = `${key}:top:${filter}`;
+
+      // BỎ ÉP KIỂU <string> Ở ĐÂY, VÌ UPSTASH SẼ TRẢ VỀ BẤT CỨ THỨ GÌ NÓ PARSE ĐƯỢC
+      const cachedData = await redis?.get(cacheKey);
+
+      if (!cachedData) return; // Nếu ngăn này chưa ai tạo thì bỏ qua
+
+      let list: HistoryItem[] = [];
+
+      try {
+        // KIỂM TRA ĐỊNH DẠNG TRƯỚC KHI PARSE
+        if (typeof cachedData === "string") {
+          if (cachedData.includes("[object Object]"))
+            throw new Error("Cache rác");
+          list = JSON.parse(cachedData) as HistoryItem[];
+        } else if (Array.isArray(cachedData)) {
+          list = cachedData as HistoryItem[];
+        } else {
+          throw new Error("Định dạng cache không hợp lệ");
+        }
+      } catch {
+        // Nếu parse lỗi, dọn dẹp ngay cái cache thiu này để app không bị crash
+        console.warn(`🧹 Dọn dẹp cache bị lỗi tại: ${cacheKey}`);
+        await redis?.del(cacheKey);
+        return;
+      }
+
+      // Xóa bản ghi cũ nếu đã tồn tại
+      list = list.filter((item) => item.movie_slug !== updatedItem.movie_slug);
+
+      // Nhét lên đầu trang nếu thỏa mãn điều kiện bộ lọc
+      if (shouldInclude) {
+        list.unshift(updatedItem);
+        if (list.length > 16) list.pop(); // Giữ đúng giới hạn trang chủ (ví dụ: 16)
+      }
+
+      // Lúc SET thì BẮT BUỘC phải JSON.stringify
+      await redis?.set(cacheKey, JSON.stringify(list), { ex: 3600 });
+    };
+
+    // Chạy song song cập nhật cả 3 ngăn Cache
+    await Promise.all([
+      updateSpecificCache("all", true),
+      updateSpecificCache("watching", !updatedItem.is_finished),
+      updateSpecificCache("finished", updatedItem.is_finished),
+    ]);
+  },
+
+  /**
+   * 3. Lấy 1 bộ phim (Dùng cho trang phim)
    */
   getLatest: async (
     userId: string,
@@ -21,15 +102,13 @@ export const HistoryService = {
 
     try {
       if (redis) {
-        // HGET có thể trả về string (dữ liệu thô) hoặc null
         const movieData = await redis.hget<string | HistoryItem>(
           hashKey,
           movieSlug,
         );
         if (movieData) {
-          console.log(`🚀[History Hit] Redis: ${movieSlug}`);
           return typeof movieData === "string"
-            ? (JSON.parse(movieData) as HistoryItem)
+            ? JSON.parse(movieData)
             : movieData;
         }
       }
@@ -42,13 +121,7 @@ export const HistoryService = {
         .eq("movie_slug", movieSlug)
         .maybeSingle();
 
-      if (error) {
-        console.error(
-          "❌ [HistoryService.getLatest] Supabase Error:",
-          error.message,
-        );
-        return null;
-      }
+      if (error) return null;
 
       if (data && redis) {
         await redis.hset(hashKey, { [movieSlug]: JSON.stringify(data) });
@@ -57,65 +130,145 @@ export const HistoryService = {
 
       return data as HistoryItem;
     } catch (err) {
-      console.error(
-        `❌[HistoryService.getLatest] Fatal Error [${movieSlug}]:`,
-        err,
-      );
+      console.error(`❌[HistoryService.getLatest] Error:`, err);
       return null;
     }
   },
 
   /**
-   * 1. Lấy danh sách lịch sử (Redis -> DB -> Backfill)
+   * 4. Lấy danh sách (Có Redis chặn cửa cho trang đầu)
    */
-  getList: async (
-    userId?: string,
-    deviceId?: string,
-  ): Promise<HistoryItem[]> => {
+  getListPaginated: async ({
+    userId,
+    deviceId,
+    page = 1,
+    limit = 12,
+    keyword = "",
+    filter = "all",
+  }: {
+    userId?: string;
+    deviceId?: string;
+    page?: number;
+    limit?: number;
+    keyword?: string;
+    filter?: string;
+  }) => {
+    const isFirstPageNoSearch = page === 1 && !keyword;
     const key = getHistoryKey(userId, deviceId);
-    if (!key) return [];
+    const cacheKey = isFirstPageNoSearch && key ? `${key}:top:${filter}` : null;
 
-    if (redis) {
-      // HGETALL trả về Record<string, string>
-      const cached = await redis.hgetall<Record<string, string>>(key);
-      if (cached && Object.keys(cached).length > 0) {
-        return Object.values(cached)
-          .map(
-            (v: string | HistoryItem) =>
-              (typeof v === "string" ? JSON.parse(v) : v) as HistoryItem,
-          )
-          .sort(
-            (a, b) =>
-              new Date(b.updated_at).getTime() -
-              new Date(a.updated_at).getTime(),
-          );
+    // A. Thử lấy từ Cache trước
+    if (cacheKey && redis) {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        try {
+          const parsed = (
+            typeof cached === "string" ? JSON.parse(cached) : cached
+          ) as HistoryItem[];
+
+          return {
+            data: parsed.slice(0, limit),
+            nextCursor: parsed.length >= limit ? 2 : null,
+            total: parsed.length,
+          };
+        } catch {
+          console.warn(`Dọn dẹp cache bị lỗi tại: ${cacheKey}`);
+       redis.del(cacheKey).catch(() => {});
+        }
       }
     }
-
+    // B. Cache Miss -> Xuống Database
     const supabase = await createSupabaseServer();
-    let query = supabase.from("watch_history").select("*");
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = supabase.from("watch_history").select("*", { count: "exact" });
     if (userId) query = query.eq("user_id", userId);
     else query = query.eq("device_id", deviceId);
 
-    const { data, error } = await query.order("updated_at", {
-      ascending: false,
-    });
-    if (error || !data) return [];
+    if (filter === "finished") query = query.eq("is_finished", true);
+    else if (filter === "watching") query = query.eq("is_finished", false);
+    if (keyword) query = query.ilike("movie_name", `%${keyword}%`);
 
-    if (redis && data.length > 0) {
-      const pipeline = redis.pipeline();
-      data.forEach((item) => {
-        pipeline.hset(key, { [item.movie_slug]: JSON.stringify(item) });
-      });
-      pipeline.expire(key, 604800);
-      await pipeline.exec();
+    const { data, error, count } = await query
+      .order("updated_at", { ascending: false })
+      .range(from, to);
+
+    if (error) return { data: [], nextCursor: null, total: 0 };
+
+    const result = {
+      data: (data as HistoryItem[]) || [],
+      nextCursor: count && to < count - 1 ? page + 1 : null,
+      total: count || 0,
+    };
+
+    // C. Lưu Cache
+    if (cacheKey && redis && result.data.length > 0) {
+      await redis.set(cacheKey, JSON.stringify(result.data), { ex: 3600 });
     }
 
-    return data as HistoryItem[];
+    return result;
   },
 
   /**
-   * 2. Tracking nhanh vào Redis (Dành cho Beacon định kỳ 30s)
+   * 5. XÓA 1 phim
+   */
+  deleteItem: async (userId: string, movieSlug: string) => {
+    const supabase = await createSupabaseServer();
+
+    // 1. Thêm .select() để lấy trạng thái is_finished của phim vừa bị xóa
+    const { data, error } = await supabase
+      .from("watch_history")
+      .delete()
+      .eq("user_id", userId)
+      .eq("movie_slug", movieSlug)
+      .select("is_finished");
+
+    if (error) throw error;
+
+    // 2. Nếu thực sự có phim bị xóa, ta lấy trạng thái đó để cập nhật bảng điểm
+    if (data && data.length > 0) {
+      const isFinished = data[0].is_finished;
+      await HistoryService.updateStatsCounter(userId, "DELETE", isFinished);
+    }
+
+    // 3. Xóa Cache
+    if (redis) {
+      const key = getHistoryKey(userId);
+      if (key) {
+        await redis.hdel(key, movieSlug);
+        await HistoryService.invalidateHistoryCache(userId);
+      }
+    }
+  },
+
+  /**
+   * 6. XÓA TOÀN BỘ
+   */
+  clearAll: async (userId: string) => {
+    const supabase = await createSupabaseServer();
+    const { error } = await supabase
+      .from("watch_history")
+      .delete()
+      .eq("user_id", userId);
+
+    if (error) throw error;
+
+    if (redis) {
+      const key = getHistoryKey(userId);
+      if (key) {
+        await redis.del(key); // Xóa toàn bộ lịch sử trong Redis
+        await HistoryService.invalidateHistoryCache(userId); // Xóa mảng Top Cache
+      }
+
+      // Reset bảng điểm về 0 bằng cách xóa luôn key stats
+      const statsKey = `history:stats:user:${userId}`;
+      await redis.del(statsKey);
+    }
+  },
+
+  /**
+   * 7. TRACKING (Cứ 30s ghi 1 lần)
    */
   trackProgress: async (payload: HistoryUpdatePayload) => {
     const key = getHistoryKey(payload.user_id, payload.device_id);
@@ -125,6 +278,15 @@ export const HistoryService = {
       key,
       payload.movie_slug,
     );
+
+    const isNewMovie = !existing; // Nếu rỗng -> là phim mới
+    const oldIsFinished = existing
+      ? (
+          (typeof existing === "string"
+            ? JSON.parse(existing)
+            : existing) as HistoryItem
+        ).is_finished
+      : false;
 
     const historyItem: HistoryItem = existing
       ? ((typeof existing === "string"
@@ -143,7 +305,6 @@ export const HistoryService = {
 
     const isCurrentEpFinished =
       payload.duration > 0 && payload.current_time / payload.duration > 0.9;
-
     const finalEpFinished =
       historyItem.episodes_progress[payload.last_episode_slug]
         ?.ep_is_finished || isCurrentEpFinished;
@@ -166,32 +327,44 @@ export const HistoryService = {
           ?.ep_is_finished || false;
     }
 
+    const newIsFinished = historyItem.is_finished;
+
+    // Lưu Hash Cache
     await redis.hset(key, {
       [payload.movie_slug]: JSON.stringify(historyItem),
     });
     await redis.expire(key, 604800);
+
+    // GỌI BẢNG ĐIỂM
+    if (payload.user_id) {
+      if (isNewMovie) {
+        await HistoryService.updateStatsCounter(
+          payload.user_id,
+          "ADD",
+          newIsFinished,
+        );
+      } else if (oldIsFinished !== newIsFinished) {
+        await HistoryService.updateStatsCounter(
+          payload.user_id,
+          "STATUS_CHANGE",
+          newIsFinished,
+        );
+      }
+    }
+
+    // SỬA TOP CACHE (Không xóa, giúp giảm tải DB tối đa)
+    await HistoryService.mutateTopCache(
+      payload.user_id,
+      payload.device_id,
+      historyItem,
+    );
   },
 
   /**
-   * Cập nhật Cache Redis thay vì xóa (Write-through Cache)
-   */
-  updateCache: async (userId: string, updatedItem: HistoryItem) => {
-    if (!redis) return;
-    const key = getHistoryKey(userId);
-    if (!key) return;
-
-    await redis.hset(key, {
-      [updatedItem.movie_slug]: JSON.stringify(updatedItem),
-    });
-    await redis.expire(key, 604800);
-  },
-
-  /**
-   * Lưu MỘT phim vào DB (Dùng khi user thoát trang/chuyển tập)
+   * 8. SYNC VÀO DB (Khi chuyển tập / Tắt trang)
    */
   syncItemToDB: async (userId: string, incomingItem: HistoryItem) => {
     const supabase = await createSupabaseServer();
-
     const { data: existing } = await supabase
       .from("watch_history")
       .select("id, episodes_progress, last_episode_of_movie_slug, is_finished")
@@ -252,11 +425,25 @@ export const HistoryService = {
       .upsert(finalItem, { onConflict: "id" });
     if (error) throw error;
 
-    await HistoryService.updateCache(userId, finalItem as HistoryItem);
+    if (redis) {
+      const key = getHistoryKey(userId);
+      if (key) {
+        await redis.hset(key, {
+          [finalItem.movie_slug]: JSON.stringify(finalItem),
+        });
+        await redis.expire(key, 604800);
+      }
+    }
+    // Sửa cache trang chủ
+    await HistoryService.mutateTopCache(
+      userId,
+      undefined,
+      finalItem as HistoryItem,
+    );
   },
 
   /**
-   * LƯU NHIỀU PHIM VÀO DB (Xử lý lỗi N+1 Query)
+   * 9. LƯU SỐ LƯỢNG LỚN (Bulk)
    */
   bulkSyncToDB: async (userId: string, localItems: HistoryItem[]) => {
     if (!localItems || localItems.length === 0) return;
@@ -277,6 +464,7 @@ export const HistoryService = {
     const cachePayloads: HistoryItem[] = [];
 
     for (const item of localItems) {
+      // (Logic Merge của bạn... giữ nguyên)
       const existing = existingMap.get(item.movie_slug);
       const existingProgress =
         (existing?.episodes_progress as Record<string, EpisodeProgress>) || {};
@@ -344,7 +532,84 @@ export const HistoryService = {
         });
         pipeline.expire(key, 604800);
         await pipeline.exec();
+
+        // Vì số lượng cập nhật lớn, ta dùng Invalidate để đảm bảo an toàn mảng thay vì gọi mutate quá nhiều lần
+        await HistoryService.invalidateHistoryCache(userId);
       }
     }
+  },
+
+  /**
+   * 9. HÀM CẬP NHẬT BẢNG ĐIỂM (Chạy ngầm mỗi khi trackProgress hoặc delete)
+   */
+  updateStatsCounter: async (
+    userId: string,
+    action: "ADD" | "DELETE" | "STATUS_CHANGE",
+    isFinishedNow: boolean = false,
+  ) => {
+    if (!redis) return;
+    const statsKey = `history:stats:user:${userId}`;
+
+    // Kiểm tra xem bảng điểm đã tồn tại chưa (nếu chưa thì bỏ qua để hàm getStats tự fallback đếm lại từ DB)
+    const exists = await redis.exists(statsKey);
+    if (!exists) return;
+
+    const pipeline = redis.pipeline();
+
+    if (action === "ADD") {
+      pipeline.hincrby(statsKey, "total", 1);
+      pipeline.hincrby(statsKey, isFinishedNow ? "finished" : "watching", 1);
+    } else if (action === "DELETE") {
+      pipeline.hincrby(statsKey, "total", -1);
+      pipeline.hincrby(statsKey, isFinishedNow ? "finished" : "watching", -1);
+    } else if (action === "STATUS_CHANGE") {
+      if (isFinishedNow) {
+        pipeline.hincrby(statsKey, "watching", -1);
+        pipeline.hincrby(statsKey, "finished", 1);
+      } else {
+        pipeline.hincrby(statsKey, "watching", 1);
+        pipeline.hincrby(statsKey, "finished", -1);
+      }
+    }
+    await pipeline.exec();
+  },
+
+  /**
+   * 10. LẤY THỐNG KÊ (Zero-Query cho UI)
+   */
+  getStats: async (userId: string) => {
+    const statsKey = `history:stats:user:${userId}`;
+
+    if (redis) {
+      const cachedStats = await redis.hgetall(statsKey);
+      if (cachedStats && Object.keys(cachedStats).length > 0) {
+        return {
+          total: Number(cachedStats.total || 0),
+          watching: Number(cachedStats.watching || 0),
+          finished: Number(cachedStats.finished || 0),
+        };
+      }
+    }
+
+    // FALLBACK: Nếu Redis rỗng (bị xóa cache), đành phải chọc DB 1 lần để tạo lại bảng điểm
+    const supabase = await createSupabaseServer();
+    const { data, error } = await supabase
+      .from("watch_history")
+      .select("is_finished") // Chỉ select cột is_finished cho nhẹ
+      .eq("user_id", userId);
+
+    if (error || !data) return { total: 0, watching: 0, finished: 0 };
+
+    const total = data.length;
+    const finished = data.filter((d) => d.is_finished).length;
+    const watching = total - finished;
+
+    // Tạo lại bảng điểm trên Redis, lưu 7 ngày
+    if (redis) {
+      await redis.hset(statsKey, { total, watching, finished });
+      await redis.expire(statsKey, 604800);
+    }
+
+    return { total, watching, finished };
   },
 };

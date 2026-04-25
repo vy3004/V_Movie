@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import NProgress from "nprogress";
 import { toast } from "sonner";
 
 export default function AutoJoinClient({ roomId }: { roomId: string }) {
@@ -17,6 +18,7 @@ export default function AutoJoinClient({ roomId }: { roomId: string }) {
         router.refresh(); // Refresh để Server chuyển màn hình
       else {
         toast.error("Không thể tham gia phòng");
+        NProgress.start();
         router.push("/xem-chung");
       }
     };

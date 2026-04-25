@@ -96,7 +96,16 @@ export function useCommentMutations({
           rootId,
         }),
       });
-      if (!res.ok) throw new Error("Server error");
+      if (!res.ok) {
+        let errorMessage = "Lỗi máy chủ, không thể gửi bình luận.";
+        try {
+          const errorData = await res.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // Response không phải JSON
+        }
+        throw new Error(errorMessage);
+      }
       return res.json().then((d) => d.comment as CommentItem);
     },
     onMutate: async ({ content }) => {
@@ -162,8 +171,7 @@ export function useCommentMutations({
         };
       });
     },
-    onError: (_err, _vars, context) => {
-      // FIX LỖI CACHE TREO: Nếu chưa từng có data, xóa luôn cache thay vì để lại Comment Ảo
+    onError: (err, _vars, context) => {
       if (context?.previousData) {
         queryClient.setQueryData(currentQueryKey, context.previousData);
       } else {
@@ -173,7 +181,10 @@ export function useCommentMutations({
         });
       }
       if (safeParentId) updateParentReplyCount(safeParentId, -1);
-      toast.error("Không thể gửi bình luận.");
+
+      toast.error(
+        err instanceof Error ? err.message : "Không thể gửi bình luận.",
+      );
     },
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: currentQueryKey }),
@@ -308,7 +319,7 @@ export function useCommentMutations({
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["comments", movieSlug] });
       queryClient.invalidateQueries({ queryKey: ["comment-lineage"] });
-    }
+    },
   });
 
   return {

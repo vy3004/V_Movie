@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { messageSchema } from "@/lib/validations/message.validation";
-
-export const runtime = "edge";
+import { sanitizeHtml } from "@/lib/utils";
 
 export async function GET(request: Request) {
   try {
@@ -54,7 +53,6 @@ export async function GET(request: Request) {
   }
 }
 
-// --- 2. HÀM GỬI TIN NHẮN (BẢN BẢO MẬT TỐI ĐA) ---
 export async function POST(request: Request) {
   try {
     const supabase = await createSupabaseServer();
@@ -66,16 +64,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await request.json();
-    const parsedData = messageSchema.safeParse(body);
 
-    if (!parsedData.success) {
-      return NextResponse.json(
-        { error: parsedData.error.issues[0].message },
-        { status: 400 },
-      );
+    const cleanText = sanitizeHtml(body.text || "");
+
+    const result = messageSchema.safeParse({
+      ...body,
+      text: cleanText,
+    });
+
+    if (!result.success) {
+      const isActuallyEmpty = (body.text || "").trim().length === 0;
+      let errorMessage = result.error.issues[0].message;
+
+      // Thông báo lỗi nếu hacker chèn mã độc
+      if (!isActuallyEmpty && errorMessage === "Tin nhắn không được để trống") {
+        errorMessage = "Nội dung tin nhắn không hợp lệ";
+      }
+
+      return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
 
-    const { id, roomId, text, type, metadata } = parsedData.data;
+    const { id, roomId, text, type, metadata } = result.data;
 
     // Lấy quyền của User và Setting của phòng
     const [{ data: participant }, { data: roomInfo }] = await Promise.all([
@@ -128,7 +137,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Insert tin nhắn
     const { data: message, error: mErr } = await supabase
       .from("watch_party_messages")
       .insert({
@@ -137,7 +145,7 @@ export async function POST(request: Request) {
         user_id: user.id,
         user_name: user.user_metadata?.full_name || "Guest",
         avatar_url: user.user_metadata?.avatar_url || "",
-        text,
+        text: text, 
         type,
         metadata,
       })

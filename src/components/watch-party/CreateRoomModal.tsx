@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import NProgress from "nprogress";
 import { useInView } from "react-intersection-observer";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -104,6 +105,7 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
 
       if (result.room) {
         toast.success("Tạo phòng thành công!");
+        NProgress.start();
         router.push(`/xem-chung/${result.room.room_code}`);
       } else {
         toast.error(result.error);

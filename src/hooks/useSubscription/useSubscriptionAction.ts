@@ -12,28 +12,26 @@ interface UseSubscriptionProps {
   movie: Movie;
 }
 
-export function useSubscription({ user, movie }: UseSubscriptionProps) {
+export function useSubscriptionAction({ user, movie }: UseSubscriptionProps) {
   const queryClient = useQueryClient();
   const userId = user?.id || "guest";
   const movieSlug = movie?.slug || "";
 
-  // Danh sách các Key dùng chung
-  const subQueryKey = ["subscription", movieSlug, userId];
-  const listQueryKey = ["subscriptions-list", userId];
+  const subStatusKey = ["subscription-status", movieSlug, userId];
+  const listQueryKey = ["subscriptions-list"];
+  const statsQueryKey = ["subscriptions-stats"];
 
   // 1. Lấy trạng thái theo dõi
   const { data: isFollowed = false } = useQuery({
-    queryKey: subQueryKey,
+    queryKey: subStatusKey,
     queryFn: async () => {
       if (!movie) return false;
-
       if (!user) {
-        if (typeof window === "undefined") return false;
         const subs = getLocalSubscriptions();
         return subs.some((s) => s.movie_slug === movie.slug);
       }
       const res = await fetch(
-        `/api/subscriptions/check?movieSlug=${movie.slug}`,
+        `/api/subscriptions/check?movieSlug=${encodeURIComponent(movie.slug)}`,
       );
       if (!res.ok) return false;
       const data = await res.json();
@@ -48,17 +46,12 @@ export function useSubscription({ user, movie }: UseSubscriptionProps) {
     mutationFn: async (currentlyFollowed: boolean) => {
       if (!movie) throw new Error("Chưa tải xong thông tin phim");
 
-      const firstEpisode = movie.episodes?.[0];
-      const lastEpisodeSlug =
-        firstEpisode?.server_data?.[
-          firstEpisode.server_data.length - 1
-        ]?.slug?.trim();
-
       const itemPayload: SubscriptionItem = {
         movie_slug: movie.slug,
         movie_name: movie.name,
         movie_poster: movie.thumb_url,
-        last_known_episode_slug: lastEpisodeSlug,
+        last_known_episode_slug:
+          movie.episodes?.[0]?.server_data?.slice(-1)[0]?.slug,
         movie_status: movie.status,
         has_new_episode: false,
       };
@@ -66,10 +59,13 @@ export function useSubscription({ user, movie }: UseSubscriptionProps) {
       if (!user) return toggleLocalSubscription(itemPayload);
 
       if (currentlyFollowed) {
-        const res = await fetch(`/api/subscriptions?movieSlug=${movie.slug}`, {
-          method: "DELETE",
-        });
-        if (!res.ok) throw new Error();
+        const res = await fetch(
+          `/api/subscriptions?movieSlug=${encodeURIComponent(movie.slug)}`,
+          {
+            method: "DELETE",
+          },
+        );
+        if (!res.ok) throw new Error("Lỗi khi hủy theo dõi");
         return false;
       } else {
         const res = await fetch("/api/subscriptions", {
@@ -81,29 +77,35 @@ export function useSubscription({ user, movie }: UseSubscriptionProps) {
         return true;
       }
     },
-
-    onMutate: async (currentlyFollowed: boolean) => {
-      await queryClient.cancelQueries({ queryKey: subQueryKey });
-      const previousState = queryClient.getQueryData<boolean>(subQueryKey);
-      queryClient.setQueryData(subQueryKey, !currentlyFollowed);
+    onMutate: async (currentlyFollowed) => {
+      // Optimistic Update cho nút Heart
+      await queryClient.cancelQueries({ queryKey: subStatusKey });
+      const previousState = queryClient.getQueryData<boolean>(subStatusKey);
+      queryClient.setQueryData(subStatusKey, !currentlyFollowed);
       return { previousState };
     },
     onError: (err, _var, context) => {
-      queryClient.setQueryData(subQueryKey, context?.previousState);
+      queryClient.setQueryData(subStatusKey, context?.previousState);
       toast.error("Thao tác thất bại!");
     },
     onSuccess: (_, currentlyFollowed) => {
       toast.success(
         currentlyFollowed ? "Đã hủy theo dõi" : "Đã theo dõi phim này",
       );
+
+      // LÀM MỚI CACHE NGAY LẬP TỨC ĐỂ TRANG CHỦ CẬP NHẬT
+      queryClient.invalidateQueries({ queryKey: listQueryKey });
+      queryClient.invalidateQueries({ queryKey: statsQueryKey });
+
+      // Phát sự kiện cho các Tab khác
+      window.dispatchEvent(new Event("subscription-updated"));
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: subQueryKey });
-      queryClient.invalidateQueries({ queryKey: listQueryKey });
+      queryClient.invalidateQueries({ queryKey: subStatusKey });
     },
   });
 
-  // 3. Mutation: Xóa Badge (Chấm đỏ tập mới) - TÍCH HỢP MỚI
+  // 3. Mutation: Xóa Badge (Chấm đỏ tập mới)
   const clearBadgeMutation = useMutation({
     mutationFn: async () => {
       if (!user) {
@@ -119,36 +121,15 @@ export function useSubscription({ user, movie }: UseSubscriptionProps) {
       }
       const res = await fetch("/api/subscriptions/clear-badge", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ movieSlug: movie.slug }),
       });
       if (!res.ok) throw new Error("Failed to clear badge");
     },
-    onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: listQueryKey });
-      const previousList =
-        queryClient.getQueryData<SubscriptionItem[]>(listQueryKey);
-
-      // Optimistic update cho danh sách subscription
-      queryClient.setQueryData(
-        listQueryKey,
-        (old: SubscriptionItem[] | undefined) => {
-          return old?.map((s) =>
-            s.movie_slug === movie.slug ? { ...s, has_new_episode: false } : s,
-          );
-        },
-      );
-
-      return { previousList };
-    },
-    onError: (_err, _var, context) => {
-      if (context?.previousList) {
-        queryClient.setQueryData(listQueryKey, context.previousList);
-      }
-    },
-    onSettled: () => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: listQueryKey });
-      // Cập nhật lại cả trạng thái follow nếu cần
-      queryClient.invalidateQueries({ queryKey: subQueryKey });
+      queryClient.invalidateQueries({ queryKey: statsQueryKey });
+      window.dispatchEvent(new Event("subscription-updated"));
     },
   });
 

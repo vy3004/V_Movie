@@ -74,20 +74,20 @@ export default function ChatInputForm({
             onChange={(e) => setText(e.target.value)}
             onFocus={() => setIsTyping(true)}
             disabled={isMuted}
-            maxLength={200}
+            maxLength={150}
             placeholder={isMuted ? "Bị cấm chat..." : "Nhấn Enter để chat..."}
             className={`w-full bg-transparent border border-transparent rounded-2xl px-2 py-2.5 text-[14px] text-white focus:outline-none placeholder:text-white/60 disabled:opacity-50 transition-all duration-300 ${
-              text.length > 150 ? "pr-[95px]" : "pr-[40px]"
+              text.length > 100 ? "pr-[95px]" : "pr-[40px]"
             }`}
           />
 
-          {text.length > 150 && (
+          {text.length > 100 && (
             <span
               className={`absolute right-[45px] z-10 pointer-events-none text-[10px] px-1 py-0.5 rounded-md bg-black/40 backdrop-blur-md animate-in fade-in zoom-in duration-200 ${
-                text.length >= 200 ? "text-red-400 font-bold" : "text-white/80"
+                text.length >= 150 ? "text-red-400 font-bold" : "text-white/80"
               }`}
             >
-              {text.length}/200
+              {text.length}/150
             </span>
           )}
 

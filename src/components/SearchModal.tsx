@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import NProgress from "nprogress";
 import Link from "next/link";
 import { useInView } from "react-intersection-observer";
 import { useForm } from "react-hook-form";
@@ -95,6 +96,7 @@ export default function SearchModal({ isOpen, onClose }: Props) {
 
   const onFormSubmit = (data: SearchFormValues) => {
     if (activeIndex === -1 && data.keyword && data.keyword.trim().length >= 2) {
+      NProgress.start();
       router.push(
         `/tim-kiem?keyword=${encodeURIComponent(data.keyword.trim())}`,
       );
@@ -111,6 +113,7 @@ export default function SearchModal({ isOpen, onClose }: Props) {
       setActiveIndex((prev) => (prev > -1 ? prev - 1 : -1));
     } else if (e.key === "Enter" && activeIndex !== -1) {
       e.preventDefault();
+      NProgress.start();
       router.push(`/phim/${movies[activeIndex].slug}`);
       onClose();
     } else if (e.key === "Escape") {

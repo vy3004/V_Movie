@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { WatchPartyParticipant, UserPresence } from "@/types";
@@ -16,6 +16,7 @@ interface HostSuccessionProps {
 }
 
 const SUCCESSION_TOAST_ID = "host-succession-toast";
+const GRACE_PERIOD_MS = 5 * 60 * 1000; // 5 phút (300.000 ms)
 
 export function useHostSuccession({
   participants,
@@ -27,47 +28,63 @@ export function useHostSuccession({
   isActive,
 }: HostSuccessionProps) {
   const isPromoting = useRef(false);
+  // Lưu thời điểm Host bắt đầu offline
+  const [hostOfflineSince, setHostOfflineSince] = useState<number | null>(null);
 
   useEffect(() => {
-    // Nếu phòng đã đóng cửa thì ngưng ngay mọi hoạt động kế vị
-    // Ngăn chặn tình trạng vừa hiện thông báo "Phòng đóng" vừa được phong làm Vua
+    // 1. Nếu phòng đã đóng cửa thì ngưng ngay
     if (!isActive) {
       isPromoting.current = false;
+      setHostOfflineSince(null);
       return;
     }
 
-    // Nếu mình đã là Host rồi thì thoát ngay lập tức
+    // 2. Nếu mình đã là Host rồi thì reset trạng thái và thoát
     const amIAlreadyHost = participants.some(
       (p) => p.user_id === myId && p.role === "host",
     );
 
     if (amIAlreadyHost) {
       isPromoting.current = false;
+      setHostOfflineSince(null);
       return;
     }
 
-    // 3. Kiểm tra xem có Host nào khác đang Online không
-    const currentHost = participants.find(
+    // 3. Kiểm tra xem có Host nào đang Online không
+    const onlineHost = participants.find(
       (p) => p.role === "host" && presenceData[p.user_id],
     );
 
-    if (currentHost) {
+    if (onlineHost) {
+      // Nếu thấy Host online, reset thời gian chờ
+      setHostOfflineSince(null);
       isPromoting.current = false;
       return;
     }
 
-    // Guard clause cơ bản
-    if (!participants.length || !myParticipantId) return;
+    // 4. Nếu không thấy Host online, bắt đầu đếm ngược
+    if (hostOfflineSince === null) {
+      setHostOfflineSince(Date.now());
+      return;
+    }
 
-    // 4. Bầu chọn Tân Vương (Chỉ chạy khi không có ai đang thực hiện lock)
-    if (!isPromoting.current) {
+    // KIỂM TRA ĐIỀU KIỆN 5 PHÚT
+    const elapsed = Date.now() - hostOfflineSince;
+    if (elapsed < GRACE_PERIOD_MS) {
+      // Chưa đủ 5 phút, chưa làm gì cả.
+      // Effect sẽ tự chạy lại khi presenceData hoặc participants thay đổi.
+      return;
+    }
+
+    // 5. Quá 5 phút rồi -> Tiến hành bầu chọn Tân Vương
+    if (!isPromoting.current && myParticipantId) {
       const validCandidates = participants.filter(
         (p) => p.status === "approved" && presenceData[p.user_id],
       );
 
       if (!validCandidates.length) return;
 
-      // Sắp xếp theo điểm quyền hạn và thời gian tham gia
+      // Sắp xếp tìm người kế vị ưu tú nhất (Quyền cao -> Tham gia sớm)
       const survivors = [...validCandidates].sort((a, b) => {
         const scoreA =
           (a.permissions?.can_manage_users ? 2 : 0) +
@@ -86,18 +103,18 @@ export function useHostSuccession({
 
       const newKing = survivors[0];
 
-      // 5. Nếu mình đứng đầu danh sách, thực hiện nghi thức "Đăng cơ"
+      // Nếu mình là người đứng đầu danh sách kế vị
       if (newKing?.user_id === myId) {
         isPromoting.current = true;
 
         const promoteSelf = async () => {
-          // Lọc sẵn danh sách Host cũ (đã offline) cần dọn dẹp
+          // Lọc danh sách Host cũ (đã offline quá 5p) để xóa
           const ghostHostIds = participants
             .filter((p) => p.role === "host" && p.user_id !== myId)
             .map((h) => h.id);
 
           try {
-            // Chỉ cần update role của mình. SQL Trigger "SECURITY DEFINER" sẽ tự động lo bảng rooms!
+            // Cập nhật mình lên làm Host
             const { error } = await supabase
               .from("watch_party_participants")
               .update({
@@ -111,13 +128,15 @@ export function useHostSuccession({
 
             if (error) throw error;
 
-            // Hiển thị thông báo duy nhất (chặn trùng lặp bằng ID)
-            toast.success("Bạn đã trở thành Chủ phòng mới!", {
-              icon: "👑",
-              id: SUCCESSION_TOAST_ID,
-            });
+            toast.success(
+              "Host cũ đã rời đi quá lâu. Bạn được chỉ định làm Chủ phòng mới!",
+              {
+                icon: "👑",
+                id: SUCCESSION_TOAST_ID,
+              },
+            );
 
-            // Xóa record các Host cũ đã offline (Ghost Hosts)
+            // Xóa bản ghi của các Host cũ đã offline
             if (ghostHostIds.length > 0) {
               await supabase
                 .from("watch_party_participants")
@@ -125,13 +144,13 @@ export function useHostSuccession({
                 .in("id", ghostHostIds);
             }
 
+            setHostOfflineSince(null);
             refetch();
           } catch (error) {
             console.error("[HOST_SUCCESSION_ERROR]:", error);
             isPromoting.current = false;
-            toast.error("Không thể tiếp quản vị trí Chủ phòng", {
-              id: SUCCESSION_TOAST_ID,
-            });
+            setHostOfflineSince(null);
+            toast.error("Không thể tiếp quản vị trí Chủ phòng");
           }
         };
 
@@ -146,5 +165,6 @@ export function useHostSuccession({
     supabase,
     refetch,
     isActive,
+    hostOfflineSince,
   ]);
 }

@@ -2,6 +2,7 @@
 
 import React from "react";
 import WatchPartyView from "@/components/watch-party/WatchPartyView";
+import WatchPartyVoiceWrapper from "@/components/watch-party/WatchPartyVoiceWrapper";
 import { WatchPartyProvider } from "@/providers/WatchPartyProvider";
 import { User } from "@supabase/supabase-js";
 import { WatchPartyRoom, WatchPartyParticipant } from "@/types";
@@ -24,7 +25,9 @@ export default function WatchPartyClient({
       initialRoom={initialRoom}
       initialMe={initialMe}
     >
-      <WatchPartyView />
+      <WatchPartyVoiceWrapper room={initialRoom}>
+        <WatchPartyView />
+      </WatchPartyVoiceWrapper>
     </WatchPartyProvider>
   );
 }

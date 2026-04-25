@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import NProgress from "nprogress";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import NotificationCard from "@/components/NotificationCard";
@@ -111,6 +112,7 @@ export default function NotificationProvider({
         ? `/phim/${noti.movie_slug}?tap=${episode}&commentId=${commentId}#comment-${commentId}`
         : `/phim/${noti.movie_slug}?tap=${episode}`;
 
+      NProgress.start();
       router.push(url);
     },
     [router, markAsReadMutation, queryClient, userId],

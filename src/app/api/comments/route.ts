@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { sanitizeHtml } from "@/lib/utils";
+import { commentSchema } from "@/lib/validations/comment.validation";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { CommentService } from "@/services/comment.service";
-
-export const runtime = "edge";
 
 export async function GET(request: Request) {
   try {
@@ -40,14 +40,38 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+
+    const cleanContent = sanitizeHtml(body.content || "");
+
+    const result = commentSchema.safeParse({
+      ...body,
+      content: cleanContent,
+    });
+
+    if (!result.success) {
+      // Tức là user đang nhập ký tự không hợp lệ/mã độc.
+      const isActuallyEmpty = (body.content || "").trim().length === 0;
+      let errorMessage = result.error.issues[0].message;
+
+      if (!isActuallyEmpty && errorMessage === "Không được để trống") {
+        errorMessage = "Nội dung chứa ký tự không hợp lệ hoặc không được phép";
+      }
+
+      return NextResponse.json({ error: errorMessage }, { status: 400 });
+    }
+
+    const validatedData = result.data;
+
     const supabase = await createSupabaseServer();
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
     if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const comment = await CommentService.addComment(user.id, body);
+    const comment = await CommentService.addComment(user.id, validatedData);
+
     return NextResponse.json({ success: true, comment });
   } catch (error) {
     console.error("[API_COMMENTS_POST]:", error);

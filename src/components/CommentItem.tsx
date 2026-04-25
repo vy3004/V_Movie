@@ -126,10 +126,12 @@ const CommentItem = memo(
 
     const handleReplySubmit = useCallback(
       async (content: string) => {
-        const finalContent =
+        const mention =
           isReply && comment.profiles?.full_name
-            ? `@${comment.profiles.full_name} ${content}`
-            : content;
+            ? `<b>@${comment.profiles.full_name}</b> `
+            : "";
+
+        const finalContent = `${mention}${content}`;
 
         // Truyền chuẩn rootParentId và comment.id để backend biết lưu/thông báo cho ai
         await addComment(

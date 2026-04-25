@@ -75,11 +75,28 @@ export function useRealtime(props: RealtimeProps) {
           refs.current.setRoom({
             ...refs.current.room,
             current_episode_slug: payload.slug,
+            ...(payload.movie_slug && {
+              current_movie_slug: payload.movie_slug,
+              movie_image: payload.movie_image,
+            }),
           });
+
+          if (refs.current.playerSyncRef?.current) {
+            refs.current.playerSyncRef.current.syncFromRemote("play", 0);
+          }
+
           if (refs.current.isRealHost) {
+            const updateData = {
+              current_episode_slug: payload.slug,
+              ...(payload.movie_slug && {
+                current_movie_slug: payload.movie_slug,
+                movie_image: payload.movie_image,
+              }),
+            };
+
             await refs.current.supabase
               .from("watch_party_rooms")
-              .update({ current_episode_slug: payload.slug })
+              .update(updateData)
               .eq("id", props.room.id);
           }
         },

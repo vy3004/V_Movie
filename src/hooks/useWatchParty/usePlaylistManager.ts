@@ -136,7 +136,11 @@ export function usePlaylistManager(
       supabase.channel(`wp_ui_${room.id}`).send({
         type: "broadcast",
         event: "change_episode_sync",
-        payload: { slug: item.episode_slug },
+        payload: {
+          slug: item.episode_slug,
+          movie_slug: item.movie_slug,
+          movie_image: item.thumb_url,
+        },
       });
 
       if (sendSystemMessage) {

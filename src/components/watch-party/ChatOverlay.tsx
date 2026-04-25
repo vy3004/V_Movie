@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { FilmIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import ChatMessageItem from "@/components/watch-party/ChatMessageItem";
 import ChatInputForm from "@/components/watch-party/ChatInputForm";
+import MediaOverlay from "@/components/watch-party/MediaOverlay";
 import { ChatMessage } from "@/types";
 
 interface ChatOverlayProps {
@@ -168,6 +169,8 @@ export default function ChatOverlay({
 
   return (
     <div className="absolute inset-0 pointer-events-none z-[100] overflow-hidden">
+      <MediaOverlay />
+
       {/* 1. NÚT CHUYỂN CHẾ ĐỘ */}
       <div
         className={`absolute top-6 right-8 transition-all duration-500 ${isUIActive ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"}`}

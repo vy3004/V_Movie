@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import NProgress from "nprogress";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
 
 type PaginationProps = {
@@ -31,7 +32,7 @@ const Pagination = ({ currentPage, totalPages }: PaginationProps) => {
           currentPage,
           currentPage + 1,
           "...",
-          totalPages
+          totalPages,
         );
       }
     }
@@ -44,6 +45,7 @@ const Pagination = ({ currentPage, totalPages }: PaginationProps) => {
     const current = new URLSearchParams(searchParams.toString());
 
     current.set("page", pageNumber.toString());
+    NProgress.start();
     router.push(`?${current.toString()}`);
   };
 
@@ -81,12 +83,12 @@ const Pagination = ({ currentPage, totalPages }: PaginationProps) => {
       <button
         aria-label="Trang sau"
         className={`px-1 sm:px-2 py-1 flex items-center justify-center ${
-          currentPage === totalPages
+          currentPage >= totalPages || totalPages === 0
             ? "opacity-50 cursor-not-allowed"
             : "hover:text-main"
         }`}
         onClick={() => handlePageChange(currentPage + 1)}
-        disabled={currentPage === totalPages}
+        disabled={currentPage >= totalPages || totalPages === 0}
       >
         <ChevronRightIcon className="size-5" />
       </button>

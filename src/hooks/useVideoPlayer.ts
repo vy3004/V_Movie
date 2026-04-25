@@ -9,6 +9,8 @@ import "@videojs/themes/dist/city/index.css";
 import "videojs-hotkeys";
 import { PlayerSyncRef } from "@/types";
 
+const STANDARD_RATES = [0.5, 1, 1.25, 1.5, 2];
+
 interface UseVideoPlayerProps {
   videoRef: React.RefObject<HTMLDivElement>;
   movieSrc: string;
@@ -306,7 +308,7 @@ export function useVideoPlayer({
         autoplay: false,
         controls: true,
         fluid: true,
-        playbackRates: [0.5, 1, 1.25, 1.5, 2],
+        playbackRates: STANDARD_RATES,
         aspectRatio: "16:9",
         sources: [{ src: movieSrc, type: "application/x-mpegURL" }],
       });
@@ -345,6 +347,16 @@ export function useVideoPlayer({
           player.currentTime(initialTime || 0);
           isInitialSeekDone.current = true;
         }
+
+        // Khôi phục âm lượng TẠI ĐÂY cho Player
+        const savedVol = localStorage.getItem("v_movie_volume");
+        if (savedVol !== null) {
+          const vol = Number(savedVol);
+          if (!isNaN(vol) && vol >= 0 && vol <= 1) {
+            player.volume(vol);
+          }
+        }
+
         refs.current.onPlayerReady?.();
       });
 
@@ -371,6 +383,42 @@ export function useVideoPlayer({
         commitNetworkSync("seek");
       });
       player.on("seeked", () => commitNetworkSync("seek"));
+
+      // GIẤU SỐ THẬP PHÂN LẺ KHI SOFT SYNC
+      let cachedRateEl: Element | null = null;
+      let lastDisplayedRate = "";
+
+      player.on("ratechange", () => {
+        if (!cachedRateEl) {
+          const el = player.el()?.querySelector(".vjs-playback-rate-value");
+          if (el) cachedRateEl = el;
+        }
+
+        if (cachedRateEl) {
+          const rate = player.playbackRate() ?? 1;
+
+          const isStandard = STANDARD_RATES.includes(rate);
+
+          let displayRate;
+          // Ép hiển thị thành 1 nếu đang nằm trong khoảng bù trừ của Soft Sync (0.9 -> 1.1)
+          if (!isStandard && rate >= 0.9 && rate <= 1.1) {
+            displayRate = 1;
+          } else {
+            // Vẫn giữ lại phần thập phân cho các tốc độ người dùng tự chọn (VD: 1.25, 1.5, 0.5)
+            displayRate = Number(rate.toFixed(2));
+          }
+
+          const newText = `${displayRate}x`;
+
+          // Chỉ thao tác với DOM nếu text thực sự cần thay đổi
+          if (newText !== lastDisplayedRate) {
+            lastDisplayedRate = newText;
+            queueMicrotask(() => {
+              if (cachedRateEl) cachedRateEl.textContent = newText;
+            });
+          }
+        }
+      });
 
       player.on("timeupdate", () => {
         const curr = player.currentTime() ?? 0;
@@ -415,13 +463,6 @@ export function useVideoPlayer({
           refs.current.onAutoNext();
         }
       });
-
-      player.on("volumechange", () => {
-        localStorage.setItem("v_movie_volume", String(player.volume()));
-      });
-
-      const savedVol = localStorage.getItem("v_movie_volume");
-      if (savedVol) player.volume(Number(savedVol));
     } else {
       player = playerRef.current;
       if (currentMovieSrcRef.current !== movieSrc) {

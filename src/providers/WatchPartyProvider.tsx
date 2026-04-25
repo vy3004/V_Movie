@@ -182,7 +182,7 @@ export function WatchPartyProvider({
           created_at: new Date().toISOString(),
         };
         const updated = [...prev, newMsg];
-        return updated.length > 150 ? updated.slice(-150) : updated;
+        return updated.length > 60 ? updated.slice(-60) : updated;
       });
     },
     [roomId],
@@ -205,7 +205,7 @@ export function WatchPartyProvider({
 
       setMessages((prev) => {
         const updated = [...prev, optimisticMsg];
-        return updated.length > 150 ? updated.slice(-150) : updated;
+        return updated.length > 60 ? updated.slice(-60) : updated;
       });
 
       try {
@@ -462,15 +462,16 @@ export function WatchPartyProvider({
     isActive: room?.is_active ?? true,
   });
 
+  const hasFetchedMessages = useRef(false); // Thêm cờ chặn fetch nhiều lần
+
   useEffect(() => {
+    const isMeInList = participants.some((p) => p.user_id === user.id);
+    if (!roomId || !isMeInList || hasFetchedMessages.current) return;
+
     const controller = new AbortController();
     let isCancelled = false;
 
     const fetchMessages = async () => {
-      // CHỈ FETCH KHI ĐÃ XÁC NHẬN MÌNH LÀ THÀNH VIÊN
-      const isMeInList = participants.some((p) => p.user_id === user.id);
-      if (!isMeInList) return;
-
       try {
         const res = await fetch(`/api/watch-party/messages?roomId=${roomId}`, {
           signal: controller.signal,
@@ -479,28 +480,28 @@ export function WatchPartyProvider({
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && !isCancelled) {
-            // MERGE TIN NHẮN: Không làm mất các thông báo "đã kết nối" đang có
             setMessages((prev) => {
               const existingIds = new Set(prev.map((m) => m.id));
               const newHistory = data.filter((m) => !existingIds.has(m.id));
 
-              // Sắp xếp lại theo thời gian để tin nhắn cũ lên đầu
-              return [...newHistory, ...prev].sort(
+              const merged = [...newHistory, ...prev].sort(
                 (a, b) =>
                   new Date(a.created_at).getTime() -
                   new Date(b.created_at).getTime(),
               );
+              return merged.length > 60 ? merged.slice(-60) : merged;
             });
+
+            hasFetchedMessages.current = true;
           }
         }
-      } catch (e) {
+      } catch (e: unknown) {
         if (e instanceof Error && e.name === "AbortError") return;
         console.error("Lỗi fetch tin nhắn:", e);
       }
     };
 
-    // Chạy fetch. roomId và participants.length thay đổi sẽ trigger lại nếu hụt lần đầu
-    if (roomId) fetchMessages();
+    fetchMessages();
 
     return () => {
       isCancelled = true;

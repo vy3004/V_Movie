@@ -26,15 +26,15 @@ export default function HistoryCard({ item, type }: HistoryCardProps) {
     <div className="group relative space-y-2">
       {/* Phần ảnh và Progress Bar */}
       <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-900 border border-white/5 shadow-md">
-        <Link href={`/phim/${movieSlug}?tap=${lastTapSlug}`}>
+        <Link href={`/phim/${movieSlug}?tap=${lastTapSlug}`} prefetch={false}>
           <ImageCustom
             src={moviePoster}
             alt={movieName}
-            widths={[320, 256]}
-            sizes="(max-width: 640px) 70vw, 20vw"
+            widths={[320, 480, 640]}
+            sizes="(max-width: 640px) 70vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            loading="lazy"
             className="absolute inset-0 object-cover size-full group-hover:scale-105 transition duration-500"
           />
-
           {/* Lớp phủ Gradient mờ */}
           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity" />
         </Link>
@@ -61,7 +61,7 @@ export default function HistoryCard({ item, type }: HistoryCardProps) {
             </span>
           </div>
         )}
-        <Link href={`/phim/${movieSlug}`}>
+        <Link href={`/phim/${movieSlug}`} prefetch={false}>
           <h3 className="line-clamp-1 text-sm font-semibold text-zinc-200 group-hover:text-primary transition-colors">
             {movieName}
           </h3>

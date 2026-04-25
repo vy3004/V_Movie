@@ -6,6 +6,7 @@ export const runtime = "edge";
 
 type ParticipantUpdate = {
   is_muted?: boolean;
+  is_voice_muted?: boolean;
   permissions?: ParticipantPermissions;
 };
 
@@ -34,6 +35,7 @@ export async function PATCH(request: Request) {
       "can_control_media",
       "can_manage_users",
       "is_muted",
+      "is_voice_muted",
     ];
     if (!validPermissions.includes(permissionKey)) {
       return NextResponse.json(
@@ -56,14 +58,22 @@ export async function PATCH(request: Request) {
     const isHost = caller?.role === "host";
     const isMod = caller?.permissions?.can_manage_users === true;
 
-    if (permissionKey !== "is_muted" && !isHost) {
+    if (!isHost && !isMod) {
+      // Nếu không phải Host hoặc Mod, thì không được sửa bất kỳ quyền gì
       return NextResponse.json(
-        { error: "Chỉ Chủ phòng mới có quyền phân quyền hệ thống" },
+        { error: "Bạn không có quyền" },
         { status: 403 },
       );
-    } else if (permissionKey === "is_muted" && !isHost && !isMod) {
+    }
+
+    if (
+      !isHost &&
+      (permissionKey === "can_control_media" ||
+        permissionKey === "can_manage_users")
+    ) {
+      // Mod thì được cấm chat/cấm mic, nhưng KHÔNG ĐƯỢC phân quyền Mod/Media cho người khác
       return NextResponse.json(
-        { error: "Bạn không có quyền cấm chat" },
+        { error: "Chỉ Chủ phòng mới có quyền phân quyền hệ thống" },
         { status: 403 },
       );
     }
@@ -72,7 +82,7 @@ export async function PATCH(request: Request) {
     // Lấy thêm is_muted
     const { data: targetUser } = await supabase
       .from("watch_party_participants")
-      .select("role, permissions, is_muted")
+      .select("role, permissions, is_muted, is_voice_muted")
       .eq("room_id", roomId)
       .eq("user_id", targetUserId)
       .single();
@@ -96,6 +106,8 @@ export async function PATCH(request: Request) {
 
     if (permissionKey === "is_muted") {
       updateData = { is_muted: !targetUser.is_muted };
+    } else if (permissionKey === "is_voice_muted") {
+      updateData = { is_voice_muted: !targetUser.is_voice_muted };
     } else {
       const currentPermissions =
         (targetUser.permissions as ParticipantPermissions) || {

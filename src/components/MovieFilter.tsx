@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import NProgress from "nprogress";
 import { AdjustmentsHorizontalIcon } from "@heroicons/react/24/solid";
 
 import BreadCrumb from "@/components/BreadCrumb";
@@ -71,6 +72,7 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
     if (filters.category) query.append("category", filters.category);
     if (filters.country) query.append("country", filters.country);
 
+    NProgress.start();
     router.push(`${type}?${query.toString()}`);
   };
 

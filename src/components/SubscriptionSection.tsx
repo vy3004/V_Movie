@@ -2,7 +2,6 @@
 
 import React from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
 import MovieCard from "@/components/MovieCard";
 import {
   Carousel,
@@ -11,42 +10,40 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/Carousel";
-import { useData } from "@/providers/BaseDataContextProvider";
-import { formatEpisodeName, getLocalSubscriptions } from "@/lib/utils";
-import { SubscriptionItem } from "@/types";
+import { formatEpisodeName } from "@/lib/utils";
+import { useSubscriptionList } from "@/hooks/useSubscription";
 
 export default function SubscriptionSection() {
-  const { user } = useData();
-
-  // Lấy danh sách phim theo dõi (từ Redis/DB hoặc LocalStorage)
-  const { data: subscriptions = [], isLoading } = useQuery({
-    queryKey: ["subscriptions-list", user?.id || "guest"],
-    queryFn: async () => {
-      if (!user) return getLocalSubscriptions(); // Guest lấy từ LocalStorage
-      const res = await fetch("/api/subscriptions");
-      if (!res.ok) return [];
-      return res.json() as Promise<SubscriptionItem[]>;
-    },
-    refetchOnWindowFocus: true, // Tự cập nhật khi user quay lại tab
+  const { subscriptions, isLoading } = useSubscriptionList({
+    limit: 12,
+    filter: "all",
   });
 
-  if (isLoading)
+  if (isLoading) {
     return <div className="h-40 animate-pulse bg-zinc-900 rounded-xl" />;
-  if (subscriptions.length === 0) return null; // Không hiện nếu rỗng
+  }
+
+  if (subscriptions.length === 0) return null;
 
   return (
     <div>
-      <div className="relative z-20 flex items-center justify-between font-bold">
+      <div className="relative z-20 flex items-center justify-between font-bold mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-1.5 h-6 rounded-full bg-primary shadow-[0_0_10px_rgba(225,29,72,0.5)]"></div>
-          <h2 className="text-xl sm:text-2xl">Phim bạn đang theo dõi</h2>
+          <div className="w-1.5 h-6 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"></div>
+          <h2 className="text-xl sm:text-2xl text-white">
+            Phim bạn đang theo dõi
+          </h2>
         </div>
 
-        <Link href="/ca-nhan/theo-doi" className="relative group">
-          Xem thêm
-          <span className="absolute -bottom-1 right-0 w-0 border-b-4 border-primary transition-all duration-300 group-hover:w-full" />
+        <Link
+          href="/dashboard/subscriptions"
+          className="relative group text-sm text-zinc-400 hover:text-white transition-colors"
+        >
+          Xem tất cả
+          <span className="absolute -bottom-1 right-0 w-0 border-b-2 border-rose-500 transition-all duration-300 group-hover:w-full" />
         </Link>
       </div>
+
       <Carousel
         opts={{
           align: "start",

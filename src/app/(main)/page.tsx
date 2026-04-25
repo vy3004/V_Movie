@@ -24,30 +24,34 @@ const getHomeData = cache(async () => {
 
 const Skeleton = ({ children }: { children: React.ReactNode }) => (
   <Suspense
-    fallback={<div className="h-200 animate-pulse bg-zinc-900 rounded-xl" />}
+    fallback={
+      <div className="h-[200px] animate-pulse bg-zinc-900 rounded-xl" />
+    }
   >
     {children}
   </Suspense>
 );
-
 /**
  * SEO Metadata
  */
 export async function generateMetadata(): Promise<Metadata> {
   try {
     const data = await getHomeData();
+    const seo = data.seoOnPage;
+
+    if (!seo) throw new Error("SEO data not available");
 
     return {
-      title: data.seoOnPage.titleHead,
-      description: data.seoOnPage.descriptionHead,
+      title: seo.titleHead,
+      description: seo.descriptionHead,
       openGraph: {
-        title: data.seoOnPage.titleHead,
-        description: data.seoOnPage.descriptionHead,
-        images: data.seoOnPage.og_image,
+        title: seo.titleHead,
+        description: seo.descriptionHead,
+        images: seo.og_image,
         type: "website",
       },
       alternates: {
-        canonical: data.seoOnPage.og_url,
+        canonical: seo.og_url,
       },
     };
   } catch {
