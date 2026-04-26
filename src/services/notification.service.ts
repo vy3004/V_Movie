@@ -1,40 +1,45 @@
 import "server-only";
+
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { redis } from "@/lib/redis";
 import { NotificationItem } from "@/types";
 
 export const NotificationService = {
   /**
-   * Lấy danh sách thông báo
+   * 1. Lấy danh sách (Hỗ trợ Infinite Scroll)
    */
-  getList: async (
-    userId: string,
-    limit: number = 20,
-  ): Promise<NotificationItem[]> => {
-    const supabase = await createSupabaseServer();
+  getList: async (userId: string, page: number = 1, limit: number = 15) => {
+    page = Math.max(1, Math.floor(page));
+    limit = Math.max(1, Math.min(limit, 100));
 
-    const { data, error } = await supabase
+    const supabase = await createSupabaseServer();
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data, error, count } = await supabase
       .from("notifications")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
-      .limit(limit);
+      .range(from, to);
 
     if (error) {
       console.error("[NotificationService.getList]", error);
-      return [];
+      return { items: [], nextCursor: null, total: 0 };
     }
 
-    return data as NotificationItem[];
+    return {
+      items: (data as NotificationItem[]) || [],
+      nextCursor: count && to < count - 1 ? page + 1 : null,
+      total: count || 0,
+    };
   },
 
   /**
-   * Đánh dấu đã đọc & XÓA CACHE TẬP MỚI
+   * 2. Đánh dấu đã đọc & Xử lý Cache
    */
   markAsRead: async (userId: string, notiId?: string) => {
     const supabase = await createSupabaseServer();
-
-    // 1. Cập nhật DB
     let query = supabase.from("notifications").update({ is_read: true });
 
     if (notiId) {
@@ -43,12 +48,11 @@ export const NotificationService = {
       query = query.eq("user_id", userId).eq("is_read", false);
     }
 
-    // Quan trọng: Trả về data sau khi update để biết thông báo đó nói về phim nào
     const { data: updatedNotis, error } =
       await query.select("type, movie_slug");
     if (error) throw error;
 
-    // 2. Logic Cache Invalidation
+    // Logic dọn dẹp Cache Redis
     if (redis && updatedNotis && updatedNotis.length > 0) {
       // Tìm xem trong số các thông báo vừa đọc, có cái nào là "có tập mới" không
       const newEpisodeNotis = updatedNotis.filter(
@@ -81,6 +85,43 @@ export const NotificationService = {
           });
         }
 
+        await pipeline.exec();
+      }
+    }
+  },
+
+  /**
+   * 3. Xóa thông báo (Dọn dẹp hòm thư)
+   */
+  clear: async (userId: string, onlyRead: boolean) => {
+    const supabase = await createSupabaseServer();
+    // Fetch notifications trước khi xóa để dọn cache
+    let selectQuery = supabase
+      .from("notifications")
+      .select("type, movie_slug")
+      .eq("user_id", userId);
+    if (onlyRead) selectQuery = selectQuery.eq("is_read", true);
+
+    const { data: notisToDelete } = await selectQuery;
+
+    // Thực hiện xóa
+    let query = supabase.from("notifications").delete().eq("user_id", userId);
+
+    if (onlyRead) query = query.eq("is_read", true);
+
+    const { error } = await query;
+    if (error) throw error;
+
+    if (redis && notisToDelete && notisToDelete.length > 0) {
+      const newEpisodeNotis = notisToDelete.filter(
+        (n) => n.type === "new_episode" && n.movie_slug,
+      );
+      if (newEpisodeNotis.length > 0) {
+        const pipeline = redis.pipeline();
+        newEpisodeNotis.forEach((noti) => {
+          pipeline.del(`detail:${noti.movie_slug}`);
+        });
+        // Cập nhật subscription cache...
         await pipeline.exec();
       }
     }

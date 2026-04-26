@@ -10,17 +10,35 @@ import React, {
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import NProgress from "nprogress";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+  InfiniteData, // Trích xuất Type này từ thư viện
+} from "@tanstack/react-query";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import NotificationCard from "@/components/NotificationCard";
 import { useData } from "@/providers/BaseDataContextProvider";
 import { NotificationItem } from "@/types";
 
+// 1. Định nghĩa chuẩn xác cấu trúc trả về từ API
+interface NotificationResponse {
+  items: NotificationItem[];
+  nextCursor: number | null;
+  total: number;
+}
+
+// 2. Định nghĩa Context Type hoàn chỉnh
 interface NotificationContextType {
   notifications: NotificationItem[];
   unreadCount: number;
   markAsRead: (id?: string) => Promise<void>;
+  isLoading: boolean;
   navigateToNotification: (noti: NotificationItem) => void;
+  fetchNextPage: () => void;
+  hasNextPage: boolean | undefined;
+  isFetchingNextPage: boolean;
+  clearNotifications: (onlyRead: boolean) => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(
@@ -38,19 +56,37 @@ export default function NotificationProvider({
   const queryClient = useQueryClient();
   const supabase = useMemo(() => createSupabaseClient(), []);
 
-  // 1. Quản lý danh sách thông báo bằng React Query
-  const { data: notifications = [] } = useQuery<NotificationItem[]>({
-    queryKey: ["notifications", userId],
-    queryFn: async () => {
-      const res = await fetch("/api/notifications");
-      if (!res.ok) throw new Error("Lỗi API");
-      return res.json();
-    },
-    enabled: !!userId,
-    staleTime: Infinity, // Dữ liệu sẽ được update chủ động qua Realtime
-  });
+  // ==========================================
+  // 1. INFINITE QUERY
+  // ==========================================
+  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useInfiniteQuery<NotificationResponse>({
+      queryKey: ["notifications", userId],
+      queryFn: async ({ pageParam = 1 }) => {
+        const res = await fetch(
+          `/api/notifications?page=${pageParam}&limit=15`,
+        );
+        if (!res.ok) throw new Error("Lỗi API");
+        return res.json();
+      },
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      enabled: !!userId,
+      initialPageParam: 1,
+      staleTime: Infinity,
+    });
 
-  // 2. Đánh dấu đã đọc bằng Mutation
+  const notifications = useMemo(() => {
+    return data?.pages.flatMap((page) => page.items) || [];
+  }, [data]);
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.is_read).length,
+    [notifications],
+  );
+
+  // ==========================================
+  // 2. ĐÁNH DẤU ĐÃ ĐỌC
+  // ==========================================
   const { mutateAsync: markAsReadMutation } = useMutation({
     mutationFn: async (id?: string) => {
       const res = await fetch("/api/notifications", {
@@ -61,48 +97,71 @@ export default function NotificationProvider({
       if (!res.ok) throw new Error("Failed to mark as read");
     },
     onMutate: async (id?: string) => {
-      // Optimistic Update: Đổi màu ngay trên UI mà không cần chờ Server
       await queryClient.cancelQueries({ queryKey: ["notifications", userId] });
-      const previousNotis = queryClient.getQueryData<NotificationItem[]>([
-        "notifications",
-        userId,
-      ]);
 
-      queryClient.setQueryData<NotificationItem[]>(
+      // Lấy data cũ với Type cực chuẩn
+      const previousData = queryClient.getQueryData<
+        InfiniteData<NotificationResponse>
+      >(["notifications", userId]);
+
+      // Ép kiểu cho hàm callback của setQueryData
+      queryClient.setQueryData<InfiniteData<NotificationResponse>>(
         ["notifications", userId],
-        (old) => {
-          if (!old) return [];
-          if (id)
-            return old.map((n) => (n.id === id ? { ...n, is_read: true } : n));
-          return old.map((n) => ({ ...n, is_read: true }));
+        (oldData) => {
+          if (!oldData) return oldData;
+
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page) => ({
+              ...page,
+              items: page.items.map((n) =>
+                !id || n.id === id ? { ...n, is_read: true } : n,
+              ),
+            })),
+          };
         },
       );
 
-      return { previousNotis };
+      return { previousData };
     },
     onError: (err, variables, context) => {
-      // Rollback nếu có lỗi
-      queryClient.setQueryData(
-        ["notifications", userId],
-        context?.previousNotis,
-      );
+      if (context?.previousData) {
+        queryClient.setQueryData(
+          ["notifications", userId],
+          context.previousData,
+        );
+      }
       console.error("Lỗi đánh dấu đọc:", err);
     },
   });
 
-  // 3. Logic chuyển hướng
+  // ==========================================
+  // 3. DỌN DẸP THÔNG BÁO
+  // ==========================================
+  const { mutateAsync: clearNotificationsMutation } = useMutation({
+    mutationFn: async (onlyRead: boolean) => {
+      const res = await fetch(`/api/notifications?onlyRead=${onlyRead}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to clear notifications");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
+      toast.success("Đã dọn dẹp hòm thư!");
+    },
+  });
+
+  // ==========================================
+  // 4. ĐIỀU HƯỚNG
+  // ==========================================
   const navigateToNotification = useCallback(
     async (noti: NotificationItem) => {
       if (!noti.movie_slug) return;
-
       const commentId = noti.metadata?.comment_id;
       const episode = noti.metadata?.episode || "1";
 
-      // Nếu chưa đọc, ta CHỜ API đánh dấu và Xóa Cache Redis xong mới nhảy trang
-      // Việc này đảm bảo trang phim được load với dữ liệu OPhim mới nhất
       if (!noti.is_read) {
         await markAsReadMutation(noti.id);
-        // Invalidate Subscriptions để Navbar mất chấm đỏ
         queryClient.invalidateQueries({
           queryKey: ["subscriptions-list", userId],
         });
@@ -118,7 +177,9 @@ export default function NotificationProvider({
     [router, markAsReadMutation, queryClient, userId],
   );
 
-  // 4. Supabase Realtime Listener
+  // ==========================================
+  // 5. REALTIME LISTENER
+  // ==========================================
   useEffect(() => {
     if (!userId) return;
 
@@ -135,15 +196,35 @@ export default function NotificationProvider({
         (payload) => {
           const newNoti = payload.new as NotificationItem;
 
-          // Thêm thông báo mới vào đầu danh sách Cache
-          queryClient.setQueryData<NotificationItem[]>(
+          // Ép kiểu chuẩn cho Realtime chèn data
+          queryClient.setQueryData<InfiniteData<NotificationResponse>>(
             ["notifications", userId],
-            (old) => {
-              return [newNoti, ...(old || [])];
+            (oldData) => {
+              if (!oldData) {
+                return {
+                  pages: [{ items: [newNoti], nextCursor: null, total: 1 }],
+                  pageParams: [1],
+                };
+              }
+
+              const newPages = [...oldData.pages];
+              if (newPages.length > 0) {
+                newPages[0] = {
+                  ...newPages[0],
+                  items: [newNoti, ...newPages[0].items],
+                };
+              } else {
+                newPages.push({
+                  items: [newNoti],
+                  nextCursor: null,
+                  total: 1,
+                });
+              }
+
+              return { ...oldData, pages: newPages };
             },
           );
 
-          // Hiển thị Toast
           toast.custom(
             (t) => (
               <NotificationCard
@@ -166,19 +247,29 @@ export default function NotificationProvider({
     };
   }, [userId, supabase, queryClient, navigateToNotification]);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.is_read).length,
-    [notifications],
-  );
-
-  const contextValue = useMemo(
+  const contextValue: NotificationContextType = useMemo(
     () => ({
       notifications,
       unreadCount,
+      isLoading,
       markAsRead: markAsReadMutation,
       navigateToNotification,
+      fetchNextPage,
+      hasNextPage,
+      isFetchingNextPage,
+      clearNotifications: clearNotificationsMutation,
     }),
-    [notifications, unreadCount, markAsReadMutation, navigateToNotification],
+    [
+      notifications,
+      unreadCount,
+      isLoading,
+      markAsReadMutation,
+      navigateToNotification,
+      fetchNextPage,
+      hasNextPage,
+      isFetchingNextPage,
+      clearNotificationsMutation,
+    ],
   );
 
   return (

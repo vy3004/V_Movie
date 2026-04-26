@@ -118,7 +118,7 @@ export default function HistoryPage() {
       </div>
 
       {/* ACTIONS BAR (SEARCH + FILTER + CLEAR) */}
-      <div className="sticky top-16 z-10 flex items-center gap-3 p-2 bg-zinc-950/80 backdrop-blur-xl border border-zinc-800 rounded-3xl shadow-2xl">
+      <div className="sticky top-16 z-20 flex items-center gap-3 p-2 bg-zinc-950/80 backdrop-blur-xl border border-zinc-800 rounded-3xl shadow-2xl">
         {/* Search Input */}
         <div className="relative flex-1">
           <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-zinc-500" />
@@ -207,7 +207,7 @@ export default function HistoryPage() {
                 />
                 <button
                   onClick={() => deleteItem(item.movie_slug)}
-                  className="absolute top-2 right-2 p-2 bg-black/60 backdrop-blur-md rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-red-600 transition-all z-20 shadow-lg sm:opacity-0 max-sm:opacity-100"
+                  className="absolute top-2 right-2 p-2 bg-black/60 backdrop-blur-md rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-red-600 transition-all z-10 shadow-lg sm:opacity-0 max-sm:opacity-100"
                   aria-label="Xóa khỏi lịch sử"
                 >
                   <TrashIcon className="size-4 text-white" />
