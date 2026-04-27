@@ -109,20 +109,11 @@ export async function POST(request: Request) {
 
     // 5. Xử lý Action: KICK (Đuổi người đang trong phòng)
     else if (action === "kick") {
-      const { error, count } = await supabase
+      const { error } = await supabase
         .from("watch_party_participants")
-        .delete({ count: "exact" })
+        .delete()
         .eq("room_id", roomId)
         .eq("user_id", targetUserId);
-
-      console.log("Số dòng đã xóa thực tế:", count);
-
-      if (count === 0) {
-        console.log("⚠️ Không tìm thấy bản ghi nào để xóa với:", {
-          roomId,
-          targetUserId,
-        });
-      }
 
       if (error)
         return NextResponse.json({ error: error.message }, { status: 500 });

@@ -160,6 +160,51 @@ export const escapeSearchPattern = (value: string): string => {
     .replace(/[,()]/g, ""); // Remove PostgREST special chars
 };
 
+export const getRandomGreeting = (hour: number) => {
+  const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
+  if (hour >= 1 && hour < 5)
+    return pick([
+      "Cú đêm cày phim à 🦉",
+      "Vẫn chưa ngủ sao? 🌙",
+      "Nhớ giữ gìn sức khỏe nhé ☕",
+    ]);
+
+  if (hour >= 5 && hour < 11)
+    return pick([
+      "Chào buổi sáng ☀️",
+      "Ngày mới tràn đầy năng lượng 🌅",
+      "Sáng sớm làm một tập phim không? 🍿",
+    ]);
+
+  if (hour >= 11 && hour < 14)
+    return pick([
+      "Nghỉ trưa thôi nào 🍲",
+      "Chào buổi trưa 🛋️",
+      "Vừa ăn trưa vừa cày phim là chuẩn bài 🎬",
+    ]);
+
+  if (hour >= 14 && hour < 18)
+    return pick([
+      "Chào buổi chiều 🌤️",
+      "Pha ly trà, bật một bộ phim nào 🍵",
+      "Làm việc mệt rồi, giải trí chút thôi 🎮",
+    ]);
+
+  if (hour >= 18 && hour < 22)
+    return pick([
+      "Chào buổi tối 🌃",
+      "Giờ vàng cày phim đến rồi 🍿",
+      "Lên đồ xem phim thôi 🛋️",
+    ]);
+
+  return pick([
+    "Khuya rồi đấy 🌙",
+    "Xem nốt tập này rồi đi ngủ nhé 🥱",
+    "Không gian tĩnh lặng, quá hợp để xem phim 🎬",
+  ]);
+};
+
 // --- WEB PUSH ---
 // Trình duyệt yêu cầu Public Key phải được mã hóa sang dạng Uint8Array
 export const urlBase64ToUint8Array = (base64String: string) => {

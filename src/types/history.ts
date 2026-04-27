@@ -5,6 +5,13 @@ export interface EpisodeProgress {
   ep_updated_at: string;
 }
 
+export interface MovieMetadata {
+  genres?: string[];
+  directors?: string[];
+  actors?: string[];
+  country?: string[];
+}
+
 export interface HistoryItem {
   id?: string;
   user_id?: string;
@@ -17,6 +24,7 @@ export interface HistoryItem {
   episodes_progress: Record<string, EpisodeProgress>;
   is_finished: boolean;
   updated_at: string;
+  movie_metadata?: MovieMetadata;
 }
 
 export interface HistoryUpdatePayload {
@@ -29,4 +37,5 @@ export interface HistoryUpdatePayload {
   last_episode_of_movie_slug: string;
   current_time: number;
   duration: number;
+  movie_metadata?: MovieMetadata;
 }

@@ -110,8 +110,7 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
       } else {
         toast.error(result.error);
       }
-    } catch (error) {
-      console.log(error);
+    } catch {
       toast.error("Lỗi kết nối máy chủ");
     } finally {
       setLoading(false);

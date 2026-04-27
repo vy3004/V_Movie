@@ -140,10 +140,6 @@ export async function POST(req: Request) {
       const qstashToken = process.env.QSTASH_TOKEN;
 
       if (qstashToken) {
-        console.log(
-          `[PUSH] Lô 500 đã xong. Chuẩn bị gọi đệ quy QStash cho cursor: ${nextCursor}`,
-        );
-
         // Gọi lại chính cái API này thông qua QStash, mang theo cái mốc (cursor) mới
         await fetch(
           `https://qstash-us-east-1.upstash.io/v2/publish/${req.url}`,

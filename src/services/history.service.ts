@@ -3,6 +3,7 @@ import "server-only";
 import { redis } from "@/lib/redis";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { HistoryItem, HistoryUpdatePayload, EpisodeProgress } from "@/types";
+import { DashboardService } from "@/services/dashboard.service";
 
 const getHistoryKey = (userId?: string, deviceId?: string) => {
   if (userId) return `history:user:${userId}`;
@@ -240,6 +241,8 @@ export const HistoryService = {
         await HistoryService.invalidateHistoryCache(userId);
       }
     }
+
+    await DashboardService.invalidateStatsCache(userId);
   },
 
   /**
@@ -264,6 +267,8 @@ export const HistoryService = {
       // Reset bảng điểm về 0 bằng cách xóa luôn key stats
       const statsKey = `history:stats:user:${userId}`;
       await redis.del(statsKey);
+
+      await DashboardService.invalidateStatsCache(userId);
     }
   },
 
@@ -301,7 +306,12 @@ export const HistoryService = {
           last_episode_of_movie_slug: payload.last_episode_of_movie_slug,
           is_finished: false,
           updated_at: new Date().toISOString(),
+          movie_metadata: payload.movie_metadata,
         };
+
+    if (existing && payload.movie_metadata) {
+      historyItem.movie_metadata = payload.movie_metadata;
+    }
 
     const isCurrentEpFinished =
       payload.duration > 0 && payload.current_time / payload.duration > 0.9;
@@ -358,6 +368,9 @@ export const HistoryService = {
       payload.device_id,
       historyItem,
     );
+
+    if (payload.user_id)
+      await DashboardService.invalidateStatsCache(payload.user_id);
   },
 
   /**
@@ -418,6 +431,7 @@ export const HistoryService = {
       episodes_progress: mergedProgress,
       is_finished: isMovieFinished,
       updated_at: new Date().toISOString(),
+      movie_metadata: incomingItem.movie_metadata,
     };
 
     const { error } = await supabase
@@ -514,6 +528,7 @@ export const HistoryService = {
         episodes_progress: mergedProgress,
         is_finished: isMovieFinished,
         updated_at: new Date().toISOString(),
+        movie_metadata: item.movie_metadata,
       };
 
       // Phân loại logic
@@ -558,6 +573,8 @@ export const HistoryService = {
         await HistoryService.invalidateHistoryCache(userId);
       }
     }
+
+    await DashboardService.invalidateStatsCache(userId);
   },
 
   /**

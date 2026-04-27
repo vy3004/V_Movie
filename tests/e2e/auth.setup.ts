@@ -1,5 +1,4 @@
-// tests/e2e/auth.setup.ts
-import { test as setup, expect } from "@playwright/test";
+import { test as setup } from "@playwright/test";
 
 async function loginViaModal(
   page: any,
@@ -37,7 +36,6 @@ async function loginViaModal(
   await page.waitForTimeout(1000);
 
   await page.context().storageState({ path: storagePath });
-  console.log(`✅ Đã lưu session cho: ${email}`);
 }
 
 setup("Setup Session cho Host", async ({ page }) => {

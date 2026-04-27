@@ -7,14 +7,12 @@ export {};
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
 // Bỏ qua giai đoạn "Waiting" (Chờ đợi)
-sw.addEventListener("install", (event: ExtendableEvent) => {
-  console.log("[SW] Cài đặt bản cập nhật mới...");
+sw.addEventListener("install", () => {
   sw.skipWaiting(); // Ép kích hoạt ngay
 });
 
 // Chiếm quyền điều khiển toàn bộ các Tab đang mở
 sw.addEventListener("activate", (event: ExtendableEvent) => {
-  console.log("[SW] Đã kích hoạt bản mới!");
   event.waitUntil(sw.clients.claim()); // Đè bản cũ ngay lập tức
 });
 
@@ -103,7 +101,6 @@ sw.addEventListener("notificationclick", function (event: NotificationEvent) {
             normalizeUrl(client.url) === targetNormalized &&
             "focus" in client
           ) {
-            console.log("Tìm thấy tab đích -> Chỉ Focus");
             return client.focus();
           }
         }
@@ -119,18 +116,16 @@ sw.addEventListener("notificationclick", function (event: NotificationEvent) {
               "navigate" in client &&
               "focus" in client
             ) {
-              console.log("Tìm thấy tab chung domain -> Navigate và Focus");
               return client
                 .navigate(targetUrl.href)
                 .then((c) => (c ? c.focus() : null));
             }
-          } catch (e) {
-            // Bỏ qua nếu URL client bị lỗi
+          } catch (error) {
+            console.warn("Error when checking client origin", error);
           }
         }
 
         // TRƯỜNG HỢP 3: Tắt sạch web -> Buộc phải mở tab mới
-        console.log("Không có tab nào -> Mở window mới");
         if (sw.clients.openWindow) {
           return sw.clients.openWindow(targetUrl.href);
         }

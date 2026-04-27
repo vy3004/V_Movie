@@ -196,7 +196,9 @@ export function useRealtime(props: RealtimeProps) {
                   event: "request_sync_from_host",
                   payload: {},
                 });
-              } catch {}
+              } catch (error) {
+                console.warn("[WatchParty] request_sync_from_host:", error);
+              }
             };
             timeoutIds.push(setTimeout(requestSync, 1500));
             timeoutIds.push(setTimeout(requestSync, 3500));
@@ -210,7 +212,9 @@ export function useRealtime(props: RealtimeProps) {
                   event: "request_sync_from_room",
                   payload: {},
                 });
-              } catch {}
+              } catch (error) {
+                console.warn("[WatchParty] request_recovery:", error);
+              }
             };
             timeoutIds.push(setTimeout(requestRecovery, 2000));
             timeoutIds.push(setTimeout(requestRecovery, 4000));

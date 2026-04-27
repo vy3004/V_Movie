@@ -36,6 +36,23 @@ export function useHistoryTracker({
   const lastEpOfMovie =
     movie.episodes.flatMap((e) => e.server_data).pop()?.slug || "";
 
+  // Bóc tách Metadata
+  const movieMetadataRef = useRef({
+    genres: movie.category?.map((c) => c.name) || [],
+    directors: movie.director || [],
+    actors: movie.actor || [],
+    country: movie.country?.map((c) => c.name) || [],
+  });
+
+  useEffect(() => {
+    movieMetadataRef.current = {
+      genres: movie.category?.map((c) => c.name) || [],
+      directors: movie.director || [],
+      actors: movie.actor || [],
+      country: movie.country?.map((c) => c.name) || [],
+    };
+  }, [movie]);
+
   useEffect(() => {
     inMemoryLocalHistory.current = getLocalHistory();
   }, []);
@@ -72,6 +89,7 @@ export function useHistoryTracker({
           last_episode_of_movie_slug: lastEpOfMovie,
           updated_at: new Date().toISOString(),
           is_finished: isMovieCompletelyFinished,
+          movie_metadata: movieMetadataRef.current,
           episodes_progress: {
             ...existingProgress,
             [episodeSlug]: {
@@ -128,6 +146,7 @@ export function useHistoryTracker({
           device_id: user ? undefined : getDeviceId(),
           movie_name: movie.name,
           movie_poster: movie.poster_url,
+          movie_metadata: movieMetadataRef.current,
         };
 
         fetch("/api/history/track", {
@@ -184,6 +203,7 @@ export function useHistoryTracker({
       movie_poster: movie.poster_url,
       last_episode_slug: episodeSlug,
       last_episode_of_movie_slug: lastEpOfMovie,
+      movie_metadata: movieMetadataRef.current,
       episodes_progress: {
         [episodeSlug]: {
           ep_last_time: data.current_time,

@@ -15,12 +15,26 @@ export const createSupabaseServer = async () => {
         set(name: string, value: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value, ...options });
-          } catch {}
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              !error.message.includes("Server Action")
+            ) {
+              console.warn("[Supabase Cookie Set Error]:", error.message);
+            }
+          }
         },
         remove(name: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value: "", ...options });
-          } catch {}
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              !error.message.includes("Server Action")
+            ) {
+              console.warn("[Supabase Cookie Remove Error]:", error.message);
+            }
+          }
         },
       },
     },

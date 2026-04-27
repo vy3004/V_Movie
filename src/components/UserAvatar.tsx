@@ -35,7 +35,7 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
       ? avatar_url
       : `${MOVIE_IMG_PATH}${avatar_url}`;
     if (rawUrl.includes("googleusercontent.com")) {
-      rawUrl = rawUrl.replace(/=s\d+[^&]*/, `=s${fetchSize}-c`);
+      rawUrl = rawUrl.replace(/=?s\d+[^&]*/, `=s${fetchSize}-c`);
     }
 
     return `${WSRV_PROXY}/?output=webp&q=75&url=${encodeURIComponent(rawUrl)}&w=${fetchSize}&h=${fetchSize}&fit=cover`;

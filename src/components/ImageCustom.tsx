@@ -27,7 +27,7 @@ const ImageCustom: React.FC<ImageCustomProps> = ({
     let rawUrl = src.startsWith("http") ? src : `${MOVIE_IMG_PATH}${src}`;
 
     if (rawUrl.includes("googleusercontent.com")) {
-      rawUrl = rawUrl.replace(/=s\d+(-c)?$/, "=s120-c");
+      rawUrl = rawUrl.replace(/=?s\d+(-c)?$/, "=s120-c");
     }
 
     const getProxyUrl = (w?: number) => {

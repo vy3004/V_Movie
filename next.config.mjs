@@ -29,8 +29,8 @@ const withPWA = withPWAInit({
       options: {
         cacheName: "movie-posters",
         expiration: {
-          maxEntries: 200,
-          maxAgeSeconds: 30 * 24 * 60 * 60, // Giữ 30 ngày vì poster ít thay đổi
+          maxEntries: 100,
+          maxAgeSeconds: 15 * 24 * 60 * 60,
         },
         cacheableResponse: {
           statuses: [0, 200],

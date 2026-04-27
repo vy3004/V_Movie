@@ -382,7 +382,9 @@ export function useVideoPlayer({
             ) {
               window.screen.orientation.unlock();
             }
-          } catch {}
+          } catch (error) {
+            console.warn("Không thể mở khóa xoay màn hình thiết bị:", error);
+          }
         }
       });
 
