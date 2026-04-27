@@ -4,8 +4,9 @@ import dynamic from "next/dynamic";
 import { useState, useRef, useEffect } from "react";
 import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { debounce } from "lodash-es";
+import { useInView } from "react-intersection-observer";
 import RoomCard from "@/components/watch-party/RoomCard";
 import RoomCardSkeleton from "@/components/watch-party/RoomCardSkeleton";
 import { WatchPartyRoom } from "@/types";
@@ -14,9 +15,7 @@ import { useAuthModal } from "@/providers/AuthModalProvider";
 
 const CreateRoomModal = dynamic(
   () => import("@/components/watch-party/CreateRoomModal"),
-  {
-    ssr: false,
-  },
+  { ssr: false },
 );
 
 export default function WatchPartyLobbyPage() {
@@ -27,14 +26,18 @@ export default function WatchPartyLobbyPage() {
   const [querySearch, setQuerySearch] = useState("");
   const [showModal, setShowModal] = useState(false);
 
-  // 1. Tạo hàm debounce bằng lodash-es và giữ nó không bị re-create bằng useRef
+  // Intersection Observer để theo dõi đáy trang
+  const { ref, inView } = useInView({
+    threshold: 0.1, // Kích hoạt khi thấy 10% phần tử mồi
+  });
+
+  // 1. Logic Debounce Search
   const debouncedSearch = useRef(
     debounce((value: string) => {
       setQuerySearch(value);
     }, 500),
   ).current;
 
-  // 2. Dọn dẹp (cancel) debounce khi component bị unmount để tránh rò rỉ bộ nhớ
   useEffect(() => {
     return () => {
       debouncedSearch.cancel();
@@ -43,21 +46,34 @@ export default function WatchPartyLobbyPage() {
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setSearchTerm(value); // Cập nhật text trên input ngay lập tức
-    debouncedSearch(value); // Delay 500ms rồi mới cập nhật querySearch để gọi API
+    setSearchTerm(value);
+    debouncedSearch(value);
   };
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["wp-lobby", querySearch], // Dùng querySearch đã được debounce
-    queryFn: async () => {
-      const params = new URLSearchParams({ search: querySearch });
-      const res = await fetch(`/api/watch-party/lobby?${params}`);
-      if (!res.ok) {
-        throw new Error("Failed to fetch rooms");
-      }
-      return res.json();
-    },
-  });
+  // 2. Infinite Query Logic
+  const { data, isFetchingNextPage, fetchNextPage, hasNextPage, status } =
+    useInfiniteQuery({
+      queryKey: ["wp-lobby", querySearch],
+      queryFn: async ({ pageParam = 0 }) => {
+        const params = new URLSearchParams({
+          search: querySearch,
+          page: String(pageParam),
+          limit: "12",
+        });
+        const res = await fetch(`/api/watch-party/lobby?${params}`);
+        if (!res.ok) throw new Error("Failed to fetch rooms");
+        return res.json();
+      },
+      initialPageParam: 0,
+      getNextPageParam: (lastPage) => lastPage.nextPage,
+    });
+
+  // 3. Tự động load trang tiếp theo khi cuộn xuống đáy
+  useEffect(() => {
+    if (inView && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleCreateRoomClick = () => {
     if (!user) {
@@ -68,8 +84,8 @@ export default function WatchPartyLobbyPage() {
     setShowModal(true);
   };
 
-  const rooms = data?.rooms || [];
-
+  // Làm phẳng dữ liệu từ các trang (pages) thành một mảng duy nhất
+  const allRooms = data?.pages.flatMap((page) => page.rooms ?? []) ?? [];
   return (
     <div className="min-h-screen bg-[#141414] text-white py-12 px-6 lg:px-12">
       {/* Header Section */}
@@ -104,6 +120,7 @@ export default function WatchPartyLobbyPage() {
           </button>
         </div>
       </div>
+
       {/* Options & Filters */}
       <div className="flex flex-wrap items-center justify-between gap-6 mb-12 py-6 border-y border-white/5">
         <div className="flex flex-wrap items-center gap-3">
@@ -128,18 +145,41 @@ export default function WatchPartyLobbyPage() {
 
       {/* Main Grid */}
       <div className="max-w-7xl mx-auto">
-        {isLoading ? (
+        {status === "pending" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
               <RoomCardSkeleton key={n} />
             ))}
           </div>
-        ) : rooms.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {rooms.map((room: WatchPartyRoom) => (
-              <RoomCard key={room.id} room={room} />
-            ))}
-          </div>
+        ) : allRooms.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {allRooms.map((room: WatchPartyRoom) => (
+                <RoomCard key={room.id} room={room} />
+              ))}
+            </div>
+
+            {/* Phần tử mồi để kích hoạt fetchNextPage */}
+            <div
+              ref={ref}
+              className="h-20 flex items-center justify-center mt-10"
+            >
+              {isFetchingNextPage ? (
+                <div className="flex items-center gap-2 text-zinc-500 text-sm font-bold uppercase tracking-tighter">
+                  <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                  Đang tải thêm...
+                </div>
+              ) : hasNextPage ? (
+                <div className="text-zinc-600 text-xs uppercase tracking-widest font-bold">
+                  Cuộn để xem thêm
+                </div>
+              ) : (
+                <div className="text-zinc-600 text-xs uppercase tracking-widest font-bold opacity-50">
+                  Đã hiện hết tất cả phòng
+                </div>
+              )}
+            </div>
+          </>
         ) : (
           <div className="text-center py-20 bg-zinc-900/30 rounded-2xl border border-zinc-800/50">
             <span className="text-6xl mb-4 block">🍿</span>

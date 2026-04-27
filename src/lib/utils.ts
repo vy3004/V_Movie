@@ -154,6 +154,12 @@ export const formatMovieTitle = (
   return [name.trim(), (originName || "").trim()];
 };
 
+export const escapeSearchPattern = (value: string): string => {
+  return value
+    .replace(/[%_]/g, "\\$&") // Escape SQL LIKE wildcards
+    .replace(/[,()]/g, ""); // Remove PostgREST special chars
+};
+
 // --- WEB PUSH ---
 // Trình duyệt yêu cầu Public Key phải được mã hóa sang dạng Uint8Array
 export const urlBase64ToUint8Array = (base64String: string) => {

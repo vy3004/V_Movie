@@ -11,6 +11,7 @@ import {
   Cog6ToothIcon,
   ClipboardDocumentIcon,
   PlayIcon,
+  ArrowRightOnRectangleIcon,
 } from "@heroicons/react/24/outline";
 
 // Context & Hooks
@@ -103,14 +104,16 @@ export default function WatchPartyView() {
   const [startVideoTime, setStartVideoTime] = useState<number>(0);
   const prevEpisodeRef = useRef(room?.current_episode_slug);
   const isProcessingAutoNext = useRef(false);
+  const [isLeaving, setIsLeaving] = useState(false);
   const [isKicking, setIsKicking] = useState(false);
 
   const disconnectReason = useMemo(() => {
+    if (isLeaving) return null;
     if (isKicked) return "kicked";
     // Nếu phòng bị đánh dấu không hoạt động và mình KHÔNG phải người bấm nút đóng
     if (room && room.is_active === false && !isRealHost) return "closed";
     return null;
-  }, [isKicked, room, isRealHost]);
+  }, [isLeaving, isKicked, room, isRealHost]);
 
   // Lấy config hiện tại
   const activeConfig = disconnectReason
@@ -247,6 +250,7 @@ export default function WatchPartyView() {
   };
 
   const handleLeaveRoom = async () => {
+    setIsLeaving(true);
     const toastId = toast.loading("Đang rời phòng...");
 
     try {
@@ -302,13 +306,15 @@ export default function WatchPartyView() {
       <RoomAudioRenderer />
 
       {/* HEADER: Thông tin phòng & Mã phòng */}
-      <div className="max-w-[1600px] mx-auto mb-6 flex items-center justify-between bg-zinc-900/40 backdrop-blur-md p-4 rounded-xl border border-zinc-800 shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="bg-red-600 p-2.5 rounded-xl shadow-lg shadow-red-600/20">
+      <div className="max-w-[1600px] mx-auto mb-6 flex items-center justify-between bg-zinc-900/40 backdrop-blur-md p-4 rounded-xl border border-zinc-800 shadow-xl gap-4">
+        {" "}
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="bg-red-600 p-2.5 rounded-xl shadow-lg shadow-red-600/20 shrink-0">
             <PlayIcon className="w-6 h-6 text-white fill-current" />
           </div>
-          <div>
-            <h1 className="text-base font-black text-white uppercase truncate max-w-[200px] sm:max-w-md">
+
+          <div className="min-w-0 flex-1">
+            <h1 className="text-sm md:text-base font-black text-white uppercase truncate">
               {room.title}
             </h1>
             <button
@@ -320,17 +326,19 @@ export default function WatchPartyView() {
               }}
               className="text-[11px] text-zinc-500 flex items-center gap-1 hover:text-red-500 transition-colors"
             >
-              Mã phòng:{" "}
-              <span className="font-bold text-zinc-300">{room.room_code}</span>
-              <ClipboardDocumentIcon className="w-3.5 h-3.5" />
+              <span className="shrink-0">Mã phòng:</span>{" "}
+              <span className="font-bold truncate">{room.room_code}</span>
+              <ClipboardDocumentIcon className="w-3.5 h-3.5 shrink-0" />
             </button>
           </div>
         </div>
         <button
           onClick={handleLeaveRoom}
-          className="text-xs font-bold bg-zinc-800 hover:bg-red-600 text-white px-5 py-2.5 rounded-xl transition-all active:scale-95 shadow-lg"
+          title="Rời phòng"
+          className="flex items-center gap-2 text-xs font-bold bg-zinc-800 hover:bg-red-600 text-white px-4 py-2.5 rounded-xl transition-all active:scale-95 shadow-lg shrink-0"
         >
-          Rời phòng
+          <ArrowRightOnRectangleIcon className="w-5 h-5" />
+          <span className="hidden sm:inline">Rời phòng</span>
         </button>
       </div>
 

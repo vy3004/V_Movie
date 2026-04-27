@@ -273,6 +273,7 @@ export function useVideoPlayer({
 
     let globalNetworkTimer: NodeJS.Timeout | null = null;
     let pendingAction: "play" | "pause" | "seek" | null = null;
+    let rateAnimFrame: number = 0;
 
     const commitNetworkSync = (action: "play" | "pause" | "seek") => {
       if (Date.now() < remoteLockUntil.current) return;
@@ -371,6 +372,20 @@ export function useVideoPlayer({
         );
       }
 
+      player.on("fullscreenchange", () => {
+        if (player.isFullscreen()) {
+          try {
+            if (
+              window.screen &&
+              window.screen.orientation &&
+              window.screen.orientation.unlock
+            ) {
+              window.screen.orientation.unlock();
+            }
+          } catch {}
+        }
+      });
+
       player.on("play", () => commitNetworkSync("play"));
       player.on("pause", () => {
         refs.current.onPause?.();
@@ -384,40 +399,39 @@ export function useVideoPlayer({
       });
       player.on("seeked", () => commitNetworkSync("seek"));
 
-      // GIẤU SỐ THẬP PHÂN LẺ KHI SOFT SYNC
+      // LÀM ĐẸP CHỈ SỐ TỐC ĐỘ KHI SOFT SYNC
       let cachedRateEl: Element | null = null;
-      let lastDisplayedRate = "";
 
       player.on("ratechange", () => {
-        if (!cachedRateEl) {
-          const el = player.el()?.querySelector(".vjs-playback-rate-value");
-          if (el) cachedRateEl = el;
-        }
+        if (rateAnimFrame) cancelAnimationFrame(rateAnimFrame);
 
-        if (cachedRateEl) {
-          const rate = player.playbackRate() ?? 1;
-
-          const isStandard = STANDARD_RATES.includes(rate);
-
-          let displayRate;
-          // Ép hiển thị thành 1 nếu đang nằm trong khoảng bù trừ của Soft Sync (0.9 -> 1.1)
-          if (!isStandard && rate >= 0.9 && rate <= 1.1) {
-            displayRate = 1;
-          } else {
-            // Vẫn giữ lại phần thập phân cho các tốc độ người dùng tự chọn (VD: 1.25, 1.5, 0.5)
-            displayRate = Number(rate.toFixed(2));
+        rateAnimFrame = requestAnimationFrame(() => {
+          if (!cachedRateEl) {
+            const el = player.el()?.querySelector(".vjs-playback-rate-value");
+            if (el) cachedRateEl = el;
           }
 
-          const newText = `${displayRate}x`;
+          if (cachedRateEl) {
+            const rate = player.playbackRate() ?? 1;
+            const isStandard = STANDARD_RATES.includes(rate);
 
-          // Chỉ thao tác với DOM nếu text thực sự cần thay đổi
-          if (newText !== lastDisplayedRate) {
-            lastDisplayedRate = newText;
-            queueMicrotask(() => {
-              if (cachedRateEl) cachedRateEl.textContent = newText;
-            });
+            let displayRate;
+            // Ép hiển thị thành 1 nếu đang nằm trong khoảng bù trừ của Soft Sync (0.85 -> 1.15)
+            if (!isStandard && rate >= 0.9 && rate <= 1.1) {
+              displayRate = 1;
+            } else {
+              // Vẫn giữ lại phần thập phân cho các tốc độ người dùng tự chọn (VD: 1.25, 1.5, 0.5)
+              displayRate = Number(rate.toFixed(2));
+            }
+
+            const newText = `${displayRate}x`;
+
+            // Chỉ thao tác với DOM nếu text thực sự cần thay đổi
+            if (cachedRateEl.textContent !== newText) {
+              cachedRateEl.textContent = newText;
+            }
           }
-        }
+        });
       });
 
       player.on("timeupdate", () => {
@@ -488,6 +502,7 @@ export function useVideoPlayer({
       if (player && !player.isDisposed()) {
         isComponentUnmounted.current = true;
         cancelAnimationFrame(syncAnimFrame.current);
+        if (rateAnimFrame) cancelAnimationFrame(rateAnimFrame);
         if (globalNetworkTimer) clearTimeout(globalNetworkTimer);
         player.dispose();
         playerRef.current = null;

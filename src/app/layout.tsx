@@ -16,7 +16,12 @@ const AuthModal = dynamic(() => import("@/components/AuthModal"), {
   ssr: false,
 });
 
-import { WEB_TITLE, SUPABASE_URL, BASE_MOVIE_API } from "@/lib/configs";
+import {
+  WEB_TITLE,
+  SUPABASE_URL,
+  BASE_MOVIE_API,
+  WSRV_PROXY,
+} from "@/lib/configs";
 
 const roboto = Roboto({
   weight: ["400", "500", "700"],
@@ -62,9 +67,9 @@ export default function RootLayout({
   return (
     <html lang="vi" className="scroll-smooth">
       <head>
-        <link rel="preconnect" href="https://wsrv.nl" crossOrigin="anonymous" />
-        <link rel="dns-prefetch" href={SUPABASE_URL} />
-        <link rel="dns-prefetch" href={BASE_MOVIE_API} />
+        <link rel="preconnect" href={WSRV_PROXY} crossOrigin="anonymous" />
+        <link rel="preconnect" href={SUPABASE_URL} crossOrigin="anonymous" />
+        <link rel="preconnect" href={BASE_MOVIE_API} crossOrigin="anonymous" />
       </head>
       <body
         className={`${roboto.className} antialiased bg-black text-white selection:bg-red-600/30`}

@@ -1,13 +1,24 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { escapeSearchPattern } from "@/lib/utils";
 
 export const runtime = "edge";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const search = searchParams.get("search") || "";
+    const search = searchParams.get("search")?.trim() || "";
 
+    const page = Math.max(
+      0,
+      parseInt(searchParams.get("page") || "0", 10) || 0,
+    );
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(searchParams.get("limit") || "12", 10) || 12),
+    );
+    const from = page * limit;
+    const to = from + limit - 1;
     const supabase = await createSupabaseServer();
 
     let query = supabase
@@ -20,33 +31,33 @@ export async function GET(request: Request) {
       `,
       )
       .eq("is_active", true)
-      // DỌN DẸP PHÒNG TRỐNG: Đảm bảo không hiện phòng ma nếu Trigger xóa chưa kịp chạy hết.
-      .gt("participant_count", 0)
-      .order("created_at", { ascending: false })
-      .limit(50);
+      .gt("participant_count", 0);
 
     if (search) {
-      // 1. Khớp room_code (hiện cả Public & Private)
-      // 2. HOẶC (Phòng phải là Public AND (khớp tiêu đề OR khớp slug phim))
+      const escapedSearch = escapeSearchPattern(search);
+      const searchPattern = `%${escapedSearch}%`;
       query = query.or(
-        `room_code.ilike.%${search}%,and(is_private.eq.false,title.ilike.%${search}%),and(is_private.eq.false,current_movie_slug.ilike.%${search}%)`,
+        `room_code.ilike.${searchPattern},` +
+          `and(is_private.eq.false,title.ilike.${searchPattern}),` +
+          `and(is_private.eq.false,current_movie_slug.ilike.${searchPattern})`,
       );
     } else {
-      // Nếu không search, mặc định chỉ hiện phòng công khai
       query = query.eq("is_private", false);
     }
 
-    const { data, error } = await query;
+    const { data, error } = await query
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
     if (error) {
-      console.error("[WP_LIST_DB_ERROR]:", error);
-      return NextResponse.json(
-        { error: "Không thể tải danh sách phòng" },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: "Lỗi tải phòng" }, { status: 500 });
     }
 
-    return NextResponse.json({ rooms: data });
+    const rooms = data || [];
+    return NextResponse.json({
+      rooms,
+      nextPage: rooms.length === limit ? page + 1 : null,
+    });
   } catch (error) {
     console.error("[WP_LIST_ERROR]:", error);
     return NextResponse.json(
