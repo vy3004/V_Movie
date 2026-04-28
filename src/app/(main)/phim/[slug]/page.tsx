@@ -8,10 +8,10 @@ import { HistoryService } from "@/services/history.service";
 import { createSupabaseServer } from "@/lib/supabase/server";
 
 // Components
-import BreadCrumb from "@/components/BreadCrumb";
-import MovieDetail from "@/components/MovieDetail";
-import WatchMovie from "@/components/WatchMovie";
-import TrailerPlayer from "@/components/TrailerPlayer";
+import BreadCrumb from "@/components/layout/BreadCrumb";
+import MovieDetail from "@/components/shared/MovieDetail";
+import TrailerPlayer from "@/components/shared/TrailerPlayer";
+import WatchMovie from "@/app/(main)/phim/[slug]/_components/WatchMovie";
 
 interface PageProps {
   params: { slug: string };

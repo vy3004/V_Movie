@@ -8,7 +8,6 @@ import React, {
   useRef,
 } from "react";
 import { useRouter } from "next/navigation";
-import { User } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CateCtr,
@@ -16,6 +15,7 @@ import {
   Movie,
   PageMoviesData,
   SubscriptionItem,
+  UserProfile,
 } from "@/types";
 import { getLocalHistory, getLocalSubscriptions } from "@/lib/utils";
 import { createSupabaseClient } from "@/lib/supabase/client";
@@ -24,7 +24,7 @@ import { createSupabaseClient } from "@/lib/supabase/client";
 const HIDDEN_GENRE_SLUGS = ["phim-18", "nguoi-lon", "xxx", "phim-sex"];
 
 interface BaseDataContextType {
-  user: User | null | undefined;
+  user: UserProfile | null | undefined;
   authLoading: boolean;
   categories: CateCtr[] | undefined;
   countries: CateCtr[] | undefined;
@@ -51,7 +51,7 @@ export default function BaseDataContextProvider({
 
   // 1. Auth User
   const { data: user, isLoading: authLoading } = useQuery<
-    User | null | undefined
+    UserProfile | null | undefined
   >({
     queryKey: ["auth-user"],
     queryFn: async () => {
@@ -63,6 +63,37 @@ export default function BaseDataContextProvider({
     staleTime: Infinity,
     gcTime: Infinity,
   });
+
+  const { data: profile } = useQuery({
+    queryKey: ["user-profile", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+    staleTime: 1000 * 60 * 60,
+  });
+
+  const userProfile = useMemo(() => {
+    // 1. Nếu đang load (undefined) hoặc chưa đăng nhập (null) -> Trả về luôn
+    if (!user) return user;
+
+    // 2. Nếu có user nhưng chưa có profile -> Trả về user
+    if (!profile) return user as UserProfile;
+
+    // 3. Có cả 2 -> Gộp lại
+    return {
+      ...user,
+      ...profile,
+    } as UserProfile;
+  }, [user, profile]);
 
   // 2. Metadata: Lấy Thể loại & Quốc gia
   const { data: metadata } = useQuery({
@@ -111,7 +142,7 @@ export default function BaseDataContextProvider({
           queryClient.invalidateQueries({ queryKey });
         }
       } catch (error) {
-        console.error(`❌ [Sync Error: ${url}]`, error);
+        console.error(`[Sync Error: ${url}]`, error);
       }
     };
     handleSync(
@@ -192,7 +223,7 @@ export default function BaseDataContextProvider({
   // 7. Context Value
   const contextValue = useMemo(
     () => ({
-      user,
+      user:userProfile,
       authLoading,
       categories: processedData.cats,
       countries: processedData.ctrs,
@@ -202,7 +233,7 @@ export default function BaseDataContextProvider({
         day: processedData.day,
       },
     }),
-    [user, authLoading, processedData],
+    [userProfile, authLoading, processedData],
   );
 
   return (

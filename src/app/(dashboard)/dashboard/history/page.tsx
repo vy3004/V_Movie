@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useInView } from "react-intersection-observer";
+import { toast } from "sonner";
 import {
   ClockIcon,
   TrashIcon,
@@ -12,13 +13,12 @@ import {
   InboxIcon,
   ChevronDownIcon,
 } from "@heroicons/react/24/outline";
-import HistoryCard from "@/components/HistoryCard";
-import LoadingPage from "@/components/LoadingPage";
-import Loading from "@/components/Loading";
-import ConfirmModal from "@/components/ConfirmModal";
-import StatCard from "@/components/StatCard";
+import HistoryCard from "@/components/shared/HistoryCard";
+import LoadingPage from "@/components/ui/LoadingPage";
+import Loading from "@/components/ui/Loading";
+import ConfirmModal from "@/components/ui/ConfirmModal";
+import StatCard from "@/app/(dashboard)/dashboard/_components/StatCard";
 import { useHistoryList } from "@/hooks/useHistory";
-import { toast } from "sonner";
 
 type FilterType = "all" | "watching" | "finished";
 

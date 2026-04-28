@@ -1,5 +1,5 @@
-// src/services/subscription.service.ts
 import "server-only";
+
 import { redis } from "@/lib/redis";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { SubscriptionItem } from "@/types";
@@ -151,7 +151,6 @@ export const SubscriptionService = {
     const supabase = await createSupabaseServer();
 
     // 1. KIỂM TRA DB TRƯỚC
-    // Ta lấy luôn trạng thái cũ để tí nữa so sánh STATUS_CHANGE
     const { data: existingItem } = await supabase
       .from("user_subscriptions")
       .select("has_new_episode")
@@ -202,12 +201,12 @@ export const SubscriptionService = {
   },
 
   /**
-   * 6. XÓA PHIM (Optimized with SELECT)
+   * 6. XÓA PHIM
    */
   remove: async (userId: string, movieSlug: string) => {
     const supabase = await createSupabaseServer();
 
-    // Xóa và lấy lại trạng thái để trừ điểm stats chính xác trong 1 nốt nhạc
+    // Xóa và lấy lại trạng thái để trừ điểm stats
     const { data, error } = await supabase
       .from("user_subscriptions")
       .delete()
@@ -254,7 +253,7 @@ export const SubscriptionService = {
       const oldHasNew = redis
         ? JSON.parse((await redis.hget(getSubsKey(userId), movieSlug)) || "{}")
             .has_new_episode
-        : true; // fallback assume had new
+        : true;
 
       if (redis)
         await redis

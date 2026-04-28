@@ -15,9 +15,9 @@ import {
   FunnelIcon,
   ChevronDownIcon,
 } from "@heroicons/react/24/outline";
-import NotificationCard from "@/components/NotificationCard";
-import NotificationSkeleton from "@/components/NotificationSkeleton";
-import LoadingPage from "@/components/LoadingPage";
+import NotificationCard from "@/components/shared/NotificationCard";
+import NotificationSkeleton from "@/components/shared/NotificationSkeleton";
+import LoadingPage from "@/components/ui/LoadingPage";
 import { useNotification, FilterType } from "@/hooks/useNotification";
 
 export default function NotificationsPage() {
@@ -73,7 +73,7 @@ export default function NotificationsPage() {
   if (isLoading) return <LoadingPage />;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8 pb-20 animate-in fade-in duration-700 px-4 sm:px-0">
+    <div className="space-y-8 pb-20 animate-in fade-in duration-700">
       {/* --- HEADER --- */}
       <div>
         <h1 className="text-3xl font-black text-white flex items-center gap-3 tracking-tight">

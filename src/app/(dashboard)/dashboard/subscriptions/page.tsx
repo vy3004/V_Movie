@@ -13,11 +13,11 @@ import {
   CheckCircleIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import MovieCard from "@/components/MovieCard";
-import LoadingPage from "@/components/LoadingPage";
-import Loading from "@/components/Loading";
-import ConfirmModal from "@/components/ConfirmModal";
-import StatCard from "@/components/StatCard";
+import MovieCard from "@/components/shared/MovieCard";
+import LoadingPage from "@/components/ui/LoadingPage";
+import Loading from "@/components/ui/Loading";
+import ConfirmModal from "@/components/ui/ConfirmModal";
+import StatCard from "@/app/(dashboard)/dashboard/_components/StatCard";
 import { formatEpisodeName } from "@/lib/utils";
 import { useSubscriptionList } from "@/hooks/useSubscription";
 

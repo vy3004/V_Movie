@@ -1,12 +1,12 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { LockClosedIcon } from "@heroicons/react/24/outline";
 
-import KnockDoorClient from "@/components/watch-party/KnockDoorClient";
-import AutoJoinClient from "@/components/watch-party/AutoJoinClient";
-import WatchPartyClient from "@/components/watch-party/WatchPartyClient";
-import WaitingRoomClient from "@/components/watch-party/WaitingRoomClient";
-import ErrorRoomClient from "@/components/watch-party/ErrorRoomClient";
-import WatchPartyGuestClient from "@/components/watch-party/WatchPartyGuestClient";
+import KnockDoorClient from "@/app/(main)/xem-chung/_components/KnockDoorClient";
+import AutoJoinClient from "@/app/(main)/xem-chung/_components/AutoJoinClient";
+import WatchPartyClient from "@/app/(main)/xem-chung/_components/WatchPartyClient";
+import WaitingRoomClient from "@/app/(main)/xem-chung/_components/WaitingRoomClient";
+import ErrorRoomClient from "@/app/(main)/xem-chung/_components/ErrorRoomClient";
+import WatchPartyGuestClient from "@/app/(main)/xem-chung/_components/WatchPartyGuestClient";
 
 export default async function WatchPartyPage({
   params,

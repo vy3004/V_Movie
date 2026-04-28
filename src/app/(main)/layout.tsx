@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
-import Header from "@/components/Header";
+import Header from "@/components/layout/Header";
 
-const Footer = dynamic(() => import("@/components/Footer"), {
+const Footer = dynamic(() => import("@/components/layout/Footer"), {
   ssr: false,
   loading: () => <div className="h-20 w-full bg-zinc-950" />,
 });

@@ -5,14 +5,14 @@ import { Metadata } from "next";
 import { MovieService } from "@/services/movie.service";
 import { shuffleMovies } from "@/lib/utils";
 
-import Container from "@/components/Container";
-import HeroCarousel from "@/components/HeroCarousel";
-import ListMovieSection from "@/components/ListMovieSection";
-import HistorySection from "@/components/HistorySection";
-import SubscriptionSection from "@/components/SubscriptionSection";
-import WatchPartyBanner from "@/components/watch-party/WatchPartyBanner";
-import TopMovieSection from "@/components/TopMovieSection";
-const Banner = dynamicImport(() => import("@/components/Banner"), {
+import Container from "@/components/ui/Container";
+import ListMovieSection from "@/app/(main)/_components/ListMovieSection";
+import HistorySection from "@/app/(main)/_components/HistorySection";
+import SubscriptionSection from "@/app/(main)/_components/SubscriptionSection";
+import HeroCarousel from "@/app/(main)/_components/HeroCarousel";
+import WatchPartyBanner from "@/app/(main)/_components/WatchPartyBanner";
+import TopMovieSection from "@/app/(main)/_components/TopMovieSection";
+const Banner = dynamicImport(() => import("@/app/(main)/_components/Banner"), {
   ssr: false,
 });
 

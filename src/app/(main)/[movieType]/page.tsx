@@ -9,12 +9,15 @@ import { MovieService } from "@/services/movie.service";
 import { MovieQueryParams } from "@/types";
 
 // Components
-import MovieCard from "@/components/MovieCard";
-import MovieFilter from "@/components/MovieFilter";
+import MovieCard from "@/components/shared/MovieCard";
+import MovieFilter from "@/app/(main)/[movieType]/_components/MovieFilter";
 
-const Pagination = dynamic(() => import("@/components/Pagination"), {
-  ssr: false,
-});
+const Pagination = dynamic(
+  () => import("@/app/(main)/[movieType]/_components/Pagination"),
+  {
+    ssr: false,
+  },
+);
 
 interface PageProps {
   params: { movieType: string };

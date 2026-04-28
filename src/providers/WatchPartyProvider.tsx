@@ -16,15 +16,7 @@ import {
   RefetchOptions,
   RefetchQueryFilters,
 } from "@tanstack/react-query";
-import { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
-
-import {
-  useHostSuccession,
-  usePlaylistManager,
-  useRealtime,
-  useVideoControl,
-} from "@/hooks/useWatchParty";
 
 import { createSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -35,12 +27,18 @@ import {
   UserPresence,
   PlaylistItem,
   Movie,
+  UserProfile,
 } from "@/types";
+
+import { useVideoControl } from "@/app/(main)/xem-chung/_hooks/useVideoControl";
+import { useRealtime } from "@/app/(main)/xem-chung/_hooks/useRealtime";
+import { usePlaylistManager } from "@/app/(main)/xem-chung/_hooks/usePlaylistManager";
+import { useHostSuccession } from "@/app/(main)/xem-chung/_hooks/useHostSuccession";
 
 interface WatchPartyContextType {
   room: WatchPartyRoom;
   setRoom: React.Dispatch<React.SetStateAction<WatchPartyRoom>>;
-  user: User;
+  user: UserProfile;
   participants: WatchPartyParticipant[];
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
@@ -106,7 +104,7 @@ const WatchPartyContext = createContext<WatchPartyContextType | null>(null);
 interface ProviderProps {
   children: React.ReactNode;
   roomId: string;
-  user: User;
+  user: UserProfile;
   initialRoom: WatchPartyRoom;
   initialMe: WatchPartyParticipant;
 }
@@ -195,8 +193,8 @@ export function WatchPartyProvider({
         id: clientMsgId,
         room_id: roomId,
         user_id: user.id,
-        user_name: user.user_metadata?.full_name || "Guest",
-        avatar_url: user.user_metadata?.avatar_url || "",
+        user_name: user.full_name || user.user_metadata?.full_name || "Guest",
+        avatar_url: user.avatar_url || user.user_metadata?.avatar_url || "",
         text: msgText,
         type: type,
         created_at: new Date().toISOString(),
@@ -362,7 +360,7 @@ export function WatchPartyProvider({
       });
 
       await sendSystemMessage(
-        `🎬 ${user.user_metadata?.full_name || "Thành viên"} đã chuyển sang ${name || "tập mới"}`,
+        `🎬 ${user?.full_name || user.user_metadata?.full_name || "Thành viên"} đã chuyển sang ${name || "tập mới"}`,
       );
     },
     [canControl, isRealHost, room.id, supabase, user, sendSystemMessage],

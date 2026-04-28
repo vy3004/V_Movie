@@ -1,8 +1,10 @@
 import React from "react";
 import dynamic from "next/dynamic";
 
-import Container from "@/components/Container";
-const Sidebar = dynamic(() => import("@/components/Sidebar"), { ssr: false });
+import Container from "@/components/ui/Container";
+const Sidebar = dynamic(() => import("@/components/layout/Sidebar"), {
+  ssr: false,
+});
 
 const MovieLayout = ({ children }: { children: React.ReactNode }) => {
   return (

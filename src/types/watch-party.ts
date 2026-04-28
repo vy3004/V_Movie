@@ -1,3 +1,5 @@
+import { UserProfile } from "./user";
+
 // 1. Định nghĩa Settings cấu hình trong Room (Cột JSONB)
 export interface RoomSettings {
   wait_for_all: boolean;
@@ -28,12 +30,6 @@ export interface WatchPartyRoom {
 export interface ParticipantPermissions {
   can_manage_users: boolean;
   can_control_media: boolean;
-}
-
-// Định nghĩa phụ: Profile của user lấy từ bảng profiles khi JOIN
-export interface UserProfile {
-  full_name: string | null;
-  avatar_url: string | null;
 }
 
 // 4. Định nghĩa Thành viên (Bảng watch_party_participants)

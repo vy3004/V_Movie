@@ -7,14 +7,16 @@ import { toast } from "sonner";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { debounce } from "lodash-es";
 import { useInView } from "react-intersection-observer";
-import RoomCard from "@/components/watch-party/RoomCard";
-import RoomCardSkeleton from "@/components/watch-party/RoomCardSkeleton";
+
 import { WatchPartyRoom } from "@/types";
 import { useData } from "@/providers/BaseDataContextProvider";
 import { useAuthModal } from "@/providers/AuthModalProvider";
 
+import RoomCard from "@/app/(main)/xem-chung/_components/RoomCard";
+import RoomCardSkeleton from "@/app/(main)/xem-chung/_components/RoomCardSkeleton";
+
 const CreateRoomModal = dynamic(
-  () => import("@/components/watch-party/CreateRoomModal"),
+  () => import("@/app/(main)/xem-chung/_components/CreateRoomModal"),
   { ssr: false },
 );
 

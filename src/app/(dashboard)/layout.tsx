@@ -13,8 +13,8 @@ import {
   XMarkIcon,
   ArrowLeftOnRectangleIcon,
 } from "@heroicons/react/24/outline";
-import Logo from "@/components/Logo";
-import UserButton from "@/components/UserButton";
+import Logo from "@/components/ui/Logo";
+import UserButton from "@/components/layout/UserButton";
 
 const navigation = [
   { name: "Tổng quan", href: "/dashboard", icon: HomeIcon },

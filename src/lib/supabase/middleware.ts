@@ -2,7 +2,11 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
-  // eslint-disable-next-line prefer-const
+  const { pathname } = request.nextUrl;
+
+  // 1. KIỂM TRA ROUTE TRƯỚC TIÊN (Early Exit)
+  const isProtectedRoute = pathname.startsWith("/dashboard");
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -28,22 +32,22 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // 2. TỐI ƯU GỌI MẠNG (Chỉ gọi DB khi vào route bảo mật)
+  // Tránh việc trang chủ phải chờ 200ms để check user
+  if (isProtectedRoute) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  // Logic bảo vệ route
-  const { pathname } = request.nextUrl;
-  const isProtectedRoute = ["/profile"].some((path) =>
-    pathname.startsWith(path),
-  );
-
-  if (!user && isProtectedRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.searchParams.set("auth", "required");
-    return NextResponse.redirect(url);
+    // Nếu không có user mà dám vào route bảo mật -> Đuổi về trang chủ
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.searchParams.set("auth", "required");
+      return NextResponse.redirect(url);
+    }
   }
 
+  // Đối với các trang public, ta cứ cho đi qua mượt mà
   return supabaseResponse;
 }

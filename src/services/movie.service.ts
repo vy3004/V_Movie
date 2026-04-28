@@ -1,4 +1,5 @@
 import "server-only";
+
 import axios from "axios";
 import { redis } from "@/lib/redis";
 import { BASE_MOVIE_API, WEB_TITLE } from "@/lib/configs";

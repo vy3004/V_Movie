@@ -16,12 +16,12 @@ import { getRandomGreeting } from "@/lib/utils";
 import { HistoryItem } from "@/types";
 
 // --- COMPONENTS ---
-import HistoryCard from "@/components/HistoryCard";
-import UserBadges from "@/components/UserBadges";
+import HistoryCard from "@/components/shared/HistoryCard";
+import UserBadges from "@/components/shared/UserBadges";
 
 // --- DYNAMIC IMPORTS ---
 const ActivityChart = dynamic(
-  () => import("@/components/dashboard/ActivityChart"),
+  () => import("@/app/(dashboard)/dashboard/_components/ActivityChart"),
 
   {
     ssr: false,
@@ -46,17 +46,20 @@ const ActivityChart = dynamic(
   },
 );
 
-const GenreChart = dynamic(() => import("@/components/dashboard/GenreChart"), {
-  ssr: false,
+const GenreChart = dynamic(
+  () => import("@/app/(dashboard)/dashboard/_components/GenreChart"),
+  {
+    ssr: false,
 
-  loading: () => (
-    <div className="flex-1 min-h-[250px] bg-zinc-900/50 rounded-[2.5rem] border border-white/5 p-6 flex flex-col items-center justify-center animate-pulse">
-      <div className="w-full h-6 bg-zinc-800 rounded-lg mb-auto self-start" />
+    loading: () => (
+      <div className="flex-1 min-h-[250px] bg-zinc-900/50 rounded-[2.5rem] border border-white/5 p-6 flex flex-col items-center justify-center animate-pulse">
+        <div className="w-full h-6 bg-zinc-800 rounded-lg mb-auto self-start" />
 
-      <div className="w-40 h-40 rounded-full border-[20px] border-zinc-800 my-auto" />
-    </div>
-  ),
-});
+        <div className="w-40 h-40 rounded-full border-[20px] border-zinc-800 my-auto" />
+      </div>
+    ),
+  },
+);
 
 // --- CONSTANTS ---
 const DEFAULT_ACTIVITY = [
@@ -146,10 +149,10 @@ export default async function OverviewPage() {
             )}
           </p>
           <div className="flex items-baseline gap-3">
-            <p className="text-5xl font-black text-white leading-none tracking-tighter">
+            <div className="text-5xl font-black text-white leading-none tracking-tight">
               {totalHours}{" "}
               <span className="text-lg text-zinc-500 ml-1 font-bold">Giờ</span>
-            </p>
+            </div>
             <span
               className={`text-xs font-bold px-2 py-1 rounded-lg ${
                 isPositive

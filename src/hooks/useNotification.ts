@@ -3,17 +3,10 @@ import { toast } from "sonner";
 import { useInView } from "react-intersection-observer";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNotifications } from "@/providers/NotificationProvider";
-import { NotificationItem } from "@/types";
+import { NotificationItem, NotificationSettings } from "@/types";
 import { urlBase64ToUint8Array } from "@/lib/utils";
 
 export type FilterType = "all" | "unread" | "movies" | "comments";
-
-export interface NotificationPrefs {
-  new_episode: boolean;
-  comment_reply: boolean;
-  watch_party: boolean;
-  web_push: boolean;
-}
 
 export function useNotification() {
   const queryClient = useQueryClient();
@@ -52,7 +45,7 @@ export function useNotification() {
       web_push: false,
     },
     isLoading: isPrefsLoading,
-  } = useQuery<NotificationPrefs>({
+  } = useQuery<NotificationSettings>({
     queryKey: ["user-notification-prefs"],
     queryFn: async () => {
       const res = await fetch("/api/user/preferences");
@@ -66,7 +59,7 @@ export function useNotification() {
 
   // Mutation để lưu cài đặt lên Server
   const { mutate: savePrefsMutation, isPending: isSavingPrefs } = useMutation({
-    mutationFn: async (newPrefs: NotificationPrefs) => {
+    mutationFn: async (newPrefs: NotificationSettings) => {
       const res = await fetch("/api/user/preferences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -85,7 +78,7 @@ export function useNotification() {
   });
 
   // Hàm Gạt Nút (Optimistic Update - Gạt là UI đổi ngay)
-  const togglePref = (key: keyof NotificationPrefs) => {
+  const togglePref = (key: keyof NotificationSettings) => {
     const updatedPrefs = { ...prefs, [key]: !prefs[key] };
     queryClient.setQueryData(["user-notification-prefs"], updatedPrefs);
   };

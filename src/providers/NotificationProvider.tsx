@@ -17,7 +17,7 @@ import {
   InfiniteData, // Trích xuất Type này từ thư viện
 } from "@tanstack/react-query";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import NotificationCard from "@/components/NotificationCard";
+import NotificationCard from "@/components/shared/NotificationCard";
 import { useData } from "@/providers/BaseDataContextProvider";
 import { NotificationItem } from "@/types";
 

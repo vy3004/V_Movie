@@ -10,9 +10,9 @@ import BaseDataContextProvider from "@/providers/BaseDataContextProvider";
 import AuthModalProvider from "@/providers/AuthModalProvider";
 import NotificationProvider from "@/providers/NotificationProvider";
 import ConfirmProvider from "@/providers/ConfirmProvider";
-import ScrollToTop from "@/components/ScrollToTop";
+import ScrollToTop from "@/components/layout/ScrollToTop";
 
-const AuthModal = dynamic(() => import("@/components/AuthModal"), {
+const AuthModal = dynamic(() => import("@/components/layout/AuthModal"), {
   ssr: false,
 });
 

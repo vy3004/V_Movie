@@ -22,7 +22,7 @@ export const calculateUserBadges = (stats: {
     badges.push({
       id: "lv5",
       title: "Kẻ Thống Trị",
-      description: "Vị thần của mọi khung hình",
+      description: "Nắm giữ mọi khung hình",
       icon: "👑",
       color: "text-purple-400",
       bg: "bg-purple-400/10",
