@@ -110,13 +110,13 @@ sw.addEventListener("notificationclick", function (event: NotificationEvent) {
           const client = windowClients[i];
           try {
             const clientOrigin = new URL(client.url).origin;
-            // Nếu chung Domain (Origin) -> Dùng tab đó chuyển hướng sang phim mới
             if (
               clientOrigin === targetUrl.origin &&
               "navigate" in client &&
               "focus" in client
             ) {
-              return client
+              const windowClient = client as WindowClient;
+              return windowClient
                 .navigate(targetUrl.href)
                 .then((c) => (c ? c.focus() : null));
             }

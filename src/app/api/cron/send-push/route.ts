@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import webpush, { WebPushError } from "web-push";
+import { WebPushError } from "web-push";
+import webpush from "@/lib/webpush";
 import { qstashReceiver } from "@/lib/qstash";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { PushPayload, PushSubscriptionRecord } from "@/types/webpush";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
