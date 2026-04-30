@@ -8,6 +8,7 @@ import {
   PageMoviesData,
   MovieQueryParams,
   CateCtr,
+  Movie,
 } from "@/types";
 
 /**
@@ -118,8 +119,8 @@ export const MovieService = {
       );
 
       // BƯỚC 2: Logic Fallback (Vét phim năm trước nếu không đủ số lượng limit)
-      // Chỉ áp dụng khi slug là phim-bo/phim-le/hoathinh và user không yêu cầu năm cụ thể
-      const isListType = ["phim-bo", "phim-le", "hoathinh"].includes(slug);
+      // Chỉ áp dụng khi slug là phim-bo/phim-le/hoat-hinh và user không yêu cầu năm cụ thể
+      const isListType = ["phim-bo", "phim-le", "hoat-hinh"].includes(slug);
       if (isListType && !filters.year && apiData.items.length < limit) {
         const prevData = await fetchFromApi(previousYear);
         const needed = Number(limit) - apiData.items.length;
@@ -254,6 +255,168 @@ export const MovieService = {
         error,
       );
       return { data: { categories: [], countries: [] }, source: "ERROR" };
+    }
+  },
+  /**
+   * 5. Lấy phim theo Thể loại (Chuyên dụng cho Fallback AI Recommend)
+   */
+  getByGenre: async (
+    genreSlug: string,
+    page: number = 1,
+    limit: number = 12,
+  ): Promise<PageMoviesData> => {
+    // Cố định sortField để lấy phim có nhiều lượt vote nhất
+    const sortField = "tmdb.vote_count";
+    const cacheKey = getCacheKey("genre", {
+      genreSlug,
+      page,
+      limit,
+      sortField,
+    });
+
+    if (redis) {
+      const cached = await redis.get<PageMoviesData>(cacheKey);
+      if (cached) return cached;
+    }
+
+    try {
+      const response = await axios.get(
+        `${BASE_MOVIE_API}/the-loai/${genreSlug}`,
+        {
+          params: { page, limit, sortField },
+          timeout: 10000,
+        },
+      );
+
+      const apiData = response.data.data;
+
+      console.log(`Fetched movies for genre "${genreSlug}" from API:`, apiData);
+
+      const result: PageMoviesData = {
+        items: apiData.items || [],
+        params: apiData.params || {
+          type_slug: genreSlug,
+          filterCategory: [genreSlug],
+          filterCountry: [],
+          filterYear: "",
+          filterType: "",
+          sortField: sortField,
+          sortType: "desc",
+          pagination: {
+            totalItems: 0,
+            totalItemsPerPage: limit,
+            currentPage: page,
+            pageRanges: 5,
+          },
+        },
+        titlePage: apiData.titlePage || `Thể loại: ${genreSlug}`,
+        breadCrumb: apiData.breadCrumb || [],
+        seoOnPage: {
+          ...apiData.seoOnPage,
+          titleHead: `${WEB_TITLE} | Thể loại ${genreSlug}`,
+        },
+      };
+
+      // Cache lại 2 tiếng
+      if (redis && result.items.length > 0) {
+        await redis.set(cacheKey, result, { ex: 7200 });
+      }
+      return result;
+    } catch (error) {
+      console.error(
+        `[MovieService.getByGenre] Error with genreSlug: ${genreSlug}`,
+        error,
+      );
+      throw error;
+    }
+  },
+  /**
+   * 6. Lấy phim tương tự (Lọc 2 lớp)
+   */
+  getSimilarMovies: async (
+    currentSlug: string,
+    typeSlug: string, // 'phim-bo' hoặc 'phim-le' hoặc 'hoat-hinh'
+    genres: { slug: string; name?: string }[],
+    countries: { slug: string; name?: string }[],
+    limit: number = 12,
+  ): Promise<Movie[]> => {
+    if (!genres || genres.length === 0) return [];
+
+    const cacheKey = `similar_movies:${currentSlug}`;
+    if (redis) {
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        return (
+          typeof cachedData === "string" ? JSON.parse(cachedData) : cachedData
+        ) as Movie[];
+      }
+    }
+
+    try {
+      const similarMovies: Movie[] = [];
+      const seenSlugs = new Set<string>([currentSlug]);
+
+      const primaryGenre = genres[0]?.slug;
+      const primaryCountry =
+        countries && countries.length > 0 ? countries[0].slug : undefined;
+
+      // ==========================================
+      // LỚP 1: TÌM KIẾM KHẮT KHE (Cùng Loại + Thể loại + Quốc gia)
+      // ==========================================
+      const strictResponse = await MovieService.getList({
+        slug: typeSlug,
+        category: primaryGenre,
+        country: primaryCountry,
+        limit: limit + 5,
+      });
+
+      let items = strictResponse.items || [];
+
+      // ==========================================
+      // LỚP 2: FALLBACK (Nếu lớp 1 lấy không đủ phim)
+      // ==========================================
+      if (items.length < limit) {
+        const looseResponse = await MovieService.getList({
+          slug: typeSlug,
+          category: primaryGenre, // Bỏ quốc gia đi, chỉ cần cùng thể loại
+          limit: limit + 5,
+        });
+
+        // Gộp kết quả lại (Phim xịn đứng trước, phim fallback đứng sau)
+        items = [...items, ...(looseResponse.items || [])];
+      }
+
+      // ==========================================
+      // NHẶT KẸO & LỌC TRÙNG
+      // ==========================================
+      for (const m of items) {
+        if (similarMovies.length >= limit) break;
+
+        const currentEp = (m.episode_current || "").toLowerCase();
+
+        if (
+          !currentEp.includes("trailer") &&
+          currentEp !== "" &&
+          !seenSlugs.has(m.slug)
+        ) {
+          seenSlugs.add(m.slug);
+          similarMovies.push(m);
+        }
+      }
+
+      if (redis && similarMovies.length > 0) {
+        await redis.set(cacheKey, JSON.stringify(similarMovies), {
+          ex: 60 * 60 * 24 * 3, // Cache 3 ngày
+        });
+      }
+
+      return similarMovies;
+    } catch (error) {
+      console.error(
+        `[SIMILAR_MOVIES_ERROR] Lỗi lấy phim tương tự cho ${currentSlug}`,
+        error,
+      );
+      return [];
     }
   },
 };

@@ -1,4 +1,6 @@
-import LazyMovieSection from "@/app/(main)/_components/LazyMovieSection";
+import { Suspense } from "react";
+import ServerMovieSection from "./ServerMovieSection";
+import MovieSectionSkeleton from "@/components/shared/MovieSectionSkeleton";
 import { typesMovie } from "@/lib/configs";
 
 const SECTIONS = [
@@ -11,13 +13,14 @@ const SECTIONS = [
 
 const ListMovieSection = () => {
   return (
-    <div className="space-y-6 sm:space-y-12">
+    <div className="space-y-6 sm:space-y-12 mt-6 sm:mt-12">
       {SECTIONS.map((section) => (
-        <LazyMovieSection
-          key={section.type}
-          title={section.config.name}
-          slug={section.config.slug}
-        />
+        <Suspense key={section.type} fallback={<MovieSectionSkeleton />}>
+          <ServerMovieSection
+            title={section.config.name}
+            slug={section.config.slug}
+          />
+        </Suspense>
       ))}
     </div>
   );

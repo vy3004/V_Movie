@@ -1,18 +1,28 @@
-import { cache, Suspense } from "react";
-import dynamicImport from "next/dynamic";
+import dynamic from "next/dynamic";
+import { cache } from "react";
 import { Metadata } from "next";
 
 import { MovieService } from "@/services/movie.service";
 import { shuffleMovies } from "@/lib/utils";
 
 import Container from "@/components/ui/Container";
-import ListMovieSection from "@/app/(main)/_components/ListMovieSection";
-import HistorySection from "@/app/(main)/_components/HistorySection";
-import SubscriptionSection from "@/app/(main)/_components/SubscriptionSection";
 import HeroCarousel from "@/app/(main)/_components/HeroCarousel";
-import WatchPartyBanner from "@/app/(main)/_components/WatchPartyBanner";
 import TopMovieSection from "@/app/(main)/_components/TopMovieSection";
-const Banner = dynamicImport(() => import("@/app/(main)/_components/Banner"), {
+import RecommendSection from "@/app/(main)/_components/RecommendSection";
+import ListMovieSection from "@/app/(main)/_components/ListMovieSection";
+const HistorySection = dynamic(
+  () => import("@/app/(main)/_components/HistorySection"),
+  { ssr: false },
+);
+const SubscriptionSection = dynamic(
+  () => import("@/app/(main)/_components/SubscriptionSection"),
+  { ssr: false },
+);
+const WatchPartyBanner = dynamic(
+  () => import("@/app/(main)/_components/WatchPartyBanner"),
+  { ssr: false },
+);
+const Banner = dynamic(() => import("@/app/(main)/_components/Banner"), {
   ssr: false,
 });
 
@@ -22,15 +32,6 @@ const getHomeData = cache(async () => {
   return await MovieService.getList({ limit: 16 });
 });
 
-const Skeleton = ({ children }: { children: React.ReactNode }) => (
-  <Suspense
-    fallback={
-      <div className="h-[200px] animate-pulse bg-zinc-900 rounded-xl" />
-    }
-  >
-    {children}
-  </Suspense>
-);
 /**
  * SEO Metadata
  */
@@ -85,27 +86,15 @@ export default async function HomePage() {
       )}
 
       <Container className="mt-6 sm:mt-12">
-        <Skeleton>
-          <HistorySection title="Tiếp tục xem" type="watching" />
-        </Skeleton>
+        <RecommendSection />
+        <HistorySection title="Tiếp tục xem" type="watching" />
       </Container>
 
       <WatchPartyBanner />
 
-      <Container
-        className={`${
-          hasData ? "mt-6 sm:mt-12" : "mt-10 sm:mt-20"
-        } mb-12 space-y-6 sm:space-y-12`}
-      >
-        {/* Các Section mang tính cá nhân hóa dùng Suspense để không chặn luồng render chính */}
-        <Suspense
-          fallback={
-            <div className="h-20 animate-pulse bg-zinc-900 rounded-xl" />
-          }
-        >
-          <SubscriptionSection />
-          <HistorySection title="Phim đã xem" type="finished" />
-        </Suspense>
+      <Container className="mt-6 sm:mt-12">
+        <SubscriptionSection />
+        <HistorySection title="Phim đã xem" type="finished" />
 
         <Banner />
 

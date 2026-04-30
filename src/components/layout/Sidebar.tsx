@@ -5,7 +5,6 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { FireIcon, StarIcon } from "@heroicons/react/24/solid";
 
-import Loading from "@/components/ui/Loading";
 import ImageCustom from "@/components/ui/ImageCustom";
 import { Badge, BorderedItem } from "@/components/shared/MovieDetail";
 
@@ -35,7 +34,7 @@ const Sidebar = () => {
   };
 
   return (
-    <div className="col-span-12 xl:col-span-4 py-3.5 px-4 rounded-lg bg-background">
+    <div className="col-span-12 xl:col-span-4 py-3.5 px-4 rounded-t-lg bg-background">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center text-main font-bold uppercase">
           <FireIcon className="size-5 mr-1" />
@@ -116,7 +115,7 @@ const MovieList = ({ movies }: { movies: Movie[] }) => {
               <div className="absolute right-1 top-1 bg-black/80 rounded-lg px-2 py-1 flex items-center gap-1 text-xs text-primary group-hover:text-main font-semibold">
                 <StarIcon className="size-3" />
                 {movie.tmdb?.vote_average?.toFixed(0) ?? "N/A"}
-              </div>{" "}
+              </div>
             </div>
             <div className="col-span-2 h-full space-y-3">
               <h3 className="line-clamp-2 group-hover:text-main group-hover:font-semibold">
@@ -143,8 +142,40 @@ const MovieList = ({ movies }: { movies: Movie[] }) => {
           </Link>
         ))
       ) : (
-        <Loading />
+        <MovieListSkeleton />
       )}
+    </div>
+  );
+};
+
+const MovieListSkeleton = () => {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div key={index} className="grid grid-cols-3 gap-3 items-center">
+          {/* Cột 1: Ảnh Thumbnail */}
+          <div className="col-span-1 relative aspect-[3/4] rounded-lg bg-gray-700/40 animate-pulse overflow-hidden" />
+
+          {/* Cột 2: Nội dung */}
+          <div className="col-span-2 h-full flex flex-col justify-center space-y-4">
+            <div className="h-6 w-full bg-gray-700/40 rounded animate-pulse" />
+
+            <div className="space-y-2.5">
+              {/* Hàng Badge chất lượng & ngôn ngữ */}
+              <div className="flex gap-2">
+                <div className="h-5 w-12 bg-gray-700/40 rounded shadow-sm animate-pulse" />
+                <div className="h-5 w-20 bg-gray-700/40 rounded shadow-sm animate-pulse" />
+              </div>
+              {/* Hàng Meta (Năm, Tập...) */}
+              <div className="flex gap-2">
+                <div className="h-5 w-10 bg-gray-700/40 rounded animate-pulse" />
+                <div className="h-5 w-16 bg-gray-700/40 rounded animate-pulse" />
+                <div className="h-5 w-14 bg-gray-700/40 rounded animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 };

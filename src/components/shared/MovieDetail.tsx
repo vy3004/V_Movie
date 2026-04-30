@@ -74,12 +74,10 @@ export const MovieInfo = ({
   isDetail: boolean;
 }) => (
   <div className={className}>
-    <h1 className="text-xl font-extrabold text-primary line-clamp-1 md:leading-tight sm:text-3xl md:text-5xl">
+    <h1 className="text-xl font-extrabold text-primary line-clamp-1 md:leading-tight md:text-3xl">
       {movie.name}
     </h1>
-    <h2 className="text-sm line-clamp-1 sm:text-xl md:text-3xl">
-      {movie.origin_name}
-    </h2>
+    <h2 className="text-sm line-clamp-1 sm:text-xl">{movie.origin_name}</h2>
     <div className="space-y-1 sm:space-y-4 text-xs md:text-sm pt-4 md:pt-8">
       <MovieTags movie={movie} className="space-y-2 sm:space-y-4" />
 
@@ -168,7 +166,7 @@ export const CategoryAndCountry = ({
       <Badge className="bg-white/40" key={cate.slug}>
         {cate.name}
       </Badge>
-    ))}{" "}
+    ))}
   </div>
 );
 

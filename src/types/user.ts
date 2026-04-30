@@ -14,3 +14,10 @@ export interface NotificationSettings {
   watch_party: boolean;
   comment_reply: boolean;
 }
+
+export interface UserRecommendation {
+  recently_finished: string[];
+  currently_watching: string[];
+  total_watched?: number;
+  genre_counts?: Record<string, number>;
+}

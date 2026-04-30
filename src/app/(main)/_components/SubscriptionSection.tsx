@@ -26,7 +26,7 @@ export default function SubscriptionSection() {
   if (!subscriptions || subscriptions.length === 0) return null;
 
   return (
-    <div>
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-700 mb-10">
       <div className="relative z-20 flex items-center justify-between font-bold mb-4">
         <div className="flex items-center gap-3">
           <div className="w-1.5 h-6 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"></div>

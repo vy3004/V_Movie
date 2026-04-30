@@ -225,6 +225,18 @@ export const urlBase64ToUint8Array = (base64String: string) => {
   return outputArray;
 };
 
+// Chuyển "Hành Động" -> "hanh-dong"
+export const generateSlug = (str: string) => {
+  return str
+    .toLowerCase()
+    .normalize("NFD") // Tách dấu ra khỏi ký tự
+    .replace(/[\u0300-\u036f]/g, "") // Xóa các dấu
+    .replace(/đ/g, "d") // Đổi đ thành d
+    .replace(/[^a-z0-9\s-]/g, "") // Xóa ký tự đặc biệt, giữ lại chữ, số, khoảng trắng và gạch ngang
+    .trim() // Xóa khoảng trắng 2 đầu
+    .replace(/\s+/g, "-"); // Đổi khoảng trắng thành gạch ngang
+};
+
 const GUEST_HISTORY_KEY = "v_movie_guest_history";
 
 export const saveLocalHistory = (item: HistoryItem) => {

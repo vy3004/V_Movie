@@ -13,6 +13,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.65",
     "@heroicons/react": "^2.1.5",
     "@hookform/resolvers": "^5.2.2",
     "@livekit/components-react": "^2.9.20",
@@ -23,6 +24,7 @@
     "@upstash/qstash": "^2.10.1",
     "@upstash/redis": "^1.37.0",
     "@videojs/themes": "^1.0.1",
+    "ai": "^6.0.170",
     "axios": "^1.7.7",
     "date-fns": "^4.1.0",
     "embla-carousel-autoplay": "^8.3.0",

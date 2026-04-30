@@ -1,4 +1,4 @@
-import { cache } from "react";
+import { cache, Suspense } from "react";
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 
@@ -12,6 +12,7 @@ import BreadCrumb from "@/components/layout/BreadCrumb";
 import MovieDetail from "@/components/shared/MovieDetail";
 import TrailerPlayer from "@/components/shared/TrailerPlayer";
 import WatchMovie from "@/app/(main)/phim/[slug]/_components/WatchMovie";
+import SimilarMovies from "./_components/SimilarMovies";
 
 interface PageProps {
   params: { slug: string };
@@ -95,6 +96,15 @@ export default async function MoviePage({ params }: PageProps) {
       ) : (
         <TrailerPlayer movie={movie} user={user} />
       )}
+
+      <Suspense fallback={null}>
+        <SimilarMovies
+          currentSlug={movie.slug}
+          typeSlug={movie.type}
+          genres={movie.category}
+          countries={movie.country}
+        />
+      </Suspense>
 
       {data.seoOnPage.seoSchema && (
         <script

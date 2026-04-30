@@ -113,7 +113,7 @@ export default function BaseDataContextProvider({
       if (!res.ok) throw new Error("Failed to fetch movies");
       return res.json();
     },
-    staleTime: 1000 * 60 * 60,
+    staleTime: 1000 * 60 * 60 * 24, // 1 ngày
   });
 
   // 4. Đồng bộ Lịch sử & Theo dõi
@@ -223,7 +223,7 @@ export default function BaseDataContextProvider({
   // 7. Context Value
   const contextValue = useMemo(
     () => ({
-      user:userProfile,
+      user: userProfile,
       authLoading,
       categories: processedData.cats,
       countries: processedData.ctrs,

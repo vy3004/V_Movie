@@ -86,3 +86,12 @@ export interface MovieQueryParams {
   country?: string;
   year?: string | number;
 }
+
+export interface MovieRecommendation {
+  movie_slug: string;
+  name: string;
+  thumb_url: string;
+  episode_current: string;
+  reason?: string;
+  categories?: string[];
+}
