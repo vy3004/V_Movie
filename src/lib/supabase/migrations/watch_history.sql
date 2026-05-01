@@ -11,14 +11,24 @@ create table public.watch_history (
   updated_at timestamp with time zone null default now(),
   created_at timestamp with time zone null default now(),
   last_episode_of_movie_slug text null,
+  movie_metadata jsonb null default '{}'::jsonb,
   constraint watch_history_pkey primary key (id),
   constraint unique_history unique NULLS not distinct (user_id, device_id, movie_slug),
+  constraint unique_user_movie unique (user_id, movie_slug),
   constraint watch_history_user_movie_unique unique (user_id, movie_slug),
   constraint watch_history_user_id_fkey foreign KEY (user_id) references auth.users (id) on delete CASCADE
 ) TABLESPACE pg_default;
 
-create index IF not exists idx_history_user on public.watch_history using btree (user_id, updated_at desc) TABLESPACE pg_default;
-
 create index IF not exists idx_history_device on public.watch_history using btree (device_id, updated_at desc) TABLESPACE pg_default;
 
 create index IF not exists idx_history_movie_slug on public.watch_history using btree (movie_slug) TABLESPACE pg_default;
+
+create index IF not exists idx_history_user on public.watch_history using btree (user_id, updated_at desc) TABLESPACE pg_default;
+
+create index IF not exists idx_watch_history_user_updated on public.watch_history using btree (user_id, updated_at desc) TABLESPACE pg_default;
+
+create index IF not exists idx_watch_history_device_updated on public.watch_history using btree (device_id, updated_at desc) TABLESPACE pg_default;
+
+create index IF not exists idx_watch_history_is_finished on public.watch_history using btree (is_finished) TABLESPACE pg_default;
+
+create index IF not exists idx_watch_history_movie_name_search on public.watch_history using gin (movie_name gin_trgm_ops) TABLESPACE pg_default;

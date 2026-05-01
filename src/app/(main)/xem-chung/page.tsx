@@ -148,11 +148,7 @@ export default function WatchPartyLobbyPage() {
       {/* Main Grid */}
       <div className="max-w-7xl mx-auto">
         {status === "pending" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-              <RoomCardSkeleton key={n} />
-            ))}
-          </div>
+          <RoomCardSkeletons />
         ) : allRooms.length > 0 ? (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -162,24 +158,8 @@ export default function WatchPartyLobbyPage() {
             </div>
 
             {/* Phần tử mồi để kích hoạt fetchNextPage */}
-            <div
-              ref={ref}
-              className="h-20 flex items-center justify-center mt-10"
-            >
-              {isFetchingNextPage ? (
-                <div className="flex items-center gap-2 text-zinc-500 text-sm font-bold uppercase tracking-tighter">
-                  <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
-                  Đang tải thêm...
-                </div>
-              ) : hasNextPage ? (
-                <div className="text-zinc-600 text-xs uppercase tracking-widest font-bold">
-                  Cuộn để xem thêm
-                </div>
-              ) : (
-                <div className="text-zinc-600 text-xs uppercase tracking-widest font-bold opacity-50">
-                  Đã hiện hết tất cả phòng
-                </div>
-              )}
+            <div ref={ref} className="mt-6 w-full">
+              {isFetchingNextPage && <RoomCardSkeletons />}
             </div>
           </>
         ) : (
@@ -217,3 +197,11 @@ function FilterPill({
     </button>
   );
 }
+
+const RoomCardSkeletons = () => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    {[1, 2, 3, 4].map((n) => (
+      <RoomCardSkeleton key={n} />
+    ))}
+  </div>
+);

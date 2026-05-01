@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useCallback, useMemo } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { User } from "@supabase/supabase-js";
 import { throttle } from "lodash-es";
@@ -28,9 +28,11 @@ export function useHistoryTracker({
   const queryClient = useQueryClient();
 
   // KHAI BÁO Ổ KHÓA ĐỂ CHỐNG GỌI TRÙNG LẶP API
-  const lastSavedDBStateRef = useRef<{ slug: string; time: number } | null>(
-    null,
-  );
+  const lastSavedDBStateRef = useRef<{
+    slug: string;
+    time: number;
+    timestamp: number;
+  } | null>(null);
 
   // 1. Tính tập cuối của phim
   const lastEpOfMovie =
@@ -58,65 +60,71 @@ export function useHistoryTracker({
   }, []);
 
   // 2. Logic lưu LocalStorage an toàn (Chống spam bằng Throttle 5s)
-  const syncLocal = useMemo(
-    () =>
-      throttle(() => {
-        const data = trackingData.current;
-        if (!data || data.current_time < 5) return;
-
-        const existing = inMemoryLocalHistory.current.find(
-          (h) => h.movie_slug === movie.slug,
-        );
-        const existingProgress =
-          (existing?.episodes_progress as Record<string, EpisodeProgress>) ||
-          {};
-
-        const isCurrentEpFinished =
-          data.duration > 0 && data.current_time / data.duration > 0.9;
-        const finalEpIsFinished =
-          existingProgress[episodeSlug]?.ep_is_finished || isCurrentEpFinished;
-
-        const isMovieCompletelyFinished =
-          episodeSlug === lastEpOfMovie
-            ? finalEpIsFinished
-            : existingProgress[lastEpOfMovie]?.ep_is_finished || false;
-
-        const newItem: HistoryItem = {
-          movie_slug: movie.slug,
-          movie_name: movie.name,
-          movie_poster: movie.poster_url,
-          last_episode_slug: episodeSlug,
-          last_episode_of_movie_slug: lastEpOfMovie,
-          updated_at: new Date().toISOString(),
-          is_finished: isMovieCompletelyFinished,
-          movie_metadata: movieMetadataRef.current,
-          episodes_progress: {
-            ...existingProgress,
-            [episodeSlug]: {
-              ep_last_time: data.current_time,
-              ep_duration: data.duration,
-              ep_is_finished: finalEpIsFinished,
-              ep_updated_at: new Date().toISOString(),
-            },
-          },
-        };
-
-        const index = inMemoryLocalHistory.current.findIndex(
-          (h) => h.movie_slug === movie.slug,
-        );
-        if (index > -1) inMemoryLocalHistory.current[index] = newItem;
-        else inMemoryLocalHistory.current.push(newItem);
-
-        saveLocalHistory(newItem);
-      }, 5000),
-    [movie.slug, movie.name, movie.poster_url, episodeSlug, lastEpOfMovie],
-  );
+  const syncLocalRef = useRef<ReturnType<typeof throttle>>();
 
   useEffect(() => {
+    // Cancel throttle cũ nếu có
+    if (syncLocalRef.current) {
+      syncLocalRef.current.cancel();
+    }
+
+    // Tạo throttle mới
+    syncLocalRef.current = throttle(() => {
+      const data = trackingData.current;
+      if (!data || data.current_time < 5) return;
+
+      const existing = inMemoryLocalHistory.current.find(
+        (h) => h.movie_slug === movie.slug,
+      );
+      const existingProgress =
+        (existing?.episodes_progress as Record<string, EpisodeProgress>) || {};
+
+      const isCurrentEpFinished =
+        data.duration > 0 && data.current_time / data.duration > 0.9;
+      const finalEpIsFinished =
+        existingProgress[episodeSlug]?.ep_is_finished || isCurrentEpFinished;
+
+      const isMovieCompletelyFinished =
+        episodeSlug === lastEpOfMovie
+          ? finalEpIsFinished
+          : existingProgress[lastEpOfMovie]?.ep_is_finished || false;
+
+      const newItem: HistoryItem = {
+        movie_slug: movie.slug,
+        movie_name: movie.name,
+        movie_poster: movie.poster_url,
+        last_episode_slug: episodeSlug,
+        last_episode_of_movie_slug: lastEpOfMovie,
+        updated_at: new Date().toISOString(),
+        is_finished: isMovieCompletelyFinished,
+        movie_metadata: movieMetadataRef.current,
+        episodes_progress: {
+          ...existingProgress,
+          [episodeSlug]: {
+            ep_last_time: data.current_time,
+            ep_duration: data.duration,
+            ep_is_finished: finalEpIsFinished,
+            ep_updated_at: new Date().toISOString(),
+          },
+        },
+      };
+
+      const index = inMemoryLocalHistory.current.findIndex(
+        (h) => h.movie_slug === movie.slug,
+      );
+      if (index > -1) inMemoryLocalHistory.current[index] = newItem;
+      else inMemoryLocalHistory.current.push(newItem);
+
+      saveLocalHistory(newItem);
+    }, 5000);
+
+    // Cleanup khi dependencies thay đổi hoặc unmount
     return () => {
-      syncLocal.cancel();
+      if (syncLocalRef.current) {
+        syncLocalRef.current.flush();
+      }
     };
-  }, [syncLocal]);
+  }, [movie.slug, movie.name, movie.poster_url, episodeSlug, lastEpOfMovie]);
 
   // 3. Logic Gửi Tracking Lên Redis
   const handleTimeUpdate = useCallback(
@@ -129,7 +137,10 @@ export function useHistoryTracker({
         duration,
       };
 
-      syncLocal();
+      // Gọi throttle function từ ref
+      if (syncLocalRef.current) {
+        syncLocalRef.current();
+      }
 
       const currentSecond = Math.floor(currentTime);
 
@@ -157,12 +168,16 @@ export function useHistoryTracker({
         }).catch(console.error);
       }
     },
-    [movie, episodeSlug, lastEpOfMovie, syncLocal, user],
+    [movie, episodeSlug, lastEpOfMovie, user],
   );
 
   // 4. Chốt DB khi thoát (Dùng Blob để chống lỗi rớt Header)
   const syncSupabase = useCallback(() => {
-    syncLocal.flush();
+    // Flush throttle trước khi sync
+    if (syncLocalRef.current) {
+      syncLocalRef.current.flush();
+    }
+
     if (!user) {
       // Nếu là Guest, ép cập nhật ngay lúc này
       queryClient.invalidateQueries({ queryKey: ["history-list"] });
@@ -179,7 +194,8 @@ export function useHistoryTracker({
     // Nếu tập phim và thời gian không hề thay đổi so với lần gọi ngay trước đó -> Block
     if (
       lastSavedDBStateRef.current?.slug === episodeSlug &&
-      lastSavedDBStateRef.current?.time === data.current_time
+      lastSavedDBStateRef.current?.time === data.current_time &&
+      Date.now() - lastSavedDBStateRef.current.timestamp < 2000
     ) {
       return;
     }
@@ -188,6 +204,7 @@ export function useHistoryTracker({
     lastSavedDBStateRef.current = {
       slug: episodeSlug,
       time: data.current_time,
+      timestamp: Date.now(),
     };
 
     const existing = inMemoryLocalHistory.current.find(
@@ -228,7 +245,7 @@ export function useHistoryTracker({
         queryClient.invalidateQueries({ queryKey: ["history-stats"] });
       })
       .catch(console.error);
-  }, [user, movie, episodeSlug, lastEpOfMovie, syncLocal, queryClient]);
+  }, [user, movie, episodeSlug, lastEpOfMovie, queryClient]);
 
   // Gắn event cho việc đóng tab / chuyển trang
   useEffect(() => {

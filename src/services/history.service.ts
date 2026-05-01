@@ -46,27 +46,26 @@ export const HistoryService = {
     ) => {
       const cacheKey = `${key}:top:${filter}`;
 
-      // BỎ ÉP KIỂU <string> Ở ĐÂY, VÌ UPSTASH SẼ TRẢ VỀ BẤT CỨ THỨ GÌ NÓ PARSE ĐƯỢC
-      const cachedData = await redis?.get(cacheKey);
+      // STRATEGY: Luôn lưu dạng string, luôn parse khi đọc
+      const cachedData = await redis?.get<string>(cacheKey);
 
       if (!cachedData) return; // Nếu ngăn này chưa ai tạo thì bỏ qua
 
       let list: HistoryItem[] = [];
 
       try {
-        // KIỂM TRA ĐỊNH DẠNG TRƯỚC KHI PARSE
-        if (typeof cachedData === "string") {
-          if (cachedData.includes("[object Object]"))
-            throw new Error("Cache rác");
-          list = JSON.parse(cachedData) as HistoryItem[];
-        } else if (Array.isArray(cachedData)) {
-          list = cachedData as HistoryItem[];
-        } else {
-          throw new Error("Định dạng cache không hợp lệ");
+        // Parse JSON string
+        list = JSON.parse(cachedData) as HistoryItem[];
+
+        // Validate là array
+        if (!Array.isArray(list)) {
+          throw new Error("Cache không phải array");
         }
       } catch {
-        // Nếu parse lỗi, dọn dẹp ngay cái cache thiu này để app không bị crash
-        console.warn(`🧹 Dọn dẹp cache bị lỗi tại: ${cacheKey}`);
+        // Nếu parse lỗi, dọn dẹp cache
+        console.warn(
+          `[HistoryService] Invalid cache at ${cacheKey}, clearing...`,
+        );
         await redis?.del(cacheKey);
         return;
       }
@@ -77,10 +76,10 @@ export const HistoryService = {
       // Nhét lên đầu trang nếu thỏa mãn điều kiện bộ lọc
       if (shouldInclude) {
         list.unshift(updatedItem);
-        if (list.length > 16) list.pop(); // Giữ đúng giới hạn trang chủ (ví dụ: 16)
+        if (list.length > 16) list.pop(); // Giữ đúng giới hạn trang chủ
       }
 
-      // Lúc SET thì BẮT BUỘC phải JSON.stringify
+      // Luôn stringify trước khi set
       await redis?.set(cacheKey, JSON.stringify(list), { ex: 3600 });
     };
 
@@ -160,12 +159,15 @@ export const HistoryService = {
 
     // A. Thử lấy từ Cache trước
     if (cacheKey && redis) {
-      const cached = await redis.get(cacheKey);
+      const cached = await redis.get<string>(cacheKey);
       if (cached) {
         try {
-          const parsed = (
-            typeof cached === "string" ? JSON.parse(cached) : cached
-          ) as HistoryItem[];
+          // Luôn parse từ string
+          const parsed = JSON.parse(cached) as HistoryItem[];
+
+          if (!Array.isArray(parsed)) {
+            throw new Error("Cache không phải array");
+          }
 
           return {
             data: parsed.slice(0, limit),
@@ -173,7 +175,9 @@ export const HistoryService = {
             total: parsed.length,
           };
         } catch {
-          console.warn(`Dọn dẹp cache bị lỗi tại: ${cacheKey}`);
+          console.warn(
+            `[HistoryService] Invalid cache at ${cacheKey}, clearing...`,
+          );
           redis.del(cacheKey).catch(() => {});
         }
       }
@@ -274,29 +278,30 @@ export const HistoryService = {
 
   /**
    * 7. TRACKING (Cứ 30s ghi 1 lần)
+   * Lua script chạy trên Redis server nên đảm bảo không bị xen giữa bởi request khác.
    */
   trackProgress: async (payload: HistoryUpdatePayload) => {
     const key = getHistoryKey(payload.user_id, payload.device_id);
     if (!key || !redis) return;
 
+    // ============================================================
+    // BƯỚC 1: Chuẩn bị dữ liệu historyItem trước khi ghi (client-side)
+    // ============================================================
     const existing = await redis.hget<string | HistoryItem | null>(
       key,
       payload.movie_slug,
     );
 
-    const isNewMovie = !existing; // Nếu rỗng -> là phim mới
-    const oldIsFinished = existing
-      ? (
-          (typeof existing === "string"
-            ? JSON.parse(existing)
-            : existing) as HistoryItem
-        ).is_finished
-      : false;
-
-    const historyItem: HistoryItem = existing
+    const parsedExisting: HistoryItem | null = existing
       ? ((typeof existing === "string"
           ? JSON.parse(existing)
           : existing) as HistoryItem)
+      : null;
+
+    const oldIsFinished = parsedExisting?.is_finished || false;
+
+    const historyItem: HistoryItem = parsedExisting
+      ? { ...parsedExisting }
       : {
           movie_slug: payload.movie_slug,
           movie_name: payload.movie_name || "",
@@ -309,7 +314,7 @@ export const HistoryService = {
           movie_metadata: payload.movie_metadata,
         };
 
-    if (existing && payload.movie_metadata) {
+    if (parsedExisting && payload.movie_metadata) {
       historyItem.movie_metadata = payload.movie_metadata;
     }
 
@@ -339,38 +344,66 @@ export const HistoryService = {
 
     const newIsFinished = historyItem.is_finished;
 
-    // Lưu Hash Cache
-    await redis.hset(key, {
-      [payload.movie_slug]: JSON.stringify(historyItem),
-    });
-    await redis.expire(key, 604800);
+    // ============================================================
+    // BƯỚC 2: Atomic write bằng Lua script - tránh TOCTOU race condition
+    // Lua script chạy single-threaded trên Redis → không bị xen giữa
+    // Return: 1 nếu phim mới (chưa tồn tại), 0 nếu phim đã có
+    // ============================================================
+    const TRACK_LUA_SCRIPT = `
+      local key = KEYS[1]
+      local field = ARGV[1]
+      local value = ARGV[2]
+      local ttl = tonumber(ARGV[3])
 
-    // GỌI BẢNG ĐIỂM
-    if (payload.user_id) {
-      if (isNewMovie) {
-        await HistoryService.updateStatsCounter(
-          payload.user_id,
-          "ADD",
-          newIsFinished,
-        );
-      } else if (oldIsFinished !== newIsFinished) {
-        await HistoryService.updateStatsCounter(
-          payload.user_id,
-          "STATUS_CHANGE",
-          newIsFinished,
-        );
+      local existing = redis.call('HGET', key, field)
+      local isNew = (existing == false) and 1 or 0
+
+      redis.call('HSET', key, field, value)
+      redis.call('EXPIRE', key, ttl)
+
+      return isNew
+    `;
+
+    try {
+      const isNewMovie =
+        (await redis.eval(
+          TRACK_LUA_SCRIPT,
+          [key],
+          [payload.movie_slug, JSON.stringify(historyItem), "604800"],
+        )) === 1;
+
+      // GỌI BẢNG ĐIỂM - isNewMovie giờ đã chính xác từ Lua (atomic)
+      if (payload.user_id) {
+        if (isNewMovie) {
+          await HistoryService.updateStatsCounter(
+            payload.user_id,
+            "ADD",
+            newIsFinished,
+          );
+        } else if (oldIsFinished !== newIsFinished) {
+          await HistoryService.updateStatsCounter(
+            payload.user_id,
+            "STATUS_CHANGE",
+            newIsFinished,
+          );
+        }
       }
+
+      // SỬA TOP CACHE
+      await HistoryService.mutateTopCache(
+        payload.user_id,
+        payload.device_id,
+        historyItem,
+      );
+
+      if (payload.user_id)
+        await DashboardService.invalidateStatsCache(payload.user_id);
+    } catch (error) {
+      console.error(
+        `[HistoryService.trackProgress] Lua script failed for ${payload.movie_slug}:`,
+        error,
+      );
     }
-
-    // SỬA TOP CACHE (Không xóa, giúp giảm tải DB tối đa)
-    await HistoryService.mutateTopCache(
-      payload.user_id,
-      payload.device_id,
-      historyItem,
-    );
-
-    if (payload.user_id)
-      await DashboardService.invalidateStatsCache(payload.user_id);
   },
 
   /**
@@ -395,7 +428,10 @@ export const HistoryService = {
       const oldEp = existingProgress[slug];
       mergedProgress[slug] = {
         ...newEp,
-        ep_is_finished: oldEp?.ep_is_finished || newEp.ep_is_finished,
+        // Một khi đã finished thì không bao giờ unfinish (bảo vệ trạng thái)
+        ep_is_finished: oldEp?.ep_is_finished === true
+          ? true
+          : newEp.ep_is_finished,
       };
     }
 
@@ -420,8 +456,8 @@ export const HistoryService = {
       }
     }
 
-    const finalItem = {
-      id: existing?.id,
+    const finalItem: HistoryItem = {
+      ...(existing?.id ? { id: existing.id } : {}),
       user_id: userId,
       movie_slug: incomingItem.movie_slug,
       movie_name: incomingItem.movie_name,
@@ -436,7 +472,7 @@ export const HistoryService = {
 
     const { error } = await supabase
       .from("watch_history")
-      .upsert(finalItem, { onConflict: "id" });
+      .upsert(finalItem, { onConflict: "user_id,movie_slug" });
     if (error) throw error;
 
     if (redis) {
@@ -448,12 +484,15 @@ export const HistoryService = {
         await redis.expire(key, 604800);
       }
     }
-    // Sửa cache trang chủ
+    // Sửa cache trang chủ tại chỗ (KHÔNG invalidate để giữ cache hit rate cao)
     await HistoryService.mutateTopCache(
       userId,
       undefined,
-      finalItem as HistoryItem,
+      finalItem,
     );
+
+    // Chỉ invalidate dashboard stats cache (vì cần tính toán lại)
+    await DashboardService.invalidateStatsCache(userId);
   },
 
   /**
@@ -492,7 +531,10 @@ export const HistoryService = {
         const oldEp = existingProgress[slug];
         mergedProgress[slug] = {
           ...newEp,
-          ep_is_finished: oldEp?.ep_is_finished || newEp.ep_is_finished,
+          // Một khi đã finished thì không bao giờ unfinish (bảo vệ trạng thái)
+          ep_is_finished: oldEp?.ep_is_finished === true
+            ? true
+            : newEp.ep_is_finished,
         };
       }
 
@@ -569,7 +611,7 @@ export const HistoryService = {
         pipeline.expire(key, 604800);
         await pipeline.exec();
 
-        // Xóa cache danh sách để UI load lại mượt mà
+        // Bulk sync cần invalidate vì số lượng lớn, không thể mutate từng item
         await HistoryService.invalidateHistoryCache(userId);
       }
     }

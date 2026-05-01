@@ -1,18 +1,8 @@
--- ==============================================================================
--- BẢNG PUSH_SUBSCRIPTIONS (Lưu tọa độ thiết bị của User)
--- ==============================================================================
-CREATE TABLE push_subscriptions (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    subscription JSONB NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
-);
-
--- Bật bảo mật RLS
-ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
-
--- Cho phép user tự thêm, sửa, xóa, xem thiết bị của chính họ
-CREATE POLICY "Users can manage own push subscriptions"
-ON public.push_subscriptions FOR ALL
-USING ( auth.uid() = user_id )
-WITH CHECK ( auth.uid() = user_id );
+create table public.push_subscriptions (
+  id uuid not null default gen_random_uuid (),
+  user_id uuid not null,
+  subscription jsonb not null,
+  created_at timestamp with time zone null default timezone ('utc'::text, now()),
+  constraint push_subscriptions_pkey primary key (id),
+  constraint push_subscriptions_user_id_fkey foreign KEY (user_id) references auth.users (id) on delete CASCADE
+) TABLESPACE pg_default;

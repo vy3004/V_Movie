@@ -49,6 +49,23 @@ VÍ DỤ VỀ CÁCH VIẾT "REASON" TỐT (Hãy học theo phong cách này):
 - Nếu họ thích hài hước: "Chuẩn bị sẵn khăn giấy đi, vì bạn sẽ cười ra nước mắt với độ lầy lội của phim này đấy."
 - Nếu họ thích tình cảm: "Một bản tình ca day dứt, đủ để làm trái tim những người chai sạn nhất cũng phải rung động."`;
 
+// In-memory rate limit fallback khi Redis unavailable (chỉ hoạt động trong 1 instance)
+const inMemoryRateLimit = new Map<string, number>();
+const COOLDOWN_MS = 3600000; // 1 giờ
+
+// Cleanup entries đã hết hạn mỗi 10 phút để tránh memory leak
+if (typeof setInterval !== "undefined") {
+  setInterval(() => {
+    const now = Date.now();
+    // Sử dụng forEach thay vì for...of để tương thích TypeScript
+    inMemoryRateLimit.forEach((timestamp, userId) => {
+      if (now - timestamp >= COOLDOWN_MS) {
+        inMemoryRateLimit.delete(userId);
+      }
+    });
+  }, 600000); // 10 phút
+}
+
 export const RecommendationService = {
   /**
    * Tính toán thời gian (số giây) từ hiện tại đến 2:00 AM sáng hôm sau.
@@ -221,9 +238,51 @@ export const RecommendationService = {
 
   /**
    * GỌI LẺ (ON-DEMAND): Yêu cầu AI phân tích cho một User duy nhất.
+   * @throws Error nếu đang trong cooldown period
    */
   generateForUser: async (userId: string) => {
     try {
+      // RATE LIMITING: Check cooldown 1 giờ
+      const rateLimitKey = `recommendation:cooldown:${userId}`;
+
+      if (redis) {
+        const lastGenTime = await redis.get<number>(rateLimitKey);
+
+        if (lastGenTime) {
+          const cooldownMs = 3600000; // 1 giờ
+          const timeElapsed = Date.now() - lastGenTime;
+
+          if (timeElapsed < cooldownMs) {
+            const remainingMinutes = Math.ceil(
+              (cooldownMs - timeElapsed) / 60000,
+            );
+            throw new Error(
+              `Vui lòng đợi ${remainingMinutes} phút trước khi yêu cầu gợi ý mới`,
+            );
+          }
+        }
+      } else {
+        // Redis unavailable - Fallback: Dùng in-memory Map để rate limit
+        console.warn(
+          `[RecommendationService] Redis unavailable - using in-memory rate limiting for user: ${userId}`,
+        );
+
+        const lastGenTime = inMemoryRateLimit.get(userId);
+        if (lastGenTime) {
+          const cooldownMs = 3600000; // 1 giờ
+          const timeElapsed = Date.now() - lastGenTime;
+
+          if (timeElapsed < cooldownMs) {
+            const remainingMinutes = Math.ceil(
+              (cooldownMs - timeElapsed) / 60000,
+            );
+            throw new Error(
+              `Vui lòng đợi ${remainingMinutes} phút trước khi yêu cầu gợi ý mới`,
+            );
+          }
+        }
+      }
+
       // Tái sử dụng RPC xịn để lấy data cực nhanh
       const { data: batchContext, error } = await supabaseAdmin.rpc(
         "get_ai_context_batch",
@@ -239,7 +298,7 @@ export const RecommendationService = {
       const userContext = batchContext[0];
 
       const expertPrompt = `Bạn là một "Cinephile" (Người sành phim) đang rủ rê một người bạn xem phim. Nhiệm vụ của bạn là phân tích hồ sơ và đưa ra 15 gợi ý phim xuất sắc nhất.
-        Hồ sơ người dùng: 
+        Hồ sơ người dùng:
         ${JSON.stringify(
           {
             userId: userContext.user_id,
@@ -275,7 +334,19 @@ export const RecommendationService = {
         aiResult.recommendations,
         userContext.top_genres,
       );
+
+      // Lưu timestamp để enforce cooldown (SAU KHI thành công)
+      if (redis) {
+        await redis.set(rateLimitKey, Date.now(), { ex: 3600 }); // 1 giờ
+      } else {
+        // In-memory fallback: Chỉ set timestamp SAU KHI AI call thành công
+        inMemoryRateLimit.set(userId, Date.now());
+      }
     } catch (error) {
+      // Re-throw rate limit errors để caller có thể xử lý (trả 429 cho client)
+      if (error instanceof Error && error.message.includes("Vui lòng đợi")) {
+        throw error;
+      }
       console.error(`[RECOMMENDATION_ERROR] User: ${userId}`, error);
     }
   },

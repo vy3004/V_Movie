@@ -1,6 +1,9 @@
 import "@testing-library/jest-dom";
 import { vi } from "vitest";
 
+// Mock server-only GLOBALLY để tất cả tests đều bypass
+vi.mock("server-only", () => ({}));
+
 // Mock Supabase vì không gọi DB thật khi chạy Unit Test
 vi.mock("@/lib/supabase/client", () => ({
   createSupabaseClient: () => ({

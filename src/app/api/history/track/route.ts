@@ -1,28 +1,45 @@
 import { HistoryService } from "@/services/history.service";
-import { HistoryUpdatePayload } from "@/types";
+import { historyTrackSchema } from "@/lib/validations/history.validation";
 
 export const runtime = "edge";
 
 export async function POST(request: Request) {
   try {
-    const payload: HistoryUpdatePayload = await request.json();
-
-    if (
-      !payload.movie_slug ||
-      !payload.last_episode_slug ||
-      !payload.last_episode_of_movie_slug
-    ) {
-      return new Response("Missing required fields", { status: 400 });
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
+    const result = historyTrackSchema.safeParse(body);
+
+    if (!result.success) {
+      const firstError = result.error.issues[0];
+      console.warn("[HistoryTrack] Validation failed:", {
+        field: firstError.path.join("."),
+        message: firstError.message,
+      });
+      return new Response(
+        JSON.stringify({
+          error: "Invalid input",
+          details: firstError.message,
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const payload = result.data;
+
+    // Skip tracking nếu thời gian quá ngắn
     if (payload.current_time < 30) {
       return new Response("OK - Too early to track", { status: 200 });
-    }
-
-    if (!payload.user_id && !payload.device_id) {
-      return new Response("Unauthorized: No user or device ID", {
-        status: 401,
-      });
     }
 
     await HistoryService.trackProgress(payload);
