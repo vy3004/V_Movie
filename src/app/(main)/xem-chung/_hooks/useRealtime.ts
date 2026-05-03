@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QueryClient } from "@tanstack/react-query";
 import {
   RealtimePostgresChangesPayload,
   SupabaseClient,
 } from "@supabase/supabase-js";
+import { isEqual } from "lodash-es";
 import {
   WatchPartyRoom,
   WatchPartyParticipant,
   PlayerSyncRef,
   ChatMessage,
+  UserPresence,
 } from "@/types";
 
 interface RealtimeProps {
@@ -35,6 +37,13 @@ interface RealtimeProps {
 
 export function useRealtime(props: RealtimeProps) {
   const refs = useRef(props);
+  const channelRef = useRef<ReturnType<SupabaseClient["channel"]> | null>(null);
+
+  // REF MỚI: Lưu trữ các timeout kick user để xử lý Grace Period (Chống F5/Strict Mode)
+  const pendingKicksRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+  // STATE MỚI: Lưu presence data để share với useHostSuccession
+  const [realtimePresence, setRealtimePresence] = useState<Record<string, UserPresence>>({});
 
   useEffect(() => {
     refs.current = props;
@@ -42,15 +51,85 @@ export function useRealtime(props: RealtimeProps) {
 
   useEffect(() => {
     const timeoutIds: NodeJS.Timeout[] = [];
-
-    // CỜ BÁO HIỆU: Component đã bị hủy hay chưa
     let isUnmounted = false;
 
+    // CẤU HÌNH PRESENCE KEY: Dùng userId làm key để dễ track ai vừa out
     const channel = refs.current.supabase.channel(`wp_ui_${props.room.id}`, {
-      config: { broadcast: { ack: false, self: false } },
+      config: {
+        broadcast: { ack: false, self: false },
+        presence: { key: props.userId },
+      },
     });
 
+    channelRef.current = channel;
+
     channel
+      // -------------------------------------------------------------
+      // SUPABASE PRESENCE: LẮNG NGHE SỰ KIỆN KẾT NỐI (JOIN/LEAVE)
+      // -------------------------------------------------------------
+      .on("presence", { event: "join" }, ({ key }) => {
+        // Chỉ Host mới cần xử lý logic Kick
+        if (!refs.current.isRealHost) return;
+
+        const joinedUserId = key;
+
+        // Nếu user này đang nằm trong danh sách chuẩn bị bị kick (do vừa ngắt kết nối)
+        // -> Chắc chắn họ vừa F5 hoặc do Strict Mode re-mount. Hủy lệnh kick ngay!
+        if (pendingKicksRef.current[joinedUserId]) {
+          clearTimeout(pendingKicksRef.current[joinedUserId]);
+          delete pendingKicksRef.current[joinedUserId];
+        }
+      })
+      .on("presence", { event: "leave" }, ({ key }) => {
+        if (!refs.current.isRealHost) return;
+
+        const leftUserId = key;
+        // Host không tự kick chính mình thông qua flow này
+        if (leftUserId === refs.current.userId) return;
+
+        // Đợi 15 giây (Grace Period). Nếu không quay lại -> Xóa thẳng khỏi DB
+        // Tăng từ 5s lên 15s để user có đủ thời gian load khi mạng chậm
+        pendingKicksRef.current[leftUserId] = setTimeout(async () => {
+          try {
+            const response = await fetch("/api/watch-party/participant", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                roomId: refs.current.room.id,
+                targetUserId: leftUserId,
+                action: "kick",
+              }),
+            });
+            if (!response.ok) {
+              console.error("[WatchParty] Leave request kick failed:", response.status);
+            }
+          } catch (error) {
+            console.error("[WatchParty] Lỗi khi kick offline user:", error);
+          } finally {
+            delete pendingKicksRef.current[leftUserId];
+          }
+        }, 15000); // Tăng từ 5000ms lên 15000ms
+      })
+      .on("presence", { event: "sync" }, () => {
+        // Đồng bộ presence data để share với useHostSuccession
+        const state = channel.presenceState();
+        const users: Record<string, UserPresence> = {};
+        Object.values(state)
+          .flat()
+          .forEach((p) => {
+            const user = p as unknown as UserPresence;
+            users[user.user_id] = user;
+          });
+
+        // FIX: Tránh re-render toàn app nếu trạng thái chớp nháy không đổi
+        setRealtimePresence((prev) => {
+          if (isEqual(prev, users)) return prev;
+          return users;
+        });
+      })
+      // -------------------------------------------------------------
+      // CÁC SỰ KIỆN BROADCAST / POSTGRES CŨ (GIỮ NGUYÊN)
+      // -------------------------------------------------------------
       .on(
         "postgres_changes",
         {
@@ -148,6 +227,32 @@ export function useRealtime(props: RealtimeProps) {
           );
         }
       })
+      // NOTE: Giữ request_leave cho trường hợp user BẤM NÚT RỜI PHÒNG (Leave thủ công)
+      .on("broadcast", { event: "request_leave" }, async ({ payload }) => {
+        // Chỉ host mới xử lý request leave
+        if (!refs.current.isRealHost) return;
+
+        const { userId } = payload;
+        if (!userId) return;
+
+        // Host tự động kick user đã request leave (KHÔNG ĐỢI 5s)
+        try {
+          const response = await fetch("/api/watch-party/participant", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              roomId: props.room.id,
+              targetUserId: userId,
+              action: "kick",
+            }),
+          });
+          if (!response.ok) {
+            console.error("[WatchParty] Kick API returned error:", response.status);
+          }
+        } catch (error) {
+          console.error("[WatchParty] Failed to process leave request:", error);
+        }
+      })
       .on("broadcast", { event: "heartbeat_sync" }, ({ payload }) => {
         if (
           !refs.current.canControl &&
@@ -181,24 +286,55 @@ export function useRealtime(props: RealtimeProps) {
           filter: `room_id=eq.${props.room.id}`,
         },
         (payload: RealtimePostgresChangesPayload<WatchPartyParticipant>) => {
+          const queryClient = refs.current.queryClient;
+          const queryKey = ["wp-participants", props.room.id];
+
           if (payload.eventType === "DELETE") {
-            refs.current.queryClient.setQueryData<WatchPartyParticipant[]>(
-              ["wp-participants", props.room.id],
+            // Kiểm tra xem user có thực sự đã join chưa TRƯỚC KHI xóa khỏi cache
+            const wasInRoom = queryClient
+              .getQueryData<WatchPartyParticipant[]>(queryKey)
+              ?.some((p) => p.user_id === refs.current.userId);
+
+            queryClient.setQueryData<WatchPartyParticipant[]>(
+              queryKey,
               (old = []) => old.filter((p) => p.id !== payload.old?.id),
             );
-            if (payload.old?.id === refs.current.myParticipantId) {
+
+            // CHỈ trigger onKicked nếu:
+            // 1. Record bị xóa là của mình
+            // 2. Mình đã thực sự có trong participants list (không phải chỉ có initialMe)
+            if (payload.old?.id === refs.current.myParticipantId && wasInRoom) {
               refs.current.onKicked();
             }
-          } else {
-            refs.current.refetchParticipants();
+          } else if (payload.eventType === "INSERT") {
+            // Thêm trực tiếp vào Cache, KHÔNG gọi API
+            queryClient.setQueryData<WatchPartyParticipant[]>(queryKey, (old = []) => {
+              if (old.some((p) => p.id === payload.new.id)) return old;
+              return [...old, payload.new as WatchPartyParticipant];
+            });
+          } else if (payload.eventType === "UPDATE") {
+            // Cập nhật Cache trực tiếp
+            queryClient.setQueryData<WatchPartyParticipant[]>(queryKey, (old = []) =>
+              old.map((p) =>
+                p.id === payload.new.id ? { ...p, ...(payload.new as WatchPartyParticipant) } : p,
+              ),
+            );
           }
         },
       )
-      .subscribe((status) => {
+      .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
+          // TRACK PRESENCE NGAY KHI SUBSCRIBED THÀNH CÔNG
+          await channel.track({
+            user_id: refs.current.userId,
+            online_at: new Date().toISOString(),
+          });
+
           if (!refs.current.isRealHost) {
+            let syncReceived = false;
+
             const requestSync = async () => {
-              if (channel.state !== "joined") return;
+              if (channel.state !== "joined" || syncReceived) return;
               try {
                 await channel.send({
                   type: "broadcast",
@@ -212,6 +348,25 @@ export function useRealtime(props: RealtimeProps) {
             timeoutIds.push(setTimeout(requestSync, 1500));
             timeoutIds.push(setTimeout(requestSync, 3500));
             timeoutIds.push(setTimeout(requestSync, 6000));
+
+            // ✅ FALLBACK: Nếu Host không trả lời sau 8 giây, gọi API lấy state từ DB
+            timeoutIds.push(setTimeout(async () => {
+              if (channel.state !== "joined" || syncReceived) return;
+              console.log("[WatchParty] Guest: No host response, fetching from API");
+              try {
+                const res = await fetch(`/api/watch-party?roomId=${refs.current.room.id}`);
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data.state && data.state.time !== undefined) {
+                    syncReceived = true;
+                    const action = data.state.status === "pause" ? "pause" : "play";
+                    refs.current.playerSyncRef.current?.syncFromRemote(action, data.state.time);
+                  }
+                }
+              } catch (error) {
+                console.error("[WatchParty] Guest: Failed to fetch fallback state:", error);
+              }
+            }, 8000));
           } else {
             const requestRecovery = async () => {
               if (channel.state !== "joined") return;
@@ -235,7 +390,16 @@ export function useRealtime(props: RealtimeProps) {
     return () => {
       isUnmounted = true;
       timeoutIds.forEach((id) => clearTimeout(id));
+
+      // DỌN DẸP GRACE PERIOD TIMEOUTS ĐỂ TRÁNH MEMORY LEAK
+      Object.values(pendingKicksRef.current).forEach(clearTimeout);
+      pendingKicksRef.current = {};
+
       refs.current.supabase.removeChannel(channel);
+      channelRef.current = null;
     };
-  }, [props.room.id]);
+  }, [props.room.id, props.userId]);
+
+  // Return presence data để WatchPartyProvider có thể truyền cho useHostSuccession
+  return { realtimePresence };
 }

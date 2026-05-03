@@ -50,28 +50,33 @@ export default function SettingsTab() {
     }
   };
 
-  // Kích hoạt ngòi nổ: Ẩn phòng và báo hiệu kết thúc
+  // Kích hoạt ngòi nổ: Đóng phòng và xóa toàn bộ data
   const handleEndSession = async () => {
     if (!room) return;
     setIsEnding(true);
 
     try {
-      const res = await fetch("/api/watch-party/settings", {
-        method: "PATCH",
+      const res = await fetch("/api/watch-party/close", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId: room.id, is_active: false }),
+        body: JSON.stringify({ roomId: room.id }),
       });
 
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to close room");
+      }
 
-      toast.success("Phiên xem chung đang được kết thúc...");
+      toast.success("Phiên xem chung đã kết thúc!");
       setIsEndModalOpen(false);
 
-      // Host rời đi trước, Trigger SQL sẽ dọn dẹp khi Member cũng văng ra
+      // Host rời đi
       NProgress.start();
       router.push("/xem-chung");
-    } catch {
-      toast.error("Lỗi khi đóng phòng");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Lỗi khi đóng phòng";
+      toast.error(message);
     } finally {
       setIsEnding(false);
     }

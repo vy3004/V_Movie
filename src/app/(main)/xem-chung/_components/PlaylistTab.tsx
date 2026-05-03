@@ -60,10 +60,10 @@ export default function PlaylistTab() {
             {room.movie_image && (
               <div className="relative shrink-0 overflow-hidden rounded-xl border border-red-500/20">
                 <ImageCustom
-                  className="w-12 h-16 object-cover"
+                  className="aspect-video h-16 object-cover"
                   src={room.movie_image}
                   alt="Đang chiếu"
-                  widths={[96]}
+                  widths={[170]}
                 />
               </div>
             )}

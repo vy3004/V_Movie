@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { SupabaseClient, RealtimeChannel } from "@supabase/supabase-js";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { debounce } from "lodash-es";
+import { debounce, throttle } from "lodash-es";
 import { SyncApiPayload, UserPresence } from "@/types";
 
 export function useVideoControl(
@@ -56,8 +56,46 @@ export function useVideoControl(
   });
 
   const debouncedSyncAPI = useRef(
-    debounce((payload: SyncApiPayload) => syncToBackend(payload), 400),
+    debounce((payload: SyncApiPayload) => syncToBackend(payload), 1000, {
+      leading: false,
+      trailing: true,
+    }),
   ).current;
+
+  // Throttle broadcast for seek to prevent spam (max 4 times/second)
+  const throttledBroadcast = useRef(
+    throttle(
+      (
+        channel: RealtimeChannel,
+        payload: {
+          action: string;
+          time: number;
+          episodeSlug?: string;
+          senderId?: string;
+        },
+      ) => {
+        channel
+          .send({
+            type: "broadcast",
+            event: "video_control",
+            payload,
+          })
+          .catch((err: Error) => {
+            console.error("Lỗi gửi Broadcast:", err);
+          });
+      },
+      250, // Changed from 100ms to 250ms (4 times/second)
+      { leading: true, trailing: true },
+    ),
+  ).current;
+
+  // Cleanup debounce/throttle on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSyncAPI.cancel();
+      throttledBroadcast.cancel();
+    };
+  }, [debouncedSyncAPI, throttledBroadcast]);
 
   useEffect(() => {
     if (!roomId || !userId) return;
@@ -112,6 +150,7 @@ export function useVideoControl(
       if (!channel) return;
 
       if (document.visibilityState === "hidden") {
+        // Tab bị ẩn → set "away" (màu vàng)
         channel
           .track({
             user_id: userId,
@@ -124,9 +163,11 @@ export function useVideoControl(
           channel.state === "closed" || channel.state === "errored";
 
         if (isDisconnected) {
+          // Reconnect nếu bị disconnect
           supabase.removeChannel(channel);
           channelRef.current = setupChannel();
         } else {
+          // Tab active trở lại → set "online"
           channel
             .track({
               user_id: userId,
@@ -151,22 +192,32 @@ export function useVideoControl(
 
   const sendControl = useCallback(
     (action: "play" | "pause" | "seek", time: number, episodeSlug?: string) => {
-      if (!roomId || !channelRef.current || !refs.current.canControl) return;
+      if (!roomId || !channelRef.current) {
+        return;
+      }
+
+      if (!refs.current.canControl) {
+        return;
+      }
 
       if (channelRef.current.state === "joined") {
-        channelRef.current
-          .send({
-            type: "broadcast",
-            event: "video_control",
-            payload: { action, time, episodeSlug, senderId: userId },
-          })
-          .catch((err: Error) => {
-            console.error("Lỗi gửi Broadcast:", err);
-          });
-      } else {
-        console.warn(
-          "Channel chưa sẵn sàng, lệnh bị hủy để tránh lỗi REST API.",
-        );
+        const payload = { action, time, episodeSlug, senderId: userId };
+
+        // Use throttled broadcast for seek to prevent spam
+        if (action === "seek") {
+          throttledBroadcast(channelRef.current, payload);
+        } else {
+          // Send immediately for play/pause
+          channelRef.current
+            .send({
+              type: "broadcast",
+              event: "video_control",
+              payload,
+            })
+            .catch((err: Error) => {
+              console.error("Lỗi gửi Broadcast:", err);
+            });
+        }
       }
 
       debouncedSyncAPI({
@@ -176,14 +227,42 @@ export function useVideoControl(
         episodeSlug,
       });
     },
-    [roomId, userId, debouncedSyncAPI],
+    [roomId, userId, debouncedSyncAPI, throttledBroadcast],
+  );
+
+  const sendHeartbeat = useCallback(
+    (time: number, isPaused: boolean) => {
+      if (!roomId || !channelRef.current) return;
+      if (!refs.current.canControl) return;
+
+      if (channelRef.current.state === "joined") {
+        channelRef.current
+          .send({
+            type: "broadcast",
+            event: "heartbeat_sync",
+            payload: {
+              time,
+              senderId: userId,
+              isPaused,
+            },
+          })
+          .catch(() => {});
+      }
+    },
+    [roomId, userId],
   );
 
   return {
     sendControl,
+    sendHeartbeat,
     presenceData,
     roomData: initialData?.room,
-    initialState: initialData?.state,
+    initialState: initialData?.state
+      ? {
+          time: initialData.state.time,
+          isPaused: initialData.state.status === "pause",
+        }
+      : null,
     isLoadingRoom,
   };
 }

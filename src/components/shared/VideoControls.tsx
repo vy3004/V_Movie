@@ -42,6 +42,7 @@ export default function VideoControls({
         onClick={toggleFollow}
         disabled={isFollowLoading}
         aria-label={isFollowed ? "Bỏ theo dõi" : "Theo dõi"}
+        title={isFollowed ? "Bỏ theo dõi" : "Theo dõi"}
         className={`flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm rounded-lg transition ${isFollowed ? "text-red-400 hover:bg-zinc-800" : "text-gray-300 hover:text-red-400 hover:bg-zinc-800"}`}
       >
         {isFollowed ? (
@@ -57,6 +58,7 @@ export default function VideoControls({
       <button
         onClick={() => setIsAutoNext(!isAutoNext)}
         aria-label="Chuyển tập"
+        title="Chuyển tập"
         className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg transition ${isAutoNext ? "text-green-400 hover:bg-zinc-800" : "text-gray-500 hover:bg-zinc-800"}`}
       >
         <ArrowsRightLeftIcon className="w-5 h-5" />
@@ -70,6 +72,7 @@ export default function VideoControls({
         onClick={onPrev}
         disabled={!prevEnabled}
         aria-label="Tập trước"
+        title="Tập trước"
         className="p-2 text-gray-300 hover:text-white disabled:text-gray-600 transition"
       >
         <BackwardIcon className="w-5 h-5" />
@@ -78,6 +81,7 @@ export default function VideoControls({
         onClick={onNext}
         disabled={!nextEnabled}
         aria-label="Tập tiếp theo"
+        title="Tập tiếp theo"
         className="p-2 text-gray-300 hover:text-white disabled:text-gray-600 transition"
       >
         <ForwardIcon className="w-5 h-5" />
@@ -86,6 +90,7 @@ export default function VideoControls({
       <button
         onClick={() => setIsLightsOff(!isLightsOff)}
         aria-label={isLightsOff ? "Bật đèn" : "Tắt đèn"}
+        title={isLightsOff ? "Bật đèn" : "Tắt đèn"}
         className="p-2 text-gray-300 hover:text-white transition"
       >
         {isLightsOff ? (

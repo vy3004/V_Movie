@@ -2,7 +2,11 @@
 
 import dynamic from "next/dynamic";
 import { useState, useRef, useEffect } from "react";
-import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline";
+import {
+  MagnifyingGlassIcon,
+  PlusIcon,
+  ArrowPathIcon,
+} from "@heroicons/react/24/outline";
 import { toast } from "sonner";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { debounce } from "lodash-es";
@@ -53,22 +57,29 @@ export default function WatchPartyLobbyPage() {
   };
 
   // 2. Infinite Query Logic
-  const { data, isFetchingNextPage, fetchNextPage, hasNextPage, status } =
-    useInfiniteQuery({
-      queryKey: ["wp-lobby", querySearch],
-      queryFn: async ({ pageParam = 0 }) => {
-        const params = new URLSearchParams({
-          search: querySearch,
-          page: String(pageParam),
-          limit: "12",
-        });
-        const res = await fetch(`/api/watch-party/lobby?${params}`);
-        if (!res.ok) throw new Error("Failed to fetch rooms");
-        return res.json();
-      },
-      initialPageParam: 0,
-      getNextPageParam: (lastPage) => lastPage.nextPage,
-    });
+  const {
+    data,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+    status,
+    refetch,
+    isRefetching,
+  } = useInfiniteQuery({
+    queryKey: ["wp-lobby", querySearch],
+    queryFn: async ({ pageParam = 0 }) => {
+      const params = new URLSearchParams({
+        search: querySearch,
+        page: String(pageParam),
+        limit: "12",
+      });
+      const res = await fetch(`/api/watch-party/lobby?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch rooms");
+      return res.json();
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.nextPage,
+  });
 
   // 3. Tự động load trang tiếp theo khi cuộn xuống đáy
   useEffect(() => {
@@ -86,12 +97,21 @@ export default function WatchPartyLobbyPage() {
     setShowModal(true);
   };
 
+  const handleRefresh = async () => {
+    try {
+      await refetch();
+      toast.success("Đã làm mới danh sách phòng!");
+    } catch {
+      toast.error("Không thể làm mới danh sách phòng!");
+    }
+  };
+
   // Làm phẳng dữ liệu từ các trang (pages) thành một mảng duy nhất
   const allRooms = data?.pages.flatMap((page) => page.rooms ?? []) ?? [];
   return (
     <div className="min-h-screen bg-[#141414] text-white py-12 px-6 lg:px-12">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16 px-1">
+      <div className="relative flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16 px-1">
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-red-600 font-black text-xs tracking-widest uppercase">
             <span className="w-8 h-px bg-red-600" />
@@ -110,6 +130,12 @@ export default function WatchPartyLobbyPage() {
             Tìm một căn phòng phù hợp với tâm trạng của bạn hoặc tự tạo không
             gian riêng cùng hội bạn thân nhé.
           </p>
+          {/* Abstract Decorators */}
+          <div className="absolute -bottom-10 right-20 w-48 h-48 border-[12px] border-white/5 rounded-full pointer-events-none" />
+          <div className="absolute bottom-20 left-[60%] w-28 h-28 border-[12px] border-white/5 rounded-full pointer-events-none" />
+          <div className="absolute top-20 left-60 w-28 h-28 border-2 border-red-600/20 rounded-lg rotate-45 pointer-events-none" />
+          <div className="absolute -top-10 left-10 w-28 h-28 border-2 border-red-600/20 rounded-lg rotate-12 pointer-events-none" />
+          <div className="absolute top-40 right-60 w-28 h-28 border-2 border-red-600/20 rounded-lg -rotate-12 pointer-events-none" />
         </div>
 
         <div className="flex gap-4">
@@ -133,15 +159,28 @@ export default function WatchPartyLobbyPage() {
           <FilterPill label="Âm nhạc" />
         </div>
 
-        <div className="relative w-full md:w-72">
-          <MagnifyingGlassIcon className="size-5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-          <input
-            type="text"
-            placeholder="Mã phòng, tên phim..."
-            value={searchTerm}
-            onChange={handleSearchChange}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-full py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-zinc-600 focus:bg-zinc-800 transition"
-          />
+        <div className="flex items-center gap-3">
+          <div className="relative w-full md:w-72">
+            <MagnifyingGlassIcon className="size-5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Mã phòng, tên phim..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-full py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-zinc-600 focus:bg-zinc-800 transition"
+            />
+          </div>
+
+          <button
+            onClick={handleRefresh}
+            disabled={isRefetching}
+            className="p-2.5 bg-zinc-900 border border-zinc-800 rounded-full hover:bg-zinc-800 hover:border-zinc-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Làm mới danh sách"
+          >
+            <ArrowPathIcon
+              className={`size-5 text-zinc-400 ${isRefetching ? "animate-spin" : ""}`}
+            />
+          </button>
         </div>
       </div>
 

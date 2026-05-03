@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { LiveKitRoom } from "@livekit/components-react";
 import { RoomOptions, VideoPresets } from "livekit-client";
 import { WatchPartyRoom } from "@/types";
+import { useWatchParty } from "@/providers/WatchPartyProvider";
 
 interface WatchPartyVoiceWrapperProps {
   room: WatchPartyRoom;
@@ -15,6 +16,7 @@ export default function WatchPartyVoiceWrapper({
   room,
   children,
 }: WatchPartyVoiceWrapperProps) {
+  const { participants, user } = useWatchParty();
   const [voiceToken, setVoiceToken] = useState<string | null>(null);
 
   // CẤU HÌNH BỘ LỌC ÂM THANH & TỐI ƯU HÓA CAMERA
@@ -36,6 +38,11 @@ export default function WatchPartyVoiceWrapper({
   }, []);
 
   useEffect(() => {
+    // Chỉ fetch khi user đã là participant
+    if (!user?.id || !participants) return;
+    const isMeInList = participants.some((p) => p.user_id === user.id);
+    if (!isMeInList) return;
+
     let isMounted = true;
     const abortController = new AbortController();
 
@@ -77,7 +84,7 @@ export default function WatchPartyVoiceWrapper({
       isMounted = false;
       abortController.abort(); // Lập tức cắt đứt kết nối mạng đang fetch dở dang
     };
-  }, [room.room_code]); // Chỉ phụ thuộc vào mã phòng
+  }, [room.room_code, participants, user.id]); // Thêm participants và user.id vào dependencies
 
   return (
     <LiveKitRoom

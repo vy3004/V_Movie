@@ -31,6 +31,7 @@ interface Props {
   onPlaySync?: (time: number) => void;
   onPauseSync?: (time: number) => void;
   onSeekSync?: (time: number) => void;
+  onHeartbeatSync?: (time: number, isPaused: boolean) => void;
   onPlayerReady?: () => void;
   playerSyncRef?: React.MutableRefObject<PlayerSyncRef | null>;
   onChangeEpisode?: (slug: string) => void;
@@ -71,7 +72,7 @@ if (!videojs.getComponent("NextEpisodeButton")) {
 // --------------------------------------------------------------------------
 // COMPONENT CHÍNH: VIDEO PLAYER
 // --------------------------------------------------------------------------
-export default function VideoPlayer(props: Props) {
+function VideoPlayer(props: Props) {
   const videoRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -91,13 +92,15 @@ export default function VideoPlayer(props: Props) {
   const onPlaySyncRef = useRef(props.onPlaySync);
   const onPauseSyncRef = useRef(props.onPauseSync);
   const onSeekSyncRef = useRef(props.onSeekSync);
+  const onHeartbeatSyncRef = useRef(props.onHeartbeatSync);
 
   useEffect(() => {
     canControlRef.current = props.canControl;
     onPlaySyncRef.current = props.onPlaySync;
     onPauseSyncRef.current = props.onPauseSync;
     onSeekSyncRef.current = props.onSeekSync;
-  }, [props.canControl, props.onPlaySync, props.onPauseSync, props.onSeekSync]);
+    onHeartbeatSyncRef.current = props.onHeartbeatSync;
+  }, [props.canControl, props.onPlaySync, props.onPauseSync, props.onSeekSync, props.onHeartbeatSync]);
 
   // XỬ LÝ SỰ KIỆN FULLSCREEN CỦA TRÌNH DUYỆT
   useEffect(() => {
@@ -137,6 +140,11 @@ export default function VideoPlayer(props: Props) {
   const handleSeekSync = useCallback((time: number) => {
     if (canControlRef.current && onSeekSyncRef.current)
       onSeekSyncRef.current(time);
+  }, []);
+
+  const handleHeartbeatSync = useCallback((time: number, isPaused: boolean) => {
+    if (canControlRef.current && onHeartbeatSyncRef.current)
+      onHeartbeatSyncRef.current(time, isPaused);
   }, []);
 
   const { onPlayerReady, isWatchParty, canControl } = props;
@@ -180,6 +188,7 @@ export default function VideoPlayer(props: Props) {
       onPlaySync: handlePlaySync,
       onPauseSync: handlePauseSync,
       onSeekSync: handleSeekSync,
+      onHeartbeatSync: handleHeartbeatSync,
       onPlayerReady: handlePlayerReady,
     });
 
@@ -347,3 +356,5 @@ export default function VideoPlayer(props: Props) {
     </div>
   );
 }
+
+export default VideoPlayer;

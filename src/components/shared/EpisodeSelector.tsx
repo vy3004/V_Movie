@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Bars3CenterLeftIcon,
   MagnifyingGlassIcon,
@@ -246,4 +246,4 @@ const EpisodeSelector = ({
   );
 };
 
-export default EpisodeSelector;
+export default React.memo(EpisodeSelector);

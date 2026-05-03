@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { WatchPartyService } from "@/services/watch-party.service";
-import { getErrorResponse } from "@/lib/errors/watch-party-errors";
 
 export const runtime = "edge";
 
@@ -17,16 +16,19 @@ export async function POST(request: Request) {
     }
 
     const { roomId } = await request.json();
+
     if (!roomId) {
-      return NextResponse.json({ error: "Missing roomId" }, { status: 400 });
+      return NextResponse.json({ error: "Missing Room ID" }, { status: 400 });
     }
 
-    const result = await WatchPartyService.joinRoom(roomId, user.id);
+    await WatchPartyService.closeRoom(roomId, user.id);
 
-    return NextResponse.json(result);
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[JOIN_ERROR]:", error);
-    const { message, statusCode } = getErrorResponse(error);
-    return NextResponse.json({ error: message }, { status: statusCode });
+    console.error("[CLOSE_ROOM_ERROR]:", error);
+    const message =
+      error instanceof Error ? error.message : "Internal Server Error";
+    const status = message.includes("quyền") ? 403 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

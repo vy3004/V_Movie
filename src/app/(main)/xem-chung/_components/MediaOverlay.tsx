@@ -155,6 +155,13 @@ const ParticipantMediaItem = memo(
       </div>
     );
   },
+  (prev, next) => {
+    return (
+      prev.hasCamera === next.hasCamera &&
+      prev.isSpeaking === next.isSpeaking &&
+      prev.dbUser?.id === next.dbUser?.id
+    );
+  },
 );
 
 ParticipantMediaItem.displayName = "ParticipantMediaItem";

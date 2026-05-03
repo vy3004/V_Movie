@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { ChatMessage } from "@/types";
 import UserAvatar from "@/components/shared/UserAvatar";
 
@@ -9,7 +10,7 @@ interface ChatMessageItemProps {
   isOverlay?: boolean;
 }
 
-export default function ChatMessageItem({
+function ChatMessageItem({
   msg,
   isMe,
   isFlying,
@@ -76,3 +77,18 @@ export default function ChatMessageItem({
     </div>
   );
 }
+
+export default memo(ChatMessageItem, (prev, next) => {
+  return (
+    prev.msg.id === next.msg.id &&
+    prev.msg.status === next.msg.status &&
+    prev.msg.text === next.msg.text &&
+    prev.msg.type === next.msg.type &&
+    prev.msg.avatar_url === next.msg.avatar_url &&
+    prev.msg.user_name === next.msg.user_name &&
+    prev.isMe === next.isMe &&
+    prev.isFlying === next.isFlying &&
+    prev.timeString === next.timeString &&
+    prev.isOverlay === next.isOverlay
+  );
+});

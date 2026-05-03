@@ -95,8 +95,8 @@ export default function AudioDuckingManager({
     // Khi có người nói, giảm còn 70% âm lượng gốc
     const targetVolume = isDuckingActive ? baseVol * 0.7 : baseVol;
 
-    const step = 0.01;
-    const duration = 20;
+    const step = 0.05;
+    const duration = 50;
 
     isDuckingRef.current = true;
 

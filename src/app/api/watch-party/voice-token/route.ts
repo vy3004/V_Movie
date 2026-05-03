@@ -1,12 +1,15 @@
-import { AccessToken } from "livekit-server-sdk";
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { VoiceTokenService } from "@/services/voice-token.service";
+
+// Voice token requires Node.js runtime for livekit-server-sdk
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
     const supabase = await createSupabaseServer();
 
-    // 1. LẤY THÔNG TIN USER TỪ SESSION (BẢO MẬT)
+    // 1. Lấy thông tin user từ session
     const {
       data: { user },
       error: authError,
@@ -19,8 +22,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json();
-    const { roomCode } = body; // Chỉ lấy mã phòng từ body
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const { roomCode } = body;
 
     if (!roomCode) {
       return NextResponse.json(
@@ -29,79 +38,22 @@ export async function POST(req: Request) {
       );
     }
 
-    const apiKey = process.env.LIVEKIT_API_KEY;
-    const apiSecret = process.env.LIVEKIT_API_SECRET;
-
-    if (!apiKey || !apiSecret) {
-      return NextResponse.json(
-        { error: "Server chưa cấu hình LiveKit credentials" },
-        { status: 500 },
-      );
-    }
-
-    // 2. TÌM PHÒNG (Dùng maybeSingle() để tránh sập luồng)
-    const { data: roomData, error: roomError } = await supabase
-      .from("watch_party_rooms")
-      .select("id")
-      .eq("room_code", roomCode)
-      .maybeSingle();
-
-    if (roomError || !roomData) {
-      return NextResponse.json(
-        { error: "Phòng xem chung không tồn tại hoặc đã đóng" },
-        { status: 404 },
-      );
-    }
-
-    // 3. LẤY TRẠNG THÁI "CẤM MIC" VÀ TÊN USER (Dùng maybeSingle())
-    // participantId lúc này chính là user.id lấy từ hệ thống
-    const { data: participantData, error: participantError } = await supabase
-      .from("watch_party_participants")
-      .select("is_voice_muted, profiles(full_name)")
-      .eq("room_id", roomData.id)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (participantError) {
-      console.error("Lỗi khi truy vấn participant:", participantError);
-      return NextResponse.json(
-        { error: "Internal Server Error" },
-        { status: 500 },
-      );
-    }
-
-    // Mặc định là false nếu không tìm thấy participant (chưa join phòng)
-    const isVoiceMuted = participantData?.is_voice_muted ?? false;
-    // Lấy tên từ Supabase, nếu lỗi hoặc không có thì để mặc định
-    const username = participantData?.profiles?.[0]?.full_name || "Thành viên";
-
-    // -------------------------------------------------------------
-
-    // 4. Khởi tạo một cái "Vé" (AccessToken)
-    const at = new AccessToken(apiKey, apiSecret, {
-      identity: user.id, // Sử dụng ID bảo mật từ server
-      name: username,
+    const result = await VoiceTokenService.generateToken({
+      roomCode,
+      userId: user.id,
     });
 
-    // 5. Gắn quyền hạn (Permissions) vào cái vé này
-    at.addGrant({
-      roomJoin: true,
-      room: roomCode,
-      // NẾU BỊ CẤM MIC TỪ DB -> TƯỚC QUYỀN PHÁT ÂM THANH LÊN SERVER LUN!
-      canPublish: !isVoiceMuted,
-      canPublishData: false,
-      canSubscribe: true, // Vẫn cho họ quyền nghe người khác nói
-    });
-
-    // 6. Ký cái vé thành chuỗi mã hóa JWT và trả về cho Frontend
-    const token = await at.toJwt();
-
-    return NextResponse.json({ token });
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Lỗi khi tạo Voice Token:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    const message =
+      error instanceof Error ? error.message : "Internal Server Error";
+
+    let status = 500;
+    if (message.includes("không tồn tại") || message.includes("đã đóng"))
+      status = 404;
+    else if (message.includes("chưa cấu hình")) status = 500;
+
+    return NextResponse.json({ error: message }, { status });
   }
 }

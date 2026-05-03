@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { messageSchema } from "@/lib/validations/message.validation";
 import { sanitizeHtml } from "@/lib/utils";
+import { WatchPartyContentService } from "@/services/watch-party-content.service";
 
 export async function GET(request: Request) {
   try {
@@ -21,35 +22,18 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Missing Room ID" }, { status: 400 });
     }
 
-    // Kiểm tra user có phải là thành viên phòng không
-    const { data: participant } = await supabase
-      .from("watch_party_participants")
-      .select("id")
-      .eq("room_id", roomId)
-      .eq("user_id", user.id)
-      .single();
+    const messages = await WatchPartyContentService.getMessages(
+      roomId,
+      user.id,
+    );
 
-    if (!participant) {
-      return NextResponse.json({ error: "Not a participant" }, { status: 403 });
-    }
-
-    // Lấy 50 tin nhắn gần nhất
-    const { data: messages, error } = await supabase
-      .from("watch_party_messages")
-      .select("*")
-      .eq("room_id", roomId)
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    if (error) throw error;
-
-    return NextResponse.json(messages?.reverse() ?? []);
+    return NextResponse.json(messages);
   } catch (error) {
     console.error("[CHAT_GET_ERROR]:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    const message =
+      error instanceof Error ? error.message : "Internal Server Error";
+    const status = message.includes("không phải thành viên") ? 403 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }
 
@@ -86,80 +70,50 @@ export async function POST(request: Request) {
 
     const { id, roomId, text, type, metadata } = result.data;
 
-    // Lấy quyền của User và Setting của phòng
-    const [{ data: participant }, { data: roomInfo }] = await Promise.all([
-      supabase
-        .from("watch_party_participants")
-        .select("role, is_muted, permissions")
-        .eq("room_id", roomId)
-        .eq("user_id", user.id)
-        .single(),
-      supabase
-        .from("watch_party_rooms")
-        .select("settings")
-        .eq("id", roomId)
-        .single(),
-    ]);
-
-    if (!participant) {
-      return NextResponse.json(
-        { error: "Chưa tham gia phòng" },
-        { status: 403 },
-      );
-    }
-
-    if (!roomInfo) {
-      return NextResponse.json(
-        { error: "Phòng không tồn tại" },
-        { status: 404 },
-      );
-    }
-
-    const isHost = participant.role === "host";
-    const isMod = !!participant.permissions?.can_manage_users;
-
-    // Chặn theo loại tin nhắn
-    if (type === "chat") {
-      if (participant.is_muted) {
-        return NextResponse.json({ error: "Bạn bị cấm chat" }, { status: 403 });
+    // Sanitize user metadata để tránh XSS
+    const cleanUserName = sanitizeHtml(
+      user.user_metadata?.full_name || "Guest",
+    );
+    const rawAvatarUrl = user.user_metadata?.avatar_url || "";
+    let cleanAvatarUrl = "";
+    if (rawAvatarUrl) {
+      try {
+        const url = new URL(rawAvatarUrl);
+        if (url.protocol === "https:" || url.protocol === "http:") {
+          cleanAvatarUrl = url.href;
+        }
+      } catch {
+        // Invalid URL, keep empty
       }
-      const guestCanChat = roomInfo?.settings?.guest_can_chat ?? true;
-      if (!isHost && !isMod && !guestCanChat) {
-        return NextResponse.json(
-          { error: "Phòng đã tắt chat" },
-          { status: 403 },
-        );
-      }
-    } else if (type === "system" && !isHost && !isMod) {
-      return NextResponse.json(
-        { error: "Không có quyền gửi tin hệ thống" },
-        { status: 403 },
-      );
     }
 
-    const { data: message, error: mErr } = await supabase
-      .from("watch_party_messages")
-      .insert({
-        id,
-        room_id: roomId,
-        user_id: user.id,
-        user_name: user.user_metadata?.full_name || "Guest",
-        avatar_url: user.user_metadata?.avatar_url || "",
-        text: text, 
-        type,
-        metadata,
-      })
-      .select()
-      .single();
-
-    if (mErr) throw mErr;
+    const message = await WatchPartyContentService.sendMessage({
+      id,
+      roomId,
+      userId: user.id,
+      userName: cleanUserName,
+      avatarUrl: cleanAvatarUrl,
+      text,
+      type: type as "chat" | "system",
+      metadata,
+    });
 
     return NextResponse.json(message);
   } catch (error) {
     console.error("[CHAT_POST_ERROR]:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    const message =
+      error instanceof Error ? error.message : "Internal Server Error";
+
+    let status = 500;
+    if (message.includes("Chưa tham gia")) status = 403;
+    else if (message.includes("không tồn tại")) status = 404;
+    else if (
+      message.includes("bị cấm") ||
+      message.includes("đã tắt") ||
+      message.includes("không có quyền")
+    )
+      status = 403;
+
+    return NextResponse.json({ error: message }, { status });
   }
 }

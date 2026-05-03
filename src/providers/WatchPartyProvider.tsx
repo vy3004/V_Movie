@@ -34,6 +34,7 @@ import { useVideoControl } from "@/app/(main)/xem-chung/_hooks/useVideoControl";
 import { useRealtime } from "@/app/(main)/xem-chung/_hooks/useRealtime";
 import { usePlaylistManager } from "@/app/(main)/xem-chung/_hooks/usePlaylistManager";
 import { useHostSuccession } from "@/app/(main)/xem-chung/_hooks/useHostSuccession";
+import { useGhostCleanup } from "@/app/(main)/xem-chung/_hooks/useGhostCleanup";
 
 interface WatchPartyContextType {
   room: WatchPartyRoom;
@@ -63,6 +64,7 @@ interface WatchPartyContextType {
     time: number,
     slug?: string,
   ) => void;
+  sendHeartbeat: (time: number, isPaused: boolean) => void;
   isLoadingRoom: boolean;
   initialState: { time?: number; isPaused?: boolean } | null;
   handleSelectEpisode: (
@@ -368,6 +370,7 @@ export function WatchPartyProvider({
 
   const {
     sendControl,
+    sendHeartbeat,
     presenceData,
     isLoadingRoom,
     initialState,
@@ -377,6 +380,7 @@ export function WatchPartyProvider({
       time: number,
       slug?: string,
     ) => void;
+    sendHeartbeat: (time: number, isPaused: boolean) => void;
     presenceData: Record<string, UserPresence>;
     isLoadingRoom: boolean;
     initialState: { time?: number; isPaused?: boolean } | null;
@@ -430,7 +434,7 @@ export function WatchPartyProvider({
     prevPresence.current = presenceData;
   }, [presenceData, participants, addLocalSystemMessage, user.id]);
 
-  useRealtime({
+  const { realtimePresence = {} } = useRealtime({
     room,
     userId: user.id,
     myParticipantId: myParticipant?.id,
@@ -448,13 +452,78 @@ export function WatchPartyProvider({
     },
   });
 
+  // AUTO-REJOIN: Nếu bị xóa khỏi DB nhưng vẫn còn presence → gọi lại API join
+  const hasAttemptedRejoin = useRef(false);
+  const rejoinTimestamp = useRef<number>(0);
+
+  useEffect(() => {
+    // Chỉ check khi đã có participants data
+    if (participants.length === 0) return;
+
+    const isMeInParticipants = participants.some((p) => p.user_id === user.id);
+    const isMeInPresence = !!realtimePresence[user.id];
+
+    // Nếu mình có presence nhưng không có trong DB → rejoin
+    if (isMeInPresence && !isMeInParticipants && !hasAttemptedRejoin.current) {
+      // Debounce: Chặn spam rejoin trong 5s để tránh race condition giữa nhiều tabs
+      const now = Date.now();
+      if (now - rejoinTimestamp.current < 5000) return;
+
+      rejoinTimestamp.current = now;
+      hasAttemptedRejoin.current = true;
+
+      fetch("/api/watch-party/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId }),
+      })
+        .then((res) => {
+          if (res.ok) {
+            res.json().then((data) => {
+              if (data.promoted_to_host) {
+                toast.success(
+                  "Phòng không còn chủ phòng. Bạn đã được chỉ định làm Chủ phòng mới!",
+                  { icon: "👑" },
+                );
+              }
+              refetchParticipants();
+            });
+          } else {
+            // Reset flag để có thể retry sau
+            hasAttemptedRejoin.current = false;
+            console.warn("[AUTO_REJOIN] Server returned:", res.status);
+          }
+        })
+        .catch((err) => {
+          console.error("[AUTO_REJOIN] Error rejoining:", err);
+          // Reset flag để có thể retry sau
+          hasAttemptedRejoin.current = false;
+        });
+    }
+
+    // Reset flag nếu đã có trong DB trở lại
+    if (isMeInParticipants) {
+      hasAttemptedRejoin.current = false;
+    }
+  }, [participants, realtimePresence, user.id, roomId, refetchParticipants]);
+
   const playlistManager = usePlaylistManager(room, user, sendSystemMessage);
 
   useHostSuccession({
     participants,
-    presenceData,
+    presenceData: realtimePresence,
     myId: user.id,
     myParticipantId: myParticipant?.id,
+    supabase,
+    refetch: refetchParticipants,
+    isActive: room?.is_active ?? true,
+  });
+
+  useGhostCleanup({
+    participants,
+    presenceData: realtimePresence,
+    myId: user.id,
+    isHost: isRealHost,
     supabase,
     refetch: refetchParticipants,
     isActive: room?.is_active ?? true,
@@ -530,6 +599,7 @@ export function WatchPartyProvider({
       hasModeratorAuth,
 
       sendControl,
+      sendHeartbeat,
       isLoadingRoom,
       initialState,
       handleSelectEpisode,
@@ -555,6 +625,7 @@ export function WatchPartyProvider({
       canControl,
       hasModeratorAuth,
       sendControl,
+      sendHeartbeat,
       isLoadingRoom,
       initialState,
       handleSelectEpisode,

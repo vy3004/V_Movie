@@ -72,6 +72,11 @@ body {
   }
 }
 
+.video-js .vjs-tech {
+  object-fit: contain !important;
+  object-position: center !important;
+}
+
 .vjs-next-overlay-btn {
   position: absolute !important;
   bottom: 50px !important;

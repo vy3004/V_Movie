@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
@@ -53,6 +53,10 @@ const ChatOverlay = dynamic(
 const ConfirmModal = dynamic(() => import("@/components/ui/ConfirmModal"), {
   ssr: false,
 });
+const HostSuccessionModal = dynamic(
+  () => import("@/app/(main)/xem-chung/_components/HostSuccessionModal"),
+  { ssr: false },
+);
 const VideoPlayer = dynamic(() => import("@/components/shared/VideoPlayer"), {
   ssr: false,
   loading: () => (
@@ -95,6 +99,7 @@ export default function WatchPartyView() {
     canControl,
     hasModeratorAuth,
     sendControl,
+    sendHeartbeat,
     playerSyncRef,
     isLoadingRoom,
     handleSendMessage,
@@ -112,6 +117,7 @@ export default function WatchPartyView() {
   const isProcessingAutoNext = useRef(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [isKicking, setIsKicking] = useState(false);
+  const [showSuccessionModal, setShowSuccessionModal] = useState(false);
 
   const disconnectReason = useMemo(() => {
     if (isLeaving) return null;
@@ -163,7 +169,7 @@ export default function WatchPartyView() {
   }, [initialState, room?.current_episode_slug]);
 
   // --- XỬ LÝ AUTO-NEXT (CHUYỂN TẬP/CHUYỂN PHIM) ---
-  const handleWatchPartyAutoNext = async () => {
+  const handleWatchPartyAutoNext = useCallback(async () => {
     if (!isRealHost || !canControl) return;
 
     if (isProcessingAutoNext.current) return;
@@ -253,7 +259,7 @@ export default function WatchPartyView() {
         isProcessingAutoNext.current = false;
       }, 3000);
     }
-  };
+  }, [isRealHost, canControl, movie, activeEpisode, room, handleSelectEpisode, setRoom]);
 
   const executeKick = async () => {
     if (!kickTarget) return;
@@ -275,16 +281,32 @@ export default function WatchPartyView() {
   };
 
   const handleLeaveRoom = async () => {
+    // Nếu là host và có thành viên khác → hiện modal chọn người kế nhiệm
+    if (
+      isRealHost &&
+      participants.filter((p) => p.status === "approved" && p.role !== "host")
+        .length > 0
+    ) {
+      setShowSuccessionModal(true);
+      return;
+    }
+
+    // Nếu không phải host hoặc không có ai khác → rời phòng trực tiếp
+    await executeLeaveRoom();
+  };
+
+  const executeLeaveRoom = async (newHostUserId?: string) => {
     setIsLeaving(true);
     const toastId = toast.loading("Đang rời phòng...");
 
     try {
       const res = await fetch("/api/watch-party/leave", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ roomId: room.id }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomId: room.id,
+          newHostUserId, // Truyền userId của host mới nếu có
+        }),
         keepalive: true,
       });
 
@@ -298,6 +320,11 @@ export default function WatchPartyView() {
       });
       router.replace("/xem-chung");
     }
+  };
+
+  const handleSuccessionConfirm = async (newHostUserId: string) => {
+    setShowSuccessionModal(false);
+    await executeLeaveRoom(newHostUserId);
   };
 
   // --- CẤU HÌNH TABS ---
@@ -388,6 +415,7 @@ export default function WatchPartyView() {
               onPlaySync={(t) => sendControl("play", t)}
               onPauseSync={(t) => sendControl("pause", t)}
               onSeekSync={(t) => sendControl("seek", t)}
+              onHeartbeatSync={sendHeartbeat}
               onChangeEpisode={(slug) => handleSelectEpisode(slug)}
               onAutoNext={handleWatchPartyAutoNext}
               onProgress={() => {}}
@@ -462,6 +490,13 @@ export default function WatchPartyView() {
         variant="danger"
         onClose={() => setKickTarget(null)}
         onConfirm={executeKick}
+      />
+
+      <HostSuccessionModal
+        isOpen={showSuccessionModal}
+        participants={participants}
+        onConfirm={handleSuccessionConfirm}
+        onCancel={() => setShowSuccessionModal(false)}
       />
 
       <ConfirmModal

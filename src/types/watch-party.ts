@@ -76,12 +76,14 @@ export interface UserPresence {
   time?: number;
   is_paused?: boolean;
   updated_at?: string;
+  online_at?: string;
 }
 
 // Định nghĩa kiểu cho cái Cầu nối (Ref) giữa UI và Video
 export interface PlayerSyncRef {
   syncFromRemote: (action: "play" | "pause" | "seek", time: number) => void;
   getCurrentState: () => { time: number; isPaused: boolean } | null;
+  requestSync?: () => void;
 }
 
 // Định nghĩa kiểu dữ liệu cho lệnh điều khiển mạng

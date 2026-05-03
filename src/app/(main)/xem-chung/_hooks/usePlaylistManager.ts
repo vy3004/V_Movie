@@ -211,17 +211,18 @@ export function usePlaylistManager(
       newPlaylist.splice(dragOverItem.current, 0, draggedItem);
       queryClient.setQueryData(["wp-playlist", room.id], newPlaylist);
       try {
-        const results = await Promise.all(
-          newPlaylist.map((item, index) =>
-            supabase
-              .from("watch_party_playlist")
-              .update({ sort_order: index })
-              .eq("id", item.id),
-          ),
-        );
-        const hasError = results.some((result) => result.error);
-        if (hasError) {
-          throw new Error("Một số mục không thể cập nhật");
+        // Sử dụng RPC function để bulk update thay vì nhiều query riêng lẻ
+        const items = newPlaylist.map((item, index) => ({
+          id: item.id,
+          sort_order: index,
+        }));
+
+        const { error } = await supabase.rpc("update_playlist_order", {
+          items,
+        });
+
+        if (error) {
+          throw new Error("Không thể cập nhật thứ tự");
         }
       } catch {
         toast.error("Không thể lưu thứ tự mới!");
