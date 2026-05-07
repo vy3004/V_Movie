@@ -5,8 +5,10 @@ import {
   BackwardIcon,
   ForwardIcon,
   ArrowsRightLeftIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/solid";
 import { HeartIcon as HeartOutline } from "@heroicons/react/24/outline";
+import { useState } from "react";
 
 interface VideoControlsProps {
   isFollowed: boolean;
@@ -20,6 +22,8 @@ interface VideoControlsProps {
   nextEnabled: boolean;
   isLightsOff: boolean;
   setIsLightsOff: (v: boolean) => void;
+  isWatchParty?: boolean;
+  onManualSync?: () => void;
 }
 
 export default function VideoControls({
@@ -34,7 +38,19 @@ export default function VideoControls({
   nextEnabled,
   isLightsOff,
   setIsLightsOff,
+  isWatchParty,
+  onManualSync,
 }: VideoControlsProps) {
+  // Thêm state để quay icon 1 giây tạo cảm giác (Feedback)
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncClick = () => {
+    if (onManualSync) {
+      onManualSync();
+      setIsSyncing(true);
+      setTimeout(() => setIsSyncing(false), 1000);
+    }
+  };
   return (
     <div className="flex items-center justify-around gap-3 sm:gap-4 mt-0 py-3 px-3 sm:px-4 rounded-b-xl">
       {/* Nút Theo dõi */}
@@ -86,6 +102,19 @@ export default function VideoControls({
       >
         <ForwardIcon className="w-5 h-5" />
       </button>
+
+      {/* 👑 NÚT SYNC THỦ CÔNG (CHỈ HIỆN TRONG WATCH PARTY) */}
+      {isWatchParty && (
+        <button
+          onClick={handleSyncClick}
+          title="Đồng bộ lại Video"
+          aria-label="Đồng bộ lại Video"
+          className="p-2 text-blue-400 hover:text-white hover:bg-zinc-800 rounded-lg transition"
+        >
+          <ArrowPathIcon className={`w-5 h-5 ${isSyncing ? "animate-spin" : ""}`} />
+        </button>
+      )}
+
       {/* Tắt đèn */}
       <button
         onClick={() => setIsLightsOff(!isLightsOff)}

@@ -79,7 +79,7 @@ export async function POST(request: Request) {
 
     // Nếu là guest → gửi broadcast request cho host xóa
     // Broadcast qua Supabase Realtime channel
-    const channel = supabase.channel(`wp_ui_${roomId}`);
+    const channel = supabase.channel(`wp_data_${roomId}`);
 
     // Subscribe channel trước khi send với timeout
     await Promise.race([

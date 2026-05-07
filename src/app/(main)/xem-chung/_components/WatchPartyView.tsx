@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+  useCallback,
+} from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
@@ -15,9 +21,25 @@ import {
 } from "@heroicons/react/24/outline";
 
 // Context & Hooks
-import { useWatchParty } from "@/providers/WatchPartyProvider";
 import { useQuery } from "@tanstack/react-query";
-import { Movie } from "@/types";
+import { Movie, PlayerSyncRef } from "@/types";
+import { useHistoryTracker } from "@/hooks/useHistory";
+import {
+  useWatchPartyStore,
+  selectRoom,
+  selectIsHost,
+  selectCanControl,
+  selectParticipants,
+  selectHasModeratorAuth,
+  selectUser,
+  selectIsKicked,
+  selectIsLoadingRoom,
+  sendControl,
+  sendHeartbeat,
+  handleSelectEpisode,
+  handleParticipantAction,
+  requestManualSync,
+} from "@/stores/watch-party";
 
 // Components
 import EpisodeSelectorSkeleton from "@/components/shared/EpisodeSelectorSkeleton";
@@ -89,35 +111,43 @@ export default function WatchPartyView() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>("chat");
 
-  const {
-    room,
-    setRoom,
-    user,
-    messages,
-    participants,
-    isRealHost,
-    canControl,
-    hasModeratorAuth,
-    sendControl,
-    sendHeartbeat,
-    playerSyncRef,
-    isLoadingRoom,
-    handleSendMessage,
-    handleSelectEpisode,
-    handleParticipantAction,
-    initialState,
-    kickTarget,
-    setKickTarget,
-    isKicked,
-  } = useWatchParty();
+  // Zustand store
+  const room = useWatchPartyStore(selectRoom);
+  const setRoom = useWatchPartyStore((state) => state.setRoom);
+  const user = useWatchPartyStore(selectUser);
+  const participants = useWatchPartyStore(selectParticipants);
+  const isRealHost = useWatchPartyStore(selectIsHost);
+  const canControl = useWatchPartyStore(selectCanControl);
+  const hasModeratorAuth = useWatchPartyStore(selectHasModeratorAuth);
+  const kickTarget = useWatchPartyStore((state) => state.kickTarget);
+  const setKickTarget = useWatchPartyStore((state) => state.setKickTarget);
+  const isKicked = useWatchPartyStore(selectIsKicked);
+  const isLoadingRoom = useWatchPartyStore(selectIsLoadingRoom);
+  const setPlayerSyncRef = useWatchPartyStore(
+    (state) => state.setPlayerSyncRef,
+  );
+  const playerSyncRef = useRef<PlayerSyncRef | null>(null);
+
+  // Create a callback that VideoPlayer can call to notify us when ref is ready
+  const handlePlayerReady = useCallback(() => {
+    console.log(
+      "[WatchPartyView] Player ready, syncing ref to store:",
+      !!playerSyncRef.current,
+    );
+    if (playerSyncRef.current) {
+      setPlayerSyncRef(playerSyncRef.current);
+    }
+  }, [setPlayerSyncRef]);
 
   // --- REFS & STATES PHỤC HỒI CHỨC NĂNG CŨ ---
-  const [startVideoTime, setStartVideoTime] = useState<number>(0);
   const prevEpisodeRef = useRef(room?.current_episode_slug);
   const isProcessingAutoNext = useRef(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [isKicking, setIsKicking] = useState(false);
   const [showSuccessionModal, setShowSuccessionModal] = useState(false);
+
+  const currentTime = useWatchPartyStore((state) => state.currentTime);
+  const startVideoTime = currentTime;
 
   const disconnectReason = useMemo(() => {
     if (isLeaving) return null;
@@ -155,25 +185,43 @@ export default function WatchPartyView() {
     );
   }, [movie, room]);
 
+  // Kích hoạt History Tracker (Bọc trong fallback an toàn nếu movie chưa load xong)
+  const { handleTimeUpdate, syncToSupabase } = useHistoryTracker({
+    user,
+    movie: movie || ({} as Movie),
+    episodeSlug: activeEpisode?.slug || "",
+  });
+
   // ĐỒNG BỘ THỜI GIAN LÚC MỚI VÀO PHÒNG
   useEffect(() => {
     const episodeChanged =
       room?.current_episode_slug !== prevEpisodeRef.current;
 
     if (episodeChanged) {
-      setStartVideoTime(0);
+      // TẬP PHIM VỪA BỊ ĐỔI (Dù là do mình bấm hay do Host bấm)
+      // CHỐT SỔ LỊCH SỬ CỦA TẬP CŨ VÀO DATABASE NGAY LẬP TỨC CHO MỌI NGƯỜI
+      syncToSupabase();
+
+      // Sau đó mới reset thời gian về 0 để chiếu tập mới
+      useWatchPartyStore.getState().updatePlayerState(0, true);
       prevEpisodeRef.current = room?.current_episode_slug;
-    } else if (initialState?.time !== undefined) {
-      setStartVideoTime(initialState.time);
     }
-  }, [initialState, room?.current_episode_slug]);
+  }, [room?.current_episode_slug, syncToSupabase]);
+
+  // RESET về 0 khi activeEpisode thay đổi (chuyển tập)
+  useEffect(() => {
+    useWatchPartyStore.getState().updatePlayerState(0, true);
+  }, [activeEpisode?.slug]);
 
   // --- XỬ LÝ AUTO-NEXT (CHUYỂN TẬP/CHUYỂN PHIM) ---
   const handleWatchPartyAutoNext = useCallback(async () => {
-    if (!isRealHost || !canControl) return;
+    if (!isRealHost || !canControl || !room) return;
 
     if (isProcessingAutoNext.current) return;
     isProcessingAutoNext.current = true;
+
+    // Chốt sổ Lịch sử xem của tập hiện tại TRƯỚC KHI chuyển tập
+    syncToSupabase();
 
     try {
       let nextEpisode = null;
@@ -224,11 +272,12 @@ export default function WatchPartyView() {
           const previousRoomState = { ...room };
 
           // 2. OPTIMISTIC UPDATE: Cập nhật UI ngay lập tức cho mượt
-          setRoom((prev) => ({
-            ...prev,
+          const updatedRoom = {
+            ...room,
             current_movie_slug: nextItem.movie_slug,
             movie_image: nextItem.thumb_url,
-          }));
+          };
+          setRoom(updatedRoom);
 
           // 3. GỌI DATABASE NGẦM
           const { error: updateError } = await supabase
@@ -259,7 +308,15 @@ export default function WatchPartyView() {
         isProcessingAutoNext.current = false;
       }, 3000);
     }
-  }, [isRealHost, canControl, movie, activeEpisode, room, handleSelectEpisode, setRoom]);
+  }, [
+    isRealHost,
+    canControl,
+    movie,
+    activeEpisode,
+    room,
+    setRoom,
+    syncToSupabase,
+  ]);
 
   const executeKick = async () => {
     if (!kickTarget) return;
@@ -296,6 +353,11 @@ export default function WatchPartyView() {
   };
 
   const executeLeaveRoom = async (newHostUserId?: string) => {
+    if (!room) return;
+
+    // Chốt sổ lịch sử xem trước khi rời phòng!
+    syncToSupabase();
+
     setIsLeaving(true);
     const toastId = toast.loading("Đang rời phòng...");
 
@@ -406,7 +468,7 @@ export default function WatchPartyView() {
               key={`${room.current_movie_slug}-${activeEpisode.slug}`}
               playerSyncRef={playerSyncRef}
               movieSrc={activeEpisode.link_m3u8}
-              user={user}
+              user={user!}
               movie={movie}
               isWatchParty={true}
               isHost={isRealHost}
@@ -416,21 +478,16 @@ export default function WatchPartyView() {
               onPauseSync={(t) => sendControl("pause", t)}
               onSeekSync={(t) => sendControl("seek", t)}
               onHeartbeatSync={sendHeartbeat}
-              onChangeEpisode={(slug) => handleSelectEpisode(slug)}
+              onChangeEpisode={(slug) => {
+                syncToSupabase();
+                handleSelectEpisode(slug);
+              }}
               onAutoNext={handleWatchPartyAutoNext}
-              onProgress={() => {}}
+              onProgress={handleTimeUpdate}
+              onPlayerReady={handlePlayerReady}
+              onManualSync={requestManualSync}
             >
-              <ChatOverlay
-                messages={messages}
-                currentUserId={user.id}
-                onSendMessage={(msg) => {
-                  if (msg.text)
-                    handleSendMessage(
-                      msg.text,
-                      (msg.type as "chat" | "system") || "chat",
-                    );
-                }}
-              />
+              <ChatOverlay />
             </VideoPlayer>
           )}
 
@@ -438,7 +495,10 @@ export default function WatchPartyView() {
             <EpisodeSelector
               servers={movie.episodes}
               episodeSelected={activeEpisode?.slug || ""}
-              onSelect={(sv) => handleSelectEpisode(sv.slug, sv.name)}
+              onSelect={(sv) => {
+                syncToSupabase();
+                handleSelectEpisode(sv.slug, sv.name);
+              }}
               activeServerIdx={0}
               onServerChange={() => {}}
             />

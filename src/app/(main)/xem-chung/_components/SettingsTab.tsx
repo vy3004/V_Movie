@@ -6,12 +6,13 @@ import NProgress from "nprogress";
 import { toast } from "sonner";
 import { LockClosedIcon, GlobeAltIcon } from "@heroicons/react/24/outline";
 import ConfirmModal from "@/components/ui/ConfirmModal";
-import { useWatchParty } from "@/providers/WatchPartyProvider";
 import { WatchPartyRoom, RoomSettings } from "@/types";
+import { useWatchPartyStore, selectRoom } from "@/stores/watch-party";
 
 export default function SettingsTab() {
   const router = useRouter();
-  const { room, setRoom } = useWatchParty(); //
+  const room = useWatchPartyStore(selectRoom);
+  const setRoom = useWatchPartyStore((state) => state.setRoom);
 
   const [isEndModalOpen, setIsEndModalOpen] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
@@ -44,6 +45,15 @@ export default function SettingsTab() {
       });
 
       if (!res.ok) throw new Error();
+
+      // Nếu tắt guest_can_chat, gọi API mute tất cả user (trừ host/mod)
+      if (key === "guest_can_chat" && value === false) {
+        await fetch("/api/watch-party/participant/mute-all", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomId: room.id }),
+        });
+      }
     } catch {
       setRoom(prevRoom); // Rollback nếu lỗi RLS
       toast.error("Không có quyền thay đổi cài đặt");

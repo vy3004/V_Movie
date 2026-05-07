@@ -21,7 +21,7 @@ export default function AudioDuckingManager({
   const [isDuckingActive, setIsDuckingActive] = useState(false);
 
   const duckingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const fadeIntervalRef = useRef<number | null>(null);
 
   // Ref để biết khi nào hệ thống đang TỰ ĐỘNG chỉnh âm lượng,
   // giúp phân biệt với việc User tự kéo thanh volume.
@@ -86,7 +86,11 @@ export default function AudioDuckingManager({
   useEffect(() => {
     if (!player || player.isDisposed()) return;
 
-    if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+    // CRITICAL: Cancel any existing animation frame before starting new one
+    if (fadeIntervalRef.current) {
+      cancelAnimationFrame(fadeIntervalRef.current);
+      fadeIntervalRef.current = null;
+    }
 
     // Khai báo biến để giữ timeout, giúp ta dọn dẹp nó khi Effect re-run hoặc unmount
     let resetDuckingTimeout: NodeJS.Timeout | null = null;
@@ -96,24 +100,31 @@ export default function AudioDuckingManager({
     const targetVolume = isDuckingActive ? baseVol * 0.7 : baseVol;
 
     const step = 0.05;
-    const duration = 50;
+    let lastTimestamp = 0;
+    const frameDuration = 50; // Target 50ms per step (20 steps/second)
 
     isDuckingRef.current = true;
 
-    fadeIntervalRef.current = setInterval(() => {
+    const animate = (timestamp: number) => {
       if (player.isDisposed()) {
-        if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
         return;
       }
+
+      // Throttle to ~50ms per frame
+      if (timestamp - lastTimestamp < frameDuration) {
+        fadeIntervalRef.current = requestAnimationFrame(animate);
+        return;
+      }
+      lastTimestamp = timestamp;
+
       const currentVol = player.volume();
 
       if (currentVol === undefined) {
-        if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
         return;
       }
+
       if (Math.abs(currentVol - targetVolume) <= step) {
         player.volume(targetVolume);
-        if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
 
         if (!isDuckingActive) {
           resetDuckingTimeout = setTimeout(() => {
@@ -126,12 +137,18 @@ export default function AudioDuckingManager({
             ? Math.max(0, currentVol - step)
             : Math.min(1, currentVol + step);
         player.volume(nextVol);
+        fadeIntervalRef.current = requestAnimationFrame(animate);
       }
-    }, duration);
+    };
+
+    fadeIntervalRef.current = requestAnimationFrame(animate);
 
     // Hàm Cleanup của useEffect (Chạy khi component unmount hoặc isDuckingActive/player thay đổi)
     return () => {
-      if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+      if (fadeIntervalRef.current) {
+        cancelAnimationFrame(fadeIntervalRef.current);
+        fadeIntervalRef.current = null;
+      }
       if (resetDuckingTimeout) clearTimeout(resetDuckingTimeout);
     };
   }, [isDuckingActive, player]);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { WatchPartyContentService } from "@/services/watch-party-content.service";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "edge";
 
@@ -34,6 +35,25 @@ export async function POST(request: Request) {
 
     if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // Rate limiting: 10 playlist additions per 60 seconds per user
+    const rateLimitResult = await rateLimit(`wp_playlist:${user.id}`, 10, 60);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        {
+          error:
+            "Bạn đang thêm phim vào danh sách quá nhanh, vui lòng chờ một chút",
+        },
+        {
+          status: 429,
+          headers: {
+            "X-RateLimit-Limit": "10",
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": rateLimitResult.reset.toString(),
+          },
+        },
+      );
+    }
 
     const body = await request.json();
     if (!body.roomId || !body.movieSlug) {

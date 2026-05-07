@@ -3,7 +3,7 @@ import { UserProfile } from "./user";
 // 1. Định nghĩa Settings cấu hình trong Room (Cột JSONB)
 export interface RoomSettings {
   wait_for_all: boolean;
-  guest_can_chat: boolean;
+  guest_can_chat: boolean; // false = Cấm chat cả phòng (trừ host/mod)
   allow_guest_control: boolean;
 }
 

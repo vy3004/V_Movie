@@ -32,10 +32,10 @@ export default async function WatchPartyPage({
   if (!user) {
     return <WatchPartyGuestClient room={room} />;
   }
-  // 2. Fetch trạng thái của User hiện tại
+  // 2. Fetch trạng thái của User hiện tại (bao gồm profiles)
   const { data: participant } = await supabase
     .from("watch_party_participants")
-    .select("*")
+    .select("*, profiles:user_id(full_name, avatar_url)")
     .eq("room_id", room.id)
     .eq("user_id", user.id)
     .maybeSingle();

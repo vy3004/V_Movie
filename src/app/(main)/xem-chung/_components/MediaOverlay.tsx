@@ -5,11 +5,12 @@ import { useParticipants, VideoTrack } from "@livekit/components-react";
 import { Track, Participant } from "livekit-client";
 import UserAvatar from "@/components/shared/UserAvatar";
 import SpeakingEffect from "@/app/(main)/xem-chung/_components/SpeakingEffect";
-import { useWatchParty } from "@/providers/WatchPartyProvider";
 import { WatchPartyParticipant } from "@/types";
+import { useWatchPartyStore, selectParticipants } from "@/stores/watch-party";
 
 export default function MediaOverlay() {
-  const { participants } = useWatchParty();
+  const participants = useWatchPartyStore(selectParticipants);
+
   const lkParticipants = useParticipants();
 
   // Danh sách ID những người đang nói hoặc vừa mới nói xong (grace period)
@@ -50,7 +51,8 @@ export default function MediaOverlay() {
         currentTimeouts[id] = setTimeout(() => {
           setRecentSpeakerIds((prev) => prev.filter((sid) => sid !== id));
           delete currentTimeouts[id]; // Chạy xong thì tự xóa key
-        }, 1500);
+          // Giữ luồng Video sống lâu hơn 5 giây để tránh phải tải lại liên tục nếu họ nói ngắt quãng
+        }, 5000);
       }
     });
   }, [lkParticipants, recentSpeakerIds]);

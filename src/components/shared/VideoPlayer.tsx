@@ -35,6 +35,7 @@ interface Props {
   onPlayerReady?: () => void;
   playerSyncRef?: React.MutableRefObject<PlayerSyncRef | null>;
   onChangeEpisode?: (slug: string) => void;
+  onManualSync?: () => void;
   children?: React.ReactNode;
 }
 
@@ -100,7 +101,13 @@ function VideoPlayer(props: Props) {
     onPauseSyncRef.current = props.onPauseSync;
     onSeekSyncRef.current = props.onSeekSync;
     onHeartbeatSyncRef.current = props.onHeartbeatSync;
-  }, [props.canControl, props.onPlaySync, props.onPauseSync, props.onSeekSync, props.onHeartbeatSync]);
+  }, [
+    props.canControl,
+    props.onPlaySync,
+    props.onPauseSync,
+    props.onSeekSync,
+    props.onHeartbeatSync,
+  ]);
 
   // XỬ LÝ SỰ KIỆN FULLSCREEN CỦA TRÌNH DUYỆT
   useEffect(() => {
@@ -206,8 +213,17 @@ function VideoPlayer(props: Props) {
         syncFromRemote,
         getCurrentState,
       };
+      console.log("[VideoPlayer] playerSyncRef set, calling onPlayerReady");
+      // Notify parent that ref is ready
+      props.onPlayerReady?.();
     }
-  }, [syncFromRemote, getCurrentState, props.playerSyncRef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    syncFromRemote,
+    getCurrentState,
+    props.playerSyncRef,
+    props.onPlayerReady,
+  ]);
 
   // LƯU CẤU HÌNH AUTO-NEXT
   useEffect(() => {
@@ -317,6 +333,8 @@ function VideoPlayer(props: Props) {
           setIsAutoNext={setIsAutoNext}
           isLightsOff={isLightsOff}
           setIsLightsOff={setIsLightsOff}
+          isWatchParty={props.isWatchParty}
+          onManualSync={props.onManualSync}
           onPrev={() => {
             if (!props.prevEpisodeSlug) return;
             if (props.isWatchParty) {

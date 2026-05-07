@@ -3,6 +3,7 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import { messageSchema } from "@/lib/validations/message.validation";
 import { sanitizeHtml } from "@/lib/utils";
 import { WatchPartyContentService } from "@/services/watch-party-content.service";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {
   try {
@@ -47,6 +48,22 @@ export async function POST(request: Request) {
     if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    // Rate limiting: 5 messages per 10 seconds per user
+    const rateLimitResult = await rateLimit(`chat:${user.id}`, 5, 10);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Bạn đang gửi tin nhắn quá nhanh, vui lòng chờ một chút" },
+        {
+          status: 429,
+          headers: {
+            "X-RateLimit-Limit": "5",
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": rateLimitResult.reset.toString(),
+          },
+        },
+      );
+    }
+
     const body = await request.json();
 
     const cleanText = sanitizeHtml(body.text || "");
@@ -87,6 +104,31 @@ export async function POST(request: Request) {
       }
     }
 
+    // System messages: broadcast only, don't save to DB
+    if (type === "system") {
+      const supabase = await createSupabaseServer();
+
+      // Broadcast system message via realtime channel
+      await supabase.channel(`wp_data_${roomId}`).send({
+        type: "broadcast",
+        event: "system_message",
+        payload: {
+          id,
+          room_id: roomId,
+          user_id: user.id,
+          user_name: cleanUserName,
+          avatar_url: cleanAvatarUrl,
+          text,
+          type: "system",
+          created_at: new Date().toISOString(),
+          metadata,
+        },
+      });
+
+      return NextResponse.json({ success: true });
+    }
+
+    // Chat messages: save to DB (postgres_changes will broadcast)
     const message = await WatchPartyContentService.sendMessage({
       id,
       roomId,

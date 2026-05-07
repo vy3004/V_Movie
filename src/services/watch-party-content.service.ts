@@ -309,9 +309,20 @@ export const WatchPartyContentService = {
     ]);
 
     if (!participant) {
+      // Debug: Check if participant exists with different status
+      const { data: anyParticipant } = await supabase
+        .from("watch_party_participants")
+        .select("status, role")
+        .eq("room_id", params.roomId)
+        .eq("user_id", params.userId)
+        .maybeSingle();
+
       logger.warn("Non-participant attempted to send message", {
         roomId: params.roomId,
         userId: params.userId,
+        participantExists: !!anyParticipant,
+        participantStatus: anyParticipant?.status,
+        participantRole: anyParticipant?.role,
       });
       throw new Error("Chưa tham gia phòng");
     }
@@ -381,6 +392,8 @@ export const WatchPartyContentService = {
       type: params.type,
     });
 
+    // Message will be delivered via postgres_changes subscription in WatchPartyRealtime
+    // No need for broadcast - postgres INSERT trigger is fast enough
     return message as ChatMessage;
   },
 };

@@ -151,7 +151,7 @@ export const RecommendationService = {
 
   /**
    * Đổ phim do AI tạo ra vào Kho Cache chung (Pool) để cho nhóm người dùng Guest "xài ké".
-   * ĐÃ FIX LOGIC: Chỉ lưu phim có chứa thể loại tương ứng vào đúng key của thể loại đó.
+   * Chỉ lưu phim có chứa thể loại tương ứng vào đúng key của thể loại đó.
    */
   saveToGuestPool: async (movies: MovieRecommendation[], genres: string[]) => {
     const redisClient = redis;
@@ -198,7 +198,6 @@ export const RecommendationService = {
 
   /**
    * [INTERNAL] Nhận kết quả thô từ AI, đi qua màng lọc OPhim và lưu vào DB/Redis
-   * ĐÃ FIX LỖI: Bắt exception cho Supabase Upsert
    */
   _processAndSaveResults: async (
     userId: string,

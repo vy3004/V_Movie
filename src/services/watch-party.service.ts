@@ -447,15 +447,13 @@ export const WatchPartyService = {
       ? { can_control_media: true, can_manage_users: true }
       : undefined;
 
-    const { error } = await supabase
-      .from("watch_party_participants")
-      .insert({
-        room_id: roomId,
-        user_id: userId,
-        status,
-        role,
-        permissions,
-      });
+    const { error } = await supabase.from("watch_party_participants").insert({
+      room_id: roomId,
+      user_id: userId,
+      status,
+      role,
+      permissions,
+    });
 
     if (error) {
       if (error.code === "23505") {
@@ -519,6 +517,14 @@ export const WatchPartyService = {
       role,
       promoted_to_host: role === "host",
     });
+
+    // Cập nhật Lobby cache nếu user được approved (tăng số người)
+    if (status === "approved") {
+      WatchPartyConfigService.mutateRoomInLobbyCache(roomId, {}, 1).catch(
+        console.error,
+      );
+    }
+
     return { success: true, status, promoted_to_host: role === "host" };
   },
 
@@ -658,6 +664,11 @@ export const WatchPartyService = {
     if (roomDeleted) {
       await WatchPartyConfigService.invalidateLobbyCache();
       logger.info("Room deleted, lobby cache invalidated", { roomId });
+    } else {
+      // Phòng vẫn còn → Giảm số người trong cache
+      WatchPartyConfigService.mutateRoomInLobbyCache(roomId, {}, -1).catch(
+        console.error,
+      );
     }
 
     logger.info("User left room successfully", { roomId, userId, roomDeleted });
@@ -762,6 +773,11 @@ export const WatchPartyService = {
         });
         throw approveErr;
       }
+
+      // Tăng số người trong cache khi approve
+      WatchPartyConfigService.mutateRoomInLobbyCache(roomId, {}, 1).catch(
+        console.error,
+      );
     } else if (action === "reject") {
       const { error: rejectErr } = await supabase
         .from("watch_party_participants")
@@ -793,6 +809,11 @@ export const WatchPartyService = {
         });
         throw kickErr;
       }
+
+      // Giảm số người trong cache khi kick
+      WatchPartyConfigService.mutateRoomInLobbyCache(roomId, {}, -1).catch(
+        console.error,
+      );
     }
 
     return { success: true };
@@ -924,6 +945,11 @@ export const WatchPartyService = {
         }
         throw updateErr;
       }
+
+      // Cập nhật luôn tập phim ngoài sảnh
+      WatchPartyConfigService.mutateRoomInLobbyCache(params.roomId, {
+        current_episode_slug: params.episodeSlug,
+      }).catch(console.error);
     }
 
     return { success: true, state: newState };

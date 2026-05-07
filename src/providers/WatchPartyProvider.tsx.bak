@@ -19,6 +19,8 @@ import {
 import { toast } from "sonner";
 
 import { createSupabaseClient } from "@/lib/supabase/client";
+import { useWatchPartyAdapter } from "@/stores/watch-party";
+import { FEATURE_FLAGS } from "@/lib/feature-flags";
 import {
   WatchPartyRoom,
   WatchPartyParticipant,
@@ -507,7 +509,34 @@ export function WatchPartyProvider({
     }
   }, [participants, realtimePresence, user.id, roomId, refetchParticipants]);
 
-  const playlistManager = usePlaylistManager(room, user, sendSystemMessage);
+  // Only use Context playlist manager when NOT using Zustand
+  const playlistManager = FEATURE_FLAGS.USE_ZUSTAND_WATCH_PARTY
+    ? {
+        playlist: [],
+        handleAddMovie: async () => {},
+        handlePlayNow: async () => {},
+        handleDeleteItem: async () => {},
+        handleDragStart: () => {},
+        handleDragEnter: () => {},
+        handleDragEnd: async () => {},
+      }
+    : usePlaylistManager(room, user, sendSystemMessage);
+
+  // Sync to Zustand Store (Phase 2: Adapter) - Must be after all state declarations including playlistManager
+  useWatchPartyAdapter({
+    room,
+    participants,
+    messages,
+    myParticipantId: myParticipant?.id,
+    playerSyncRef,
+    user,
+    kickTarget,
+    isKicked,
+    isLoadingRoom,
+    initialState,
+    // Only sync playlist from Context when not using Zustand (PlaylistRealtime handles it)
+    playlist: FEATURE_FLAGS.USE_ZUSTAND_WATCH_PARTY ? [] : playlistManager.playlist,
+  });
 
   useHostSuccession({
     participants,

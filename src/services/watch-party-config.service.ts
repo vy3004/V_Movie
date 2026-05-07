@@ -125,10 +125,98 @@ export const WatchPartyConfigService = {
       fields: Object.keys(safeUpdates),
     });
 
+    // Cập nhật Sảnh ngay lập tức nếu Tên phòng hoặc trạng thái Private thay đổi
+    WatchPartyConfigService.mutateRoomInLobbyCache(params.roomId, {
+      title: safeUpdates.title,
+      is_private: safeUpdates.is_private,
+    }).catch(console.error);
+
     return { success: true };
   },
 
   // ==================== LOBBY ====================
+
+  /**
+   * 👑 HÀM MUTATE CACHE TỔNG LỰC
+   * Cập nhật mọi thông tin: Tên, Phim, Tăng giảm người, Đổi Host, Ẩn/Hiện phòng
+   */
+  mutateRoomInLobbyCache: async (
+    roomId: string,
+    updates: Record<string, unknown>,
+    participantDiff: number = 0,
+  ) => {
+    if (!redis) return;
+
+    try {
+      const keys = await redis.smembers("wp:lobby:cache_keys");
+      if (!keys || keys.length === 0) return;
+
+      const pipeline = redis.pipeline();
+
+      for (const key of keys) {
+        const cachedData = await redis.get(key);
+        if (!cachedData) continue;
+
+        const parsed =
+          typeof cachedData === "string"
+            ? JSON.parse(cachedData)
+            : cachedData;
+        let isUpdated = false;
+
+        if (parsed && Array.isArray(parsed.rooms)) {
+          // TRƯỜNG HỢP 1: Phòng bị chuyển sang PRIVATE hoặc XÓA -> Lọc bỏ khỏi sảnh
+          if (updates.is_private === true || updates.is_active === false) {
+            const originalLength = parsed.rooms.length;
+            parsed.rooms = parsed.rooms.filter((r: unknown) => {
+              if (typeof r === "object" && r !== null && "id" in r) {
+                return r.id !== roomId;
+              }
+              return true;
+            });
+            if (parsed.rooms.length !== originalLength) isUpdated = true;
+          }
+          // TRƯỜNG HỢP 2: Cập nhật thông tin phòng (Tên, Ảnh, Phim, Host, Số người...)
+          else {
+            parsed.rooms = parsed.rooms.map((room: unknown) => {
+              if (
+                typeof room === "object" &&
+                room !== null &&
+                "id" in room &&
+                room.id === roomId
+              ) {
+                isUpdated = true;
+                const currentCount =
+                  typeof room === "object" &&
+                  room !== null &&
+                  "participant_count" in room &&
+                  typeof room.participant_count === "number"
+                    ? room.participant_count
+                    : 0;
+                const newCount = Math.max(0, currentCount + participantDiff);
+
+                // Trả về Object đã được gộp data mới
+                return {
+                  ...room,
+                  ...updates,
+                  participant_count: newCount,
+                };
+              }
+              return room;
+            });
+          }
+
+          if (isUpdated) {
+            // Ghi đè lại Cache hiện tại (Giữ nguyên TTL để Sảnh tự reset sau 60s)
+            pipeline.set(key, JSON.stringify(parsed), { ex: 60 });
+          }
+        }
+      }
+
+      await pipeline.exec();
+    } catch (error) {
+      logger.error("[LOBBY_CACHE] Lỗi mutate Cache Sảnh:", { error });
+    }
+  },
 
   /**
    * Invalidate all lobby cache keys

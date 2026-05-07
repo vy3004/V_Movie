@@ -6,20 +6,23 @@ import ChatMessageItem from "@/app/(main)/xem-chung/_components/ChatMessageItem"
 import ChatInputForm from "@/app/(main)/xem-chung/_components/ChatInputForm";
 import MediaOverlay from "@/app/(main)/xem-chung/_components/MediaOverlay";
 import { ChatMessage } from "@/types";
+import {
+  useWatchPartyStore,
+  selectMyParticipant,
+  selectMessages,
+  selectUser,
+  sendChatMessage,
+} from "@/stores/watch-party";
 
-interface ChatOverlayProps {
-  messages: ChatMessage[];
-  currentUserId: string;
-  isMuted?: boolean;
-  onSendMessage: (msg: Partial<ChatMessage>) => void;
-}
+// Remove props - component subscribes to Zustand directly
+export default function ChatOverlay() {
+  // Subscribe to Zustand store directly
+  const messages = useWatchPartyStore(selectMessages);
+  const user = useWatchPartyStore(selectUser);
+  const currentUserId = user?.id || '';
+  const myParticipant = useWatchPartyStore(selectMyParticipant);
+  const isMuted = myParticipant?.is_muted || false;
 
-export default function ChatOverlay({
-  messages,
-  currentUserId,
-  isMuted,
-  onSendMessage,
-}: ChatOverlayProps) {
   const [text, setText] = useState("");
   const [isCinematic, setIsCinematic] = useState(false);
   const [isUIActive, setIsUIActive] = useState(false);
@@ -86,7 +89,9 @@ export default function ChatOverlay({
   useEffect(() => {
     if (messages.length > prevMessagesLength.current) {
       const newMessages = messages.slice(prevMessagesLength.current);
-      if (!isUIActive && !isTyping && !isCinematic) {
+
+      // Không vẽ tin nhắn bay nếu User đang ở Tab khác (chống kẹt DOM và Memory Leak)
+      if (!isUIActive && !isTyping && !isCinematic && !document.hidden) {
         const validMsgs = newMessages.filter((m) => m.type !== "system");
 
         if (validMsgs.length > 0) {
@@ -124,10 +129,10 @@ export default function ChatOverlay({
     };
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (text.trim() && !isMuted) {
-      onSendMessage({ text, type: "chat" });
+      await sendChatMessage(text);
       setText("");
     }
     inputRef.current?.blur();

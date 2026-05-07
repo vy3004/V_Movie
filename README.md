@@ -1,135 +1,164 @@
-# 🎬 V-Movie
+# 🎬 V-Movie: Streaming & Real-time Watch Party Platform
 
-**V-Movie** là một nền tảng xem phim trực tuyến hiện đại, được xây dựng với kiến trúc tối ưu hiệu suất và trải nghiệm người dùng. Dự án không chỉ cung cấp tính năng xem phim cơ bản mà còn tích hợp hệ thống **Watch Party (Xem chung)** theo thời gian thực, quản lý lịch sử xem, bình luận, và hỗ trợ PWA (Progressive Web App).
+**V-Movie** is a modern movie streaming platform built with a **Performance & Scalability First** mindset. Beyond providing a high-quality streaming experience, it solves complex real-time synchronization challenges through a built-in **Watch Party** system with integrated Voice Chat.
 
 <br/>
 
 [![Next.js](https://img.shields.io/badge/Next.js-14.2-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
+[![Zustand](https://img.shields.io/badge/Zustand-5.0-orange?style=for-the-badge&logo=react)](https://zustand-demo.pmnd.rs/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
-[![Supabase](https://img.shields.io/badge/Supabase-Database_&_Auth-3ECF8E?style=for-the-badge&logo=supabase)](https://supabase.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-DB_&_Realtime-3ECF8E?style=for-the-badge&logo=supabase)](https://supabase.com/)
 [![Redis](https://img.shields.io/badge/Upstash-Redis-FF4D4D?style=for-the-badge&logo=redis)](https://upstash.com/)
+[![LiveKit](https://img.shields.io/badge/LiveKit-WebRTC-white?style=for-the-badge&logo=livekit)](https://livekit.io/)
 
 ---
 
-## ✨ Tính Năng Nổi Bật
+## ✨ Core Features
 
-### 🌐 1. Real-time Watch Party (Xem Chung)
+### 🌐 1. Real-time Watch Party
 
-Đây là tính năng cốt lõi giúp V-Movie trở nên khác biệt, mang lại trải nghiệm xem phim cùng bạn bè dù ở bất cứ đâu.
+The Watch Party system utilizes an event-driven architecture, optimized for concurrent viewing experiences for dozens of users in the same room.
 
-<!-- ![Watch Party Demo](./docs/watch-party-demo.gif) -->
+- **Hybrid Sync Algorithm:** Combines **Hard Sync** (forces a time jump if the drift is > 1.5s) and **Soft Sync** (dynamically adjusts `playbackRate` between 0.85x - 1.15x for a seamless catch-up without video buffering).
+- **High-Performance Messaging:** Real-time chat using an _Optimistic Update with Rollback_ pattern. Implements strict rate limiting (5 msgs/10s) and memory capping (< 150 messages) to prevent memory leaks (DOM thrashing).
+- **LiveKit Voice Chat & Auto Ducking:** WebRTC integration for live voice chat. An _Auto Ducking_ algorithm uses `requestAnimationFrame` to smoothly lower the movie volume to 70% when someone speaks, and smoothly restores it during silence.
+- **Host Succession & Grace Period:** Strict Role-Based Access Control (Host > Mod > Guest). Automatic host succession if the owner disconnects for > 30s. A 15-second Grace Period prevents users from being kicked during page refreshes (F5) or minor network blips.
 
-- **Hệ thống phòng (Room-based):** Tạo phòng nhanh chóng và mời bạn bè tham gia thông qua **mã code gồm 6 ký tự** ngẫu nhiên.
-- **Cơ chế Soft Sync thông minh:** Tự động đồng bộ hóa thời gian phát video giữa các thành viên. Tốc độ phát (playback speed) sẽ linh hoạt điều chỉnh trong khoảng **0.85x đến 1.15x** để các luồng video bắt kịp nhau một cách mượt mà mà không gây giật lag (buffering).
-- **Mô hình phân quyền Host/User:** Host có toàn quyền kiểm soát video (Play, Pause, Seek). Hỗ trợ cơ chế chuyển giao quyền Host (Host Succession) cho người khác trong phòng.
-- **Tương tác trực tiếp:** Khung chat real-time tích hợp cơ chế **rate-limiting 1500ms** cho tính năng thả cảm xúc (emote), ngăn chặn tình trạng spam làm quá tải hệ thống.
+### ⚡ 2. High Scalability Architecture
 
-### 🍿 2. Trải Nghiệm Xem Phim Tối Ưu
+- **Anti-Thundering Herd:** Applies **Jitter** (randomized delays) when tracking watch history, eliminating local DDoS spikes when dozens of users in a room trigger DB writes simultaneously.
+- **Zero-DB Mutation:** Utilizes **Lua Scripts** directly on Redis RAM to store watch progress and track lobby user counts, pushing API latency under < 5ms.
+- **State Management:** Fully migrated to **Zustand**, isolating components using a context-free pattern, reducing wasteful React re-renders by 80% compared to the legacy Context API approach.
 
-Giao diện người dùng được thiết kế tập trung vào nội dung và sự tiện lợi.
+### 🤖 3. AI-Powered Recommendations
 
-<!-- <img src="./docs/movie-player.png" alt="Video Player Interface" width="800" /> -->
+- Powered by **Google Gemini 2.5 Flash** to analyze user viewing habits (History, Watch Time, Genres).
+- **Batch Processing:** Groups users for nightly AI processing via Cron Jobs (QStash) to heavily optimize API costs.
+- **Guest Pool Fallback:** Caches AI-generated recommendations in Redis to cross-share with unauthenticated (guest) users.
 
-- **Trình phát Video tùy chỉnh:** Sử dụng `video.js` kết hợp `videojs-hotkeys` để người dùng có thể điều khiển bằng bàn phím tiện lợi (Space để dừng/phát, phím mũi tên để tua,...).
-- **Quản lý danh sách tự động:** Tự động lưu lại lịch sử xem phim (Watch History) và cho phép thêm phim vào danh sách đăng ký theo dõi (Subscriptions).
-- **Khám phá nội dung:** Hệ thống lọc phim đa dạng, tìm kiếm thông minh và danh sách phim thịnh hành.
+### 🍿 4. User Experience & Community
 
-### 💬 3. Hệ Thống Tương Tác & Cộng Đồng
+- **Custom Video Player:** Integrates `video.js` with `videojs-hotkeys` and advanced playlist management (Drag-and-Drop reordering optimized via SQL Bulk Updates).
+- **Threaded Comments:** Multi-level nested replies system.
+- **PWA & Web Push:** Installable as a standalone app with automated push notifications for new episodes or comment mentions.
 
-Không chỉ là xem phim, người dùng còn có thể thảo luận và kết nối.
+---
 
-<!-- <img src="./docs/comment-section.png" alt="Nested Comments" width="800" /> -->
+## 🗄️ Database Schema
 
-- **Bình luận đa cấp (Threaded Comments):** Hỗ trợ trả lời (reply) theo từng luồng thảo luận riêng biệt.
-- **Tương tác thời gian thực:** Thích (Like) bình luận và hệ thống nhận thông báo (Push Notifications) ngay khi có tương tác mới.
+- `profiles`: User information (Avatar, Bio, Preferences).
+- `watch_history`: Movie progress tracking.
+- `user_subscriptions`: Movie follow lists & notification settings.
+- `comments` & `comment_likes`: Multi-level nested comment trees.
+- `notifications` & `push_subscriptions`: In-app and Web Push (P256DH & Auth keys) management.
+- `watch_party_rooms`: Watch party metadata (Host, Capacity, Video state).
+- `watch_party_participants`: Room membership status (Permissions, Mic/Chat mute state).
+- `watch_party_playlist`: Shared movie queue.
+- `watch_party_messages`: Chat history and system interactions.
 
-### ⚡ 4. PWA & Tối Ưu Hiệu Suất Cao
+---
 
-Dự án được xây dựng với tư duy "Performance First".
+## 🌐 API Routes
 
-- **Progressive Web App (PWA):** Người dùng có thể cài đặt trực tiếp V-Movie lên màn hình điện thoại hoặc máy tính, mang lại trải nghiệm như một ứng dụng Native thực thụ.
-- **Lazy Loading & Infinite Scroll:** Tối ưu hóa tải trang, chỉ fetch dữ liệu và hình ảnh khi cuộn đến vùng hiển thị.
-- **SEO Tối Ưu:** Hỗ trợ Dynamic Metadata, `sitemap.ts` và `robots.ts` để thân thiện với các công cụ tìm kiếm.
+The system provides RESTful APIs for independent business logic:
+
+- **/api/auth/**: OAuth callbacks.
+- **/api/movies/**: Fetches movie lists, details, and SEO metadata.
+- **/api/history/**: Progress tracking, statistics, and cross-device sync.
+- **/api/comments/**: CRUD for comments, thread lineage, Like/Unlike.
+- **/api/subscriptions/ & /api/notifications/**: Follow management and push triggers.
+- **/api/recommend/**: Generative AI endpoints (User & Guest modes).
+- **/api/watch-party/**: Full room lifecycle management, Video Sync, LiveKit Voice Tokens, and RBAC Permissions.
 
 ---
 
 ## 🛠 Tech Stack
 
-**Frontend Architecture:**
+### Frontend
 
-- [Next.js 14](https://nextjs.org/) (App Router, Server Actions)
-- [TypeScript](https://www.typescriptlang.org/)
-- **Styling:** [Tailwind CSS](https://tailwindcss.com/) & Tailwind Animate
-- **State & Data Fetching:** [@tanstack/react-query](https://tanstack.com/query/latest) & Axios
-- **Form Handling:** React Hook Form + Zod
+- **Core:** Next.js 14.2 (App Router)
+- **Language:** TypeScript 5.0
+- **State Management:** Zustand (Client State), TanStack React Query (Server State)
+- **Styling:** Tailwind CSS, Tailwind Animate
+- **Video Player:** Video.js (Custom hotkeys, Next episode overlays)
 
-**Backend & Infrastructure:**
+### Backend & Infrastructure
 
-- **Database & Auth:** [Supabase](https://supabase.com/) (PostgreSQL, Realtime WebSockets)
-- **Caching & Rate Limiting:** [Upstash Redis](https://upstash.com/)
-
-**Testing & QA:**
-
-- **Unit Testing:** Vitest & React Testing Library
-- **E2E Testing:** Playwright
+- **Database / Auth:** Supabase PostgreSQL & Supabase Auth
+- **Realtime Engine:** Supabase Broadcast & Postgres Changes
+- **Cache & Rate Limit:** Upstash Redis (Serverless)
+- **WebRTC:** LiveKit Server SDK
+- **Cron Jobs:** Upstash QStash
 
 ---
 
-## 🚀 Hướng Dẫn Cài Đặt (Local Development)
+## 🛠 Local Setup
 
-### Yêu cầu
+### Prerequisites
 
-- Node.js (v18+ hoặc v20+)
-- npm / yarn / pnpm
+- Node.js (v18+ or v20+)
+- Package Manager: npm / yarn / pnpm
 
-### 1. Clone Source Code
+### 1. Clone the Repository
 
 ```bash
-git clone [https://github.com/vy3004/v-movie.git](https://github.com/vy3004/v-movie.git)
+git clone https://github.com/vy3004/v-movie.git
 cd v-movie
 ```
 
-### 2. Cài đặt Dependencies
+### 2. Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 3. Cấu hình Biến Môi Trường (Environment Variables)
+### 3. Environment Variables
 
-Tạo file .env.local ở thư mục gốc và cung cấp các thông tin sau:
+Create a .env.local file in the root directory and add the following keys:
 
 ```bash
-# Môi trường hệ thống
+# Environment
 NODE_ENV=development
+NEXT_PUBLIC_PORT=http://localhost:3000
 
-# Supabase Keys
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+# Feature Flags
+NEXT_PUBLIC_USE_ZUSTAND=true
 
-# Upstash Redis Keys
-UPSTASH_REDIS_REST_URL=your_upstash_redis_url
-UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token
+# Supabase Keys (Database, Auth, Realtime)
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 
-# Livekit Keys
-NEXT_PUBLIC_LIVEKIT_URL=your_livekit_url
-LIVEKIT_API_KEY=your_livekit_api_key
-LIVEKIT_API_SECRET=your_livekit_api_secret
+# Upstash Redis Keys (Caching, Rate Limit)
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+
+# LiveKit Keys (WebRTC Voice Chat)
+NEXT_PUBLIC_LIVEKIT_URL=
+LIVEKIT_API_KEY=
+LIVEKIT_API_SECRET=
+
+# VAPID Keys (Web Push Notifications)
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_CONTACT_EMAIL=
+
+# Google AI & QStash (Cron jobs)
+GOOGLE_GENERATIVE_AI_API_KEY=
+QSTASH_URL=
+QSTASH_TOKEN=
 ```
 
-### 4. Chạy Ứng Dụng
+### 4. Run the Application
 
 ```bash
 npm run dev
 ```
 
-Trang web sẽ chạy tại: http://localhost:3000
-
 ---
 
-## 👨‍💻 Tác giả
+## 👨‍💻 Author
 
-Được thiết kế và phát triển bởi **Trần Nguyễn Kha Vỹ**  
-_Nếu bạn thấy dự án này thú vị, đừng quên cho mình một ⭐ nhé!_
+Designed and developed by Trần Nguyễn Kha Vỹ  
+_If you find the system architecture or the problem-solving approaches in this project interesting, please consider giving the repository a ⭐!_

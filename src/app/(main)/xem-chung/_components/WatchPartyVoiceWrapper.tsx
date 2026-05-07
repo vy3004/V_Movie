@@ -5,7 +5,11 @@ import { toast } from "sonner";
 import { LiveKitRoom } from "@livekit/components-react";
 import { RoomOptions, VideoPresets } from "livekit-client";
 import { WatchPartyRoom } from "@/types";
-import { useWatchParty } from "@/providers/WatchPartyProvider";
+import {
+  useWatchPartyStore,
+  selectParticipants,
+  selectUser,
+} from "@/stores/watch-party";
 
 interface WatchPartyVoiceWrapperProps {
   room: WatchPartyRoom;
@@ -16,7 +20,8 @@ export default function WatchPartyVoiceWrapper({
   room,
   children,
 }: WatchPartyVoiceWrapperProps) {
-  const { participants, user } = useWatchParty();
+  const participants = useWatchPartyStore(selectParticipants);
+  const user = useWatchPartyStore(selectUser);
   const [voiceToken, setVoiceToken] = useState<string | null>(null);
 
   // CẤU HÌNH BỘ LỌC ÂM THANH & TỐI ƯU HÓA CAMERA
@@ -30,9 +35,16 @@ export default function WatchPartyVoiceWrapper({
         autoGainControl: true,
       },
       videoCaptureDefaults: {
-        // Ép độ phân giải xuống mức cực thấp (160x120 hoặc 320x180) vì chỉ render khung nhỏ
-        // Hỗ trợ tốt cho trường hợp mạng yếu khi xem phim
+        // Ép độ phân giải xuống mức cực thấp (320x180) vì chỉ render khung nhỏ
         resolution: VideoPresets.h180.resolution,
+        // Giới hạn FPS ở mức 15. Dư sức mượt cho 1 cái avatar tròn.
+        // Giảm 50% băng thông Video!
+        frameRate: 15,
+      },
+      // 👑 SENIOR FIX BỔ SUNG: Ép Bitrate tải lên tối đa (Phòng mạng yếu)
+      publishDefaults: {
+        videoSimulcastLayers: [VideoPresets.h180], // Chỉ cho phép gửi 1 layer thấp nhất
+        videoCodec: "vp8", // Chuẩn nén video thân thiện với web nhất
       },
     };
   }, []);
@@ -84,7 +96,7 @@ export default function WatchPartyVoiceWrapper({
       isMounted = false;
       abortController.abort(); // Lập tức cắt đứt kết nối mạng đang fetch dở dang
     };
-  }, [room.room_code, participants, user.id]); // Thêm participants và user.id vào dependencies
+  }, [room.room_code, participants, user?.id]); // Thêm participants và user.id vào dependencies
 
   return (
     <LiveKitRoom

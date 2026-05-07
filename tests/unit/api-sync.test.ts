@@ -2,7 +2,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST } from "@/app/api/watch-party/sync/route";
 
-// 1. FIX LỖI HOISTING BẰNG vi.hoisted()
 // Tất cả các biến dùng bên trong vi.mock() phải được bọc trong vi.hoisted()
 const { mockRedis, mockSupabaseChain, mockGetUser } = vi.hoisted(() => {
   return {

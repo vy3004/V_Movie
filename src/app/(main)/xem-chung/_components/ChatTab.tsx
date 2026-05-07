@@ -3,11 +3,22 @@
 import { useState, useEffect, useRef } from "react";
 import ChatMessageItem from "@/app/(main)/xem-chung/_components/ChatMessageItem";
 import ChatInputForm from "@/app/(main)/xem-chung/_components/ChatInputForm";
-import { useWatchParty } from "@/providers/WatchPartyProvider";
+import {
+  useWatchPartyStore,
+  selectMessages,
+  selectUser,
+  selectRoom,
+  selectIsHost,
+  selectMyParticipant,
+  sendChatMessage,
+} from "@/stores/watch-party";
 
 export default function ChatTab() {
-  const { messages, user, room, isRealHost, myParticipant, handleSendMessage } =
-    useWatchParty();
+  const messages = useWatchPartyStore(selectMessages);
+  const user = useWatchPartyStore(selectUser);
+  const room = useWatchPartyStore(selectRoom);
+  const isRealHost = useWatchPartyStore(selectIsHost);
+  const myParticipant = useWatchPartyStore(selectMyParticipant);
 
   const [text, setText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -16,12 +27,21 @@ export default function ChatTab() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // --- TỰ ĐỘNG CUỘN XUỐNG ---
+  // --- TỰ ĐỘNG CUỘN XUỐNG (CHỈ KHI USER Ở GẦN ĐÁY) ---
   useEffect(() => {
     const container = chatContainerRef.current;
-    if (container) {
-      // Cuộn xuống đáy mỗi khi mảng messages thay đổi
-      container.scrollTop = container.scrollHeight;
+    if (!container) return;
+
+    // Chỉ tự động cuộn nếu user đang ở gần đáy (trong vòng 100px)
+    const isNearBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight <
+      100;
+
+    if (isNearBottom) {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: "smooth",
+      });
     }
   }, [messages]);
 
@@ -33,7 +53,7 @@ export default function ChatTab() {
     e.preventDefault();
     if (!text.trim() || isDisabled) return;
 
-    handleSendMessage(text);
+    sendChatMessage(text);
 
     setText("");
     setShowEmojis(false);

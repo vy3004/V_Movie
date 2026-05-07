@@ -1,18 +1,14 @@
 import "@testing-library/jest-dom";
 import { vi } from "vitest";
 
+// Set NODE_ENV for tests
+// process.env.NODE_ENV = "test"; // Commented out - read-only in build
+
 // Mock server-only GLOBALLY để tất cả tests đều bypass
 vi.mock("server-only", () => ({}));
 
-// Mock Supabase vì không gọi DB thật khi chạy Unit Test
-vi.mock("@/lib/supabase/client", () => ({
-  createSupabaseClient: () => ({
-    channel: vi.fn(() => ({
-      on: vi.fn().mockReturnThis(),
-      subscribe: vi.fn(),
-    })),
-  }),
-}));
+// NOTE: Supabase mock moved to individual test files for better control
+// Each test file should mock Supabase according to its needs
 
 // Giả lập NextResponse của Next.js Server
 vi.mock("next/server", () => {

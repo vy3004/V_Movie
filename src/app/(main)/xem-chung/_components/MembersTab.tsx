@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useCallback } from "react";
 import {
   CheckIcon,
   XMarkIcon,
@@ -8,37 +8,36 @@ import {
 } from "@heroicons/react/24/outline";
 import { Track } from "livekit-client";
 import { toast } from "sonner";
-import {
-  useParticipants,
-  useLocalParticipant,
-  TrackToggle,
-} from "@livekit/components-react";
+import { useLocalParticipant, TrackToggle } from "@livekit/components-react";
 import ParticipantItem from "@/app/(main)/xem-chung/_components/ParticipantItem";
 import UserAvatar from "@/components/shared/UserAvatar";
-import { useWatchParty } from "@/providers/WatchPartyProvider";
+import {
+  useWatchPartyStore,
+  selectParticipants,
+  selectIsHost,
+  selectHasPermission,
+  selectUser,
+  selectRoom,
+  handleParticipantAction,
+  togglePermission,
+} from "@/stores/watch-party";
 
 export default function MembersTab() {
-  const {
-    participants,
-    presenceData,
-    isRealHost,
-    hasModeratorAuth,
-    user,
-    room,
-    openMenuId,
-    setOpenMenuId,
-    handleParticipantAction,
-    togglePermission,
-    setKickTarget,
-  } = useWatchParty();
+  const participants = useWatchPartyStore(selectParticipants);
+  const isRealHost = useWatchPartyStore(selectIsHost);
+  const hasModeratorAuth = useWatchPartyStore(
+    selectHasPermission("can_manage_users"),
+  );
+  const user = useWatchPartyStore(selectUser);
+  const room = useWatchPartyStore(selectRoom);
+  const setKickTarget = useWatchPartyStore((state) => state.setKickTarget);
 
-  const lkParticipants = useParticipants();
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
 
   // --- LOGIC: TỰ ĐỘNG ÉP TẮT MIC KHI BỊ HOST CẤM (REAL-TIME) ---
   const myParticipantData = useMemo(() => {
-    return participants.find((p) => p.user_id === user.id);
-  }, [participants, user.id]);
+    return participants.find((p) => p.user_id === user?.id);
+  }, [participants, user?.id]);
 
   const isBannedFromVoice = myParticipantData?.is_voice_muted || false;
 
@@ -82,6 +81,13 @@ export default function MembersTab() {
         (room?.max_participants || 10),
     };
   }, [participants, room?.max_participants]);
+
+  const handleKickClick = useCallback(
+    (targetParticipant: (typeof participants)[0]) => {
+      setKickTarget(targetParticipant);
+    },
+    [setKickTarget],
+  );
 
   return (
     // Container chính: flex-col h-full và overflow-hidden để cố định kích thước tab
@@ -159,28 +165,18 @@ export default function MembersTab() {
             </span>
           </div>
           {approvedMembers.map((p) => {
-            const isMe = p.user_id === user.id;
-            const lkData = isMe
-              ? localParticipant
-              : lkParticipants.find((lp) => lp.identity === p.user_id);
+            const isMe = p.user_id === user?.id;
 
             return (
               <ParticipantItem
                 key={p.id}
                 participant={p}
-                presence={presenceData[p.user_id]}
                 isRealHost={isRealHost}
                 canManageUsers={hasModeratorAuth}
                 isMe={isMe}
-                isOpenMenu={openMenuId === p.id}
-                setOpenMenu={setOpenMenuId}
+                guestCanChat={room?.settings?.guest_can_chat ?? true}
                 onTogglePermission={togglePermission}
-                onKick={(uid) => {
-                  const target = participants.find((p) => p.user_id === uid);
-                  if (target) setKickTarget(target);
-                }}
-                isSpeaking={lkData?.isSpeaking}
-                isMicEnabled={lkData?.isMicrophoneEnabled}
+                onKick={() => handleKickClick(p)}
               />
             );
           })}
@@ -190,14 +186,14 @@ export default function MembersTab() {
       <div className="shrink-0 p-3 bg-zinc-950/90 backdrop-blur-xl border-t border-zinc-800 flex items-center justify-between rounded-b-xl z-10">
         <div className="flex items-center gap-3">
           <UserAvatar
-            avatar_url={user.avatar_url || user.user_metadata.avatar_url}
-            user_name={user.full_name || user.user_metadata.full_name}
+            avatar_url={myParticipantData?.profiles?.avatar_url}
+            user_name={myParticipantData?.profiles?.full_name || ""}
             size={36}
             status="online"
           />
           <div className="flex flex-col">
             <span className="text-sm font-bold text-white truncate max-w-[100px]">
-              {user.full_name || user.user_metadata.full_name}
+              {myParticipantData?.profiles?.full_name}
             </span>
             <span className="text-[10px] text-green-500 font-bold uppercase tracking-widest">
               Connected

@@ -25,6 +25,9 @@ export function useHistoryTracker({
   const inMemoryLocalHistory = useRef<HistoryItem[]>([]);
   const lastSyncedTimeRef = useRef<number>(-1);
 
+  // Tạo Jitter từ 0 -> 5 giây ngẫu nhiên cho mỗi User (chống DDoS trong Watch Party)
+  const jitterOffset = useRef(Math.floor(Math.random() * 5));
+
   const queryClient = useQueryClient();
 
   // KHAI BÁO Ổ KHÓA ĐỂ CHỐNG GỌI TRÙNG LẶP API
@@ -36,7 +39,7 @@ export function useHistoryTracker({
 
   // 1. Tính tập cuối của phim
   const lastEpOfMovie =
-    movie.episodes.flatMap((e) => e.server_data).pop()?.slug || "";
+    movie.episodes?.flatMap((e) => e.server_data).pop()?.slug || "";
 
   // Bóc tách Metadata
   const movieMetadataRef = useRef({
@@ -144,9 +147,10 @@ export function useHistoryTracker({
 
       const currentSecond = Math.floor(currentTime);
 
+      // Mỗi máy sẽ gửi API lệch nhau vài giây (Jitter)
       if (
         currentSecond >= 30 &&
-        currentSecond % 30 === 0 &&
+        (currentSecond + jitterOffset.current) % 30 === 0 &&
         currentSecond !== lastSyncedTimeRef.current
       ) {
         lastSyncedTimeRef.current = currentSecond;
@@ -188,12 +192,12 @@ export function useHistoryTracker({
     const data = trackingData.current;
     if (!data || data.current_time < 30) return;
 
-    // Khi chuyển tập, tập mới chưa play nhưng lại lấy data.current_time của tập cũ để lưu
-    if (data.last_episode_slug !== episodeSlug) return;
+    // ❌ XÓA DÒNG NÀY: Cho phép lưu lịch sử khi chuyển tập
+    // if (data.last_episode_slug !== episodeSlug) return;
 
     // Nếu tập phim và thời gian không hề thay đổi so với lần gọi ngay trước đó -> Block
     if (
-      lastSavedDBStateRef.current?.slug === episodeSlug &&
+      lastSavedDBStateRef.current?.slug === data.last_episode_slug &&
       lastSavedDBStateRef.current?.time === data.current_time &&
       Date.now() - lastSavedDBStateRef.current.timestamp < 2000
     ) {
@@ -202,7 +206,7 @@ export function useHistoryTracker({
 
     // Khóa lại trạng thái hiện tại
     lastSavedDBStateRef.current = {
-      slug: episodeSlug,
+      slug: data.last_episode_slug,
       time: data.current_time,
       timestamp: Date.now(),
     };
@@ -210,19 +214,20 @@ export function useHistoryTracker({
     const existing = inMemoryLocalHistory.current.find(
       (h) => h.movie_slug === movie.slug,
     );
+
     const finalEpIsFinished =
-      existing?.episodes_progress[episodeSlug]?.ep_is_finished ||
+      existing?.episodes_progress[data.last_episode_slug]?.ep_is_finished ||
       (data.duration > 0 && data.current_time / data.duration > 0.9);
 
     const historyItem = {
       movie_slug: movie.slug,
       movie_name: movie.name,
       movie_poster: movie.poster_url,
-      last_episode_slug: episodeSlug,
+      last_episode_slug: data.last_episode_slug,
       last_episode_of_movie_slug: lastEpOfMovie,
       movie_metadata: movieMetadataRef.current,
       episodes_progress: {
-        [episodeSlug]: {
+        [data.last_episode_slug]: {
           ep_last_time: data.current_time,
           ep_duration: data.duration,
           ep_is_finished: finalEpIsFinished,
@@ -245,7 +250,7 @@ export function useHistoryTracker({
         queryClient.invalidateQueries({ queryKey: ["history-stats"] });
       })
       .catch(console.error);
-  }, [user, movie, episodeSlug, lastEpOfMovie, queryClient]);
+  }, [user, movie, lastEpOfMovie, queryClient]);
 
   // Gắn event cho việc đóng tab / chuyển trang
   useEffect(() => {

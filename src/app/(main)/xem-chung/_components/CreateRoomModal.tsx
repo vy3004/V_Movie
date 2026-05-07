@@ -122,7 +122,12 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div
+      role="dialog"
+      aria-modal="true"
+      data-testid="create-room-modal"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+    >
       <div className="bg-[#18181b] border border-zinc-800 w-full max-w-lg rounded-2xl shadow-2xl relative flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-zinc-800 shrink-0">
@@ -158,6 +163,7 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
               <div className="relative">
                 <MagnifyingGlassIcon className="absolute size-6 left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
                 <input
+                  data-testid="movie-search-input"
                   type="text"
                   value={query}
                   onChange={handleSearchChange}
@@ -189,6 +195,7 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
                       {movies.map((movie) => (
                         <div
                           key={movie._id}
+                          data-testid="movie-search-result"
                           onClick={() => handleSelectMovie(movie)}
                           className="flex items-center gap-3 p-3 hover:bg-zinc-700 cursor-pointer transition border-b border-zinc-700/50 last:border-0"
                         >
@@ -231,6 +238,7 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
               </label>
               <input
                 {...register("title")}
+                data-testid="room-title-input"
                 placeholder="VD: Cày phim đêm khuya..."
                 className={`w-full bg-zinc-900 border text-white rounded-xl px-4 py-3.5 focus:outline-none transition shadow-inner ${
                   errors.title
@@ -254,6 +262,7 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
                 <div className="flex bg-zinc-900 rounded-xl border border-zinc-800 p-1">
                   <button
                     type="button"
+                    data-testid="btn-public"
                     onClick={() => setValue("isPrivate", false)}
                     className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition ${
                       !isPrivate
@@ -265,6 +274,7 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
                   </button>
                   <button
                     type="button"
+                    data-testid="btn-private"
                     onClick={() => setValue("isPrivate", true)}
                     className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition ${
                       isPrivate
@@ -289,6 +299,7 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
                 </div>
                 <div className="flex items-center h-[42px] px-2 bg-zinc-900 rounded-xl border border-zinc-800">
                   <input
+                    data-testid="room-capacity-slider"
                     type="range"
                     min="2"
                     max="20"
@@ -346,6 +357,7 @@ export default function CreateRoomModal({ onClose }: { onClose: () => void }) {
         {/* Footer */}
         <div className="p-6 border-t border-zinc-800 bg-zinc-900/50 shrink-0 rounded-b-2xl">
           <button
+            data-testid="create-room-submit"
             type="submit"
             form="create-room-form"
             disabled={loading}

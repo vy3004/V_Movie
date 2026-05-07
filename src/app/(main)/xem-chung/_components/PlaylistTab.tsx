@@ -5,20 +5,78 @@ import { PlusIcon, QueueListIcon } from "@heroicons/react/24/outline";
 import ImageCustom from "@/components/ui/ImageCustom";
 import PlaylistSearch from "@/app/(main)/xem-chung/_components/PlaylistSearch";
 import PlaylistItemRow from "@/app/(main)/xem-chung/_components/PlaylistItemRow";
-import { useWatchParty } from "@/providers/WatchPartyProvider";
+import { Movie, PlaylistItem } from "@/types";
+import {
+  useWatchPartyStore,
+  selectRoom,
+  selectCanControl,
+  selectPlaylist,
+  selectUser,
+  addMovieToPlaylist,
+  playPlaylistItemNow,
+  deletePlaylistItem,
+  reorderPlaylist,
+  sendSystemMessage,
+} from "@/stores/watch-party";
 
 export default function PlaylistTab() {
-  const {
-    room,
-    canControl,
-    playlist,
-    handleAddMovie,
-    handlePlayNow,
-    handleDeleteItem,
-    handleDragStart,
-    handleDragEnter,
-    handleDragEnd,
-  } = useWatchParty();
+  const room = useWatchPartyStore(selectRoom);
+  const canControl = useWatchPartyStore(selectCanControl);
+  const playlist = useWatchPartyStore(selectPlaylist);
+  const user = useWatchPartyStore(selectUser);
+  const setDragItem = useWatchPartyStore((state) => state.setDragItem);
+  const setDragOverItem = useWatchPartyStore((state) => state.setDragOverItem);
+  const resetDrag = useWatchPartyStore((state) => state.resetDrag);
+  const dragItem = useWatchPartyStore((state) => state.dragItem);
+  const dragOverItem = useWatchPartyStore((state) => state.dragOverItem);
+
+  // Handlers
+  const handleAddMovie = (movie: Movie, onSuccess: () => void) =>
+    addMovieToPlaylist(
+      movie,
+      room!.id,
+      room!.current_movie_slug || "",
+      onSuccess,
+    );
+
+  const handlePlayNow = (item: PlaylistItem) =>
+    playPlaylistItemNow(
+      item,
+      room!.id,
+      (user && "full_name" in user
+        ? user.full_name
+        : user?.user_metadata?.full_name) || "Thành viên",
+      sendSystemMessage,
+    );
+
+  const handleDeleteItem = deletePlaylistItem;
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDragItem(index);
+    if (e.currentTarget instanceof HTMLElement)
+      e.currentTarget.style.opacity = "0.5";
+  };
+
+  const handleDragEnter = (_e: React.DragEvent, index: number) => {
+    // Dùng getState() đọc giá trị hiện tại. Chỉ update nếu thực sự thay đổi vị trí.
+    const currentDragOver = useWatchPartyStore.getState().dragOverItem;
+    if (currentDragOver !== index) {
+      setDragOverItem(index);
+    }
+  };
+
+  const handleDragEnd = async (e: React.DragEvent) => {
+    if (e.currentTarget instanceof HTMLElement)
+      e.currentTarget.style.opacity = "1";
+    if (
+      dragItem !== null &&
+      dragOverItem !== null &&
+      dragItem !== dragOverItem
+    ) {
+      await reorderPlaylist(dragItem, dragOverItem);
+    }
+    resetDrag();
+  };
 
   const [isAdding, setIsAdding] = useState(false);
 
