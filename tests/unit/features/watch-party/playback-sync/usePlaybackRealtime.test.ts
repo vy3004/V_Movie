@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+﻿/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { usePlaybackRealtime as useVideoControl } from "@/features/watch-party/playback-sync";
+import { usePlaybackRealtime } from "@/features/watch-party/playback-sync";
 
 const createTestQueryClient = () =>
   new QueryClient({
@@ -28,7 +28,7 @@ const createChannel = () => ({
   send: vi.fn().mockResolvedValue({ error: null }),
 });
 
-describe("useVideoControl", () => {
+describe("usePlaybackRealtime", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     global.fetch = vi.fn().mockImplementation((url: string) => {
@@ -81,7 +81,7 @@ describe("useVideoControl", () => {
 
     const { result } = renderHook(
       () =>
-        useVideoControl(
+        usePlaybackRealtime(
           "room-123",
           "user-1",
           () => true,
@@ -142,7 +142,7 @@ describe("useVideoControl", () => {
 
     const { result } = renderHook(
       () =>
-        useVideoControl(
+        usePlaybackRealtime(
           "room-123",
           "user-1",
           () => true,
@@ -173,6 +173,55 @@ describe("useVideoControl", () => {
     expect(syncFromRemote).not.toHaveBeenCalled();
   });
 
+  it("ignores forged realtime state when sender is not active controller", async () => {
+    const channel = createChannel();
+    let videoHandler: ((event: { payload: unknown }) => void) | undefined;
+    channel.on.mockImplementation((type: string, config: { event: string }, handler: any) => {
+      if (type === "broadcast" && config.event === "video_control") videoHandler = handler;
+      return channel;
+    });
+    const syncFromRemote = vi.fn();
+    const supabase = {
+      channel: vi.fn().mockReturnValue(channel),
+      removeChannel: vi.fn(),
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        usePlaybackRealtime(
+          "room-123",
+          "user-1",
+          () => true,
+          () => true,
+          supabase,
+          syncFromRemote,
+        ),
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() => expect(videoHandler).toBeDefined());
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-1"));
+
+    act(() => {
+      videoHandler?.({
+        payload: {
+          status: "play",
+          action: "play",
+          time: 90,
+          activeControllerId: "user-1",
+          activeControllerName: "Host",
+          version: 99,
+          updatedAt: Date.now(),
+          senderId: "user-3",
+          origin: "user",
+        },
+      });
+    });
+
+    expect(syncFromRemote).not.toHaveBeenCalled();
+    expect(result.current.activeControllerId).toBe("user-1");
+  });
+
   it("applies newer realtime state and updates active controller", async () => {
     const channel = createChannel();
     let videoHandler: ((event: { payload: unknown }) => void) | undefined;
@@ -188,7 +237,7 @@ describe("useVideoControl", () => {
 
     const { result } = renderHook(
       () =>
-        useVideoControl(
+        usePlaybackRealtime(
           "room-123",
           "user-1",
           () => true,
@@ -268,7 +317,7 @@ describe("useVideoControl", () => {
 
     const { result } = renderHook(
       () =>
-        useVideoControl(
+        usePlaybackRealtime(
           "room-123",
           "user-1",
           () => true,
@@ -375,7 +424,7 @@ describe("useVideoControl", () => {
 
     const { result } = renderHook(
       () =>
-        useVideoControl(
+        usePlaybackRealtime(
           "room-123",
           "user-1",
           () => true,
@@ -469,7 +518,7 @@ describe("useVideoControl", () => {
 
     const { result } = renderHook(
       () =>
-        useVideoControl(
+        usePlaybackRealtime(
           "room-123",
           "user-1",
           () => true,
@@ -570,7 +619,7 @@ describe("useVideoControl", () => {
 
     const { result } = renderHook(
       () =>
-        useVideoControl(
+        usePlaybackRealtime(
           "room-123",
           "user-1",
           () => true,
@@ -650,7 +699,7 @@ describe("useVideoControl", () => {
 
     const { result } = renderHook(
       () =>
-        useVideoControl(
+        usePlaybackRealtime(
           "room-123",
           "host-1",
           () => true,
@@ -745,7 +794,7 @@ describe("useVideoControl", () => {
 
     const { result } = renderHook(
       () =>
-        useVideoControl(
+        usePlaybackRealtime(
           "room-123",
           "user-1",
           () => true,
@@ -798,7 +847,7 @@ describe("useVideoControl", () => {
 
     const { result } = renderHook(
       () =>
-        useVideoControl(
+        usePlaybackRealtime(
           "room-123",
           "user-1",
           () => true,
@@ -829,3 +878,4 @@ describe("useVideoControl", () => {
     });
   });
 });
+

@@ -64,17 +64,22 @@ export interface WatchPartyPlaylist {
 
 // 6. Định nghĩa trạng thái Video trên Redis (Phục vụ Sync Real-time)
 export interface WatchPartyVideoState {
-  status?: "play" | "pause";
+  status: "play" | "pause";
   time: number;
   episode_slug?: string;
+  active_controller_id?: string;
+  active_controller_name?: string;
+  version: number;
   updated_at: number;
 }
 
 export interface UserPresence {
   user_id: string;
   status: "online" | "away";
+  tab_id?: string;
   time?: number;
   is_paused?: boolean;
+  is_voice_connected?: boolean;
   updated_at?: string;
   online_at?: string;
 }
@@ -82,6 +87,7 @@ export interface UserPresence {
 // Định nghĩa kiểu cho cái Cầu nối (Ref) giữa UI và Video
 export interface PlayerSyncRef {
   syncFromRemote: (action: "play" | "pause" | "seek", time: number) => void;
+  syncHeartbeat: (time: number, isPaused: boolean) => void;
   getCurrentState: () => { time: number; isPaused: boolean } | null;
   requestSync?: () => void;
 }
@@ -100,6 +106,7 @@ export interface SyncApiPayload {
   status?: "play" | "pause";
   time: number;
   episodeSlug?: string;
+  requestId?: string;
 }
 
 export interface PlaylistItem {

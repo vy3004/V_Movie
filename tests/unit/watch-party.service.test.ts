@@ -21,6 +21,7 @@ vi.mock("@/lib/redis", () => ({
     get: vi.fn(),
     set: vi.fn(),
     del: vi.fn(),
+    incr: vi.fn(),
   },
 }));
 
@@ -293,7 +294,6 @@ describe("WatchPartyService", () => {
           eq: vi.fn().mockReturnThis(),
         };
 
-        // First call: get room info
         selectMock.mockReturnValueOnce({
           eq: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({
@@ -306,7 +306,17 @@ describe("WatchPartyService", () => {
           }),
         });
 
-        // Second call: check existing participant
+        const hostRoomEq = vi.fn().mockReturnThis();
+        selectMock.mockReturnValueOnce({ eq: hostRoomEq });
+        hostRoomEq.mockReturnValueOnce({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { user_id: "user-1" },
+              error: null,
+            }),
+          }),
+        });
+
         selectMock.mockReturnValueOnce({
           eq: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({
@@ -315,21 +325,21 @@ describe("WatchPartyService", () => {
           }),
         });
 
-        // Third call: count participants
-        selectMock.mockReturnValueOnce({
-          eq: vi.fn().mockReturnThis(),
+        const countRoomEq = vi.fn().mockReturnThis();
+        selectMock.mockReturnValueOnce({ eq: countRoomEq });
+        countRoomEq.mockReturnValueOnce({
+          eq: vi.fn().mockResolvedValue({ count: 1 }),
         });
-        mockSupabase.eq.mockResolvedValueOnce({ count: 1 });
 
-        // Fourth call: final count check
-        selectMock.mockReturnValueOnce({
-          eq: vi.fn().mockReturnThis(),
+        const finalCountRoomEq = vi.fn().mockReturnThis();
+        selectMock.mockReturnValueOnce({ eq: finalCountRoomEq });
+        finalCountRoomEq.mockReturnValueOnce({
+          eq: vi.fn().mockResolvedValue({ count: 2 }),
         });
-        mockSupabase.eq.mockResolvedValueOnce({ count: 2 });
 
         vi.mocked(createSupabaseServer).mockResolvedValue(mockSupabase as any);
 
-        const result = await WatchPartyService.joinRoom("room-123", "user-2");
+        const result = await WatchPartyService.joinRoom("123e4567-e89b-12d3-a456-426614174000", "user-2");
 
         expect(result.success).toBe(true);
         expect(result.status).toBe("approved");
@@ -359,7 +369,21 @@ describe("WatchPartyService", () => {
           }),
         });
 
-        // Second call: check existing participant
+        // Second call: check current host
+        const hostRoomEq = vi.fn().mockReturnThis();
+        selectMock.mockReturnValueOnce({
+          eq: hostRoomEq,
+        });
+        hostRoomEq.mockReturnValueOnce({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { user_id: "user-1" },
+              error: null,
+            }),
+          }),
+        });
+
+        // Third call: check existing participant
         selectMock.mockReturnValueOnce({
           eq: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({
@@ -368,15 +392,18 @@ describe("WatchPartyService", () => {
           }),
         });
 
-        // Third call: count participants
+        // Fourth call: count participants
+        const countRoomEq = vi.fn().mockReturnThis();
         selectMock.mockReturnValueOnce({
-          eq: vi.fn().mockReturnThis(),
+          eq: countRoomEq,
         });
-        mockSupabase.eq.mockResolvedValueOnce({ count: 1 });
+        countRoomEq.mockReturnValueOnce({
+          eq: vi.fn().mockResolvedValue({ count: 1 }),
+        });
 
         vi.mocked(createSupabaseServer).mockResolvedValue(mockSupabase as any);
 
-        const result = await WatchPartyService.joinRoom("room-123", "user-2");
+        const result = await WatchPartyService.joinRoom("123e4567-e89b-12d3-a456-426614174000", "user-2");
 
         expect(result.status).toBe("pending");
       });
@@ -405,7 +432,21 @@ describe("WatchPartyService", () => {
           }),
         });
 
-        // Second call: check existing participant
+        // Second call: check current host
+        const hostRoomEq = vi.fn().mockReturnThis();
+        selectMock.mockReturnValueOnce({
+          eq: hostRoomEq,
+        });
+        hostRoomEq.mockReturnValueOnce({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { user_id: "user-1" },
+              error: null,
+            }),
+          }),
+        });
+
+        // Third call: check existing participant
         selectMock.mockReturnValueOnce({
           eq: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({
@@ -414,50 +455,69 @@ describe("WatchPartyService", () => {
           }),
         });
 
-        // Third call: count participants (room is full)
-        // .select("*", { count: "exact", head: true }).eq("room_id", roomId).eq("status", "approved")
-        const firstEq = vi.fn().mockReturnThis();
+        // Fourth call: count participants (room is full)
+        const countRoomEq = vi.fn().mockReturnThis();
         selectMock.mockReturnValueOnce({
-          eq: firstEq,
+          eq: countRoomEq,
         });
-        firstEq.mockReturnValueOnce({
+        countRoomEq.mockReturnValueOnce({
           eq: vi.fn().mockResolvedValue({ count: 2 }),
         });
 
         vi.mocked(createSupabaseServer).mockResolvedValue(mockSupabase as any);
 
         await expect(
-          WatchPartyService.joinRoom("room-123", "user-3"),
+          WatchPartyService.joinRoom("123e4567-e89b-12d3-a456-426614174000", "user-3"),
         ).rejects.toThrow(RoomFullError);
       });
 
       it("should throw error if user is blocked", async () => {
         const { createSupabaseServer } = await import("@/lib/supabase/server");
 
+        const selectMock = vi.fn();
         const mockSupabase = {
           from: vi.fn().mockReturnThis(),
-          select: vi.fn().mockReturnThis(),
+          select: selectMock,
           eq: vi.fn().mockReturnThis(),
-          single: vi
-            .fn()
-            .mockResolvedValueOnce({
-              data: {
-                is_private: false,
-                max_participants: 20,
-                is_active: true,
-              },
-              error: null,
-            })
-            .mockResolvedValueOnce({
-              data: { status: "blocked" },
+        };
+
+        selectMock.mockReturnValueOnce({
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: {
+              is_private: false,
+              max_participants: 20,
+              is_active: true,
+            },
+            error: null,
+          }),
+        });
+
+        const hostRoomEq = vi.fn().mockReturnThis();
+        selectMock.mockReturnValueOnce({
+          eq: hostRoomEq,
+        });
+        hostRoomEq.mockReturnValueOnce({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { user_id: "user-1" },
               error: null,
             }),
-        };
+          }),
+        });
+
+        selectMock.mockReturnValueOnce({
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { status: "blocked" },
+            error: null,
+          }),
+        });
 
         vi.mocked(createSupabaseServer).mockResolvedValue(mockSupabase as any);
 
         await expect(
-          WatchPartyService.joinRoom("room-123", "user-2"),
+          WatchPartyService.joinRoom("123e4567-e89b-12d3-a456-426614174000", "user-2"),
         ).rejects.toThrow(ForbiddenError);
       });
     });
@@ -506,6 +566,52 @@ describe("WatchPartyService", () => {
         );
       });
 
+      it("should allocate canonical versions with Redis atomic counter", async () => {
+        const { redis } = await import("@/lib/redis");
+        const { createSupabaseServer } = await import("@/lib/supabase/server");
+
+        const mockSupabase = {
+          from: vi.fn().mockReturnThis(),
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: {
+              role: "host",
+              permissions: { can_control_media: true },
+              room: { settings: { allow_guest_control: false } },
+              profiles: { full_name: "Host" },
+            },
+            error: null,
+          }),
+        };
+
+        vi.mocked(createSupabaseServer).mockResolvedValue(mockSupabase as any);
+        vi.mocked(redis!.get).mockResolvedValue({
+          status: "pause",
+          time: 0,
+          episode_slug: "tap-1",
+          active_controller_id: "user-0",
+          version: 7,
+          updated_at: Date.now(),
+        });
+        vi.mocked(redis!.incr).mockResolvedValue(8);
+
+        const result = await WatchPartyService.syncVideoState({
+          roomId: "room-123",
+          userId: "user-1",
+          status: "play",
+          time: 10,
+        });
+
+        expect(redis!.incr).toHaveBeenCalledWith("wp:room:room-123:state:version");
+        expect(result.state.version).toBe(8);
+        expect(redis!.set).toHaveBeenCalledWith(
+          "wp:room:room-123:state",
+          expect.objectContaining({ version: 8, active_controller_id: "user-1" }),
+          { ex: 86400 },
+        );
+      });
+
       it("should throw error if user lacks permission", async () => {
         const { createSupabaseServer } = await import("@/lib/supabase/server");
 
@@ -517,6 +623,7 @@ describe("WatchPartyService", () => {
             data: {
               role: "participant",
               permissions: { can_control_media: false },
+              room: { settings: { allow_guest_control: false } },
             },
             error: null,
           }),

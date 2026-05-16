@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { roomId, status, time, episodeSlug } = await request.json();
+    const { roomId, status, time, episodeSlug, requestId } = await request.json();
     if (!roomId)
       return NextResponse.json({ error: "Missing roomId" }, { status: 400 });
 
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       episodeSlug,
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, requestId });
   } catch (error) {
     console.error("[WP_SYNC_ERROR]:", error);
     const { message, statusCode } = getErrorResponse(error);
