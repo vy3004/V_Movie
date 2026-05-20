@@ -53,6 +53,11 @@ VÍ DỤ VỀ CÁCH VIẾT "REASON" TỐT (Hãy học theo phong cách này):
 const inMemoryRateLimit = new Map<string, number>();
 const COOLDOWN_MS = 3600000; // 1 giờ
 
+const getRateLimitClient = () =>
+  redis && typeof redis.get === "function" && typeof redis.set === "function"
+    ? redis
+    : null;
+
 // Cleanup entries đã hết hạn mỗi 10 phút để tránh memory leak
 if (typeof setInterval !== "undefined") {
   setInterval(() => {
@@ -245,42 +250,37 @@ export const RecommendationService = {
       // RATE LIMITING: Check cooldown 1 giờ
       const rateLimitKey = `recommendation:cooldown:${userId}`;
 
-      if (redis) {
-        const lastGenTime = await redis.get<number>(rateLimitKey);
+      const rateLimitClient = getRateLimitClient();
+      const lastGenTime = rateLimitClient
+        ? await rateLimitClient.get<number>(rateLimitKey)
+        : inMemoryRateLimit.get(userId);
 
-        if (lastGenTime) {
-          const cooldownMs = 3600000; // 1 giờ
-          const timeElapsed = Date.now() - lastGenTime;
+      if (lastGenTime) {
+        const timeElapsed = Date.now() - lastGenTime;
 
-          if (timeElapsed < cooldownMs) {
-            const remainingMinutes = Math.ceil(
-              (cooldownMs - timeElapsed) / 60000,
-            );
-            throw new Error(
-              `Vui lòng đợi ${remainingMinutes} phút trước khi yêu cầu gợi ý mới`,
-            );
-          }
+        if (timeElapsed < COOLDOWN_MS) {
+          const remainingMinutes = Math.ceil(
+            (COOLDOWN_MS - timeElapsed) / 60000,
+          );
+          throw new Error(
+            `Vui lòng đợi ${remainingMinutes} phút trước khi yêu cầu gợi ý mới`,
+          );
+        }
+      }
+
+      if (rateLimitClient) {
+        const reserved = await rateLimitClient.set(rateLimitKey, Date.now(), {
+          ex: 3600,
+          nx: true,
+        });
+
+        if (!reserved) {
+          throw new Error(
+            "Vui lòng đợi 60 phút trước khi yêu cầu gợi ý mới",
+          );
         }
       } else {
-        // Redis unavailable - Fallback: Dùng in-memory Map để rate limit
-        console.warn(
-          `[RecommendationService] Redis unavailable - using in-memory rate limiting for user: ${userId}`,
-        );
-
-        const lastGenTime = inMemoryRateLimit.get(userId);
-        if (lastGenTime) {
-          const cooldownMs = 3600000; // 1 giờ
-          const timeElapsed = Date.now() - lastGenTime;
-
-          if (timeElapsed < cooldownMs) {
-            const remainingMinutes = Math.ceil(
-              (cooldownMs - timeElapsed) / 60000,
-            );
-            throw new Error(
-              `Vui lòng đợi ${remainingMinutes} phút trước khi yêu cầu gợi ý mới`,
-            );
-          }
-        }
+        inMemoryRateLimit.set(userId, Date.now());
       }
 
       // Tái sử dụng RPC xịn để lấy data cực nhanh
@@ -336,11 +336,8 @@ export const RecommendationService = {
       );
 
       // Lưu timestamp để enforce cooldown (SAU KHI thành công)
-      if (redis) {
-        await redis.set(rateLimitKey, Date.now(), { ex: 3600 }); // 1 giờ
-      } else {
-        // In-memory fallback: Chỉ set timestamp SAU KHI AI call thành công
-        inMemoryRateLimit.set(userId, Date.now());
+      if (rateLimitClient) {
+        await rateLimitClient.set(rateLimitKey, Date.now(), { ex: 3600 }); // 1 giờ
       }
     } catch (error) {
       // Re-throw rate limit errors để caller có thể xử lý (trả 429 cho client)

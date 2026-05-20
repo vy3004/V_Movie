@@ -20,8 +20,19 @@ export const WatchPartyContentService = {
   /**
    * Lấy playlist
    */
-  getPlaylist: async (roomId: string) => {
+  getPlaylist: async (roomId: string, userId: string) => {
     const supabase = await createSupabaseServer();
+
+    const { data: participant, error: participantError } = await supabase
+      .from("watch_party_participants")
+      .select("id")
+      .eq("room_id", roomId)
+      .eq("user_id", userId)
+      .eq("status", "approved")
+      .maybeSingle();
+
+    if (participantError) throw participantError;
+    if (!participant) throw new Error("Bạn không có trong phòng này");
 
     const { data, error } = await supabase
       .from("watch_party_playlist")
@@ -151,6 +162,11 @@ export const WatchPartyContentService = {
         roomId: validated.roomId,
         error: error.message,
       });
+
+      if (error.code === "23505") {
+        throw new Error("Phim này đã có trong danh sách chờ");
+      }
+
       throw error;
     }
 

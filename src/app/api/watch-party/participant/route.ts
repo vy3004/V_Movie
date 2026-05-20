@@ -28,20 +28,25 @@ export async function POST(request: Request) {
       );
     }
 
-    await WatchPartyService.manageParticipant(
+    const result = await WatchPartyService.manageParticipant(
       roomId,
       user.id,
       targetUserId,
       action as "approve" | "reject" | "kick",
     );
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json(result);
   } catch (error) {
     console.error("[PARTICIPANT_ACTION_ERROR]:", error);
     const message =
       error instanceof Error ? error.message : "Internal Server Error";
 
-    let status = 500;
+    const statusCode =
+      error instanceof Error && "statusCode" in error
+        ? Number(error.statusCode)
+        : undefined;
+
+    let status = Number.isInteger(statusCode) ? statusCode : 500;
     if (message.includes("không có quyền")) status = 403;
     else if (message.includes("không tìm thấy")) status = 404;
     else if (message.includes("giới hạn")) status = 403;

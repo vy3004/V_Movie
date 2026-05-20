@@ -70,6 +70,7 @@ export function useVideoPlayer({
   const playerRef = useRef<Player | null>(null);
   const currentMovieSrcRef = useRef<string>(movieSrc);
   const isInitialSeekDone = useRef(false);
+  const initialTimeRef = useRef(initialTime);
   const lastProgressTime = useRef<number>(0);
   const isComponentUnmounted = useRef<boolean>(false);
 
@@ -126,6 +127,17 @@ export function useVideoPlayer({
   ]);
 
   useEffect(() => {
+    initialTimeRef.current = initialTime;
+
+    const player = playerRef.current;
+    if (!player || initialTime <= 0 || isInitialSeekDone.current) return;
+    if (player.readyState() < 1) return;
+
+    player.currentTime(initialTime);
+    isInitialSeekDone.current = true;
+  }, [initialTime]);
+
+  useEffect(() => {
     if (!isWatchParty) return;
 
     document.addEventListener("visibilitychange", playbackBridge.suppressLifecycleSync);
@@ -175,6 +187,7 @@ export function useVideoPlayer({
     isComponentUnmounted.current = false;
 
     let rateAnimFrame = 0;
+    let cleanupUserIntent: (() => void) | undefined;
     let player: Player;
 
     if (!playerRef.current) {
@@ -217,7 +230,7 @@ export function useVideoPlayer({
         if (playbackBridgeRef.current.applyPendingInitialSync()) {
           isInitialSeekDone.current = true;
         } else if (!isInitialSeekDone.current) {
-          player.currentTime(initialTime || 0);
+          player.currentTime(initialTimeRef.current || 0);
           isInitialSeekDone.current = true;
         }
 
@@ -242,6 +255,15 @@ export function useVideoPlayer({
         domEl.addEventListener("touchend", markUserIntent, true);
         domEl.addEventListener("keydown", markUserIntent, true);
         domEl.addEventListener("keyup", markUserIntent, true);
+
+        cleanupUserIntent = () => {
+          domEl.removeEventListener("pointerdown", markUserIntent, true);
+          domEl.removeEventListener("pointerup", markUserIntent, true);
+          domEl.removeEventListener("touchstart", markUserIntent, true);
+          domEl.removeEventListener("touchend", markUserIntent, true);
+          domEl.removeEventListener("keydown", markUserIntent, true);
+          domEl.removeEventListener("keyup", markUserIntent, true);
+        };
       }
 
       player.on("fullscreenchange", () => {
@@ -353,12 +375,12 @@ export function useVideoPlayer({
         player.load();
 
         player.one("loadedmetadata", () => {
-          player.currentTime(isWatchParty ? 0 : initialTime);
+          player.currentTime(isWatchParty ? 0 : initialTimeRef.current);
           isInitialSeekDone.current = true;
         });
-      } else if (initialTime > 0 && !isInitialSeekDone.current) {
+      } else if (initialTimeRef.current > 0 && !isInitialSeekDone.current) {
         if (player.readyState() >= 1) {
-          player.currentTime(initialTime);
+          player.currentTime(initialTimeRef.current);
           isInitialSeekDone.current = true;
         }
       }
@@ -367,13 +389,14 @@ export function useVideoPlayer({
     return () => {
       if (player && !player.isDisposed()) {
         isComponentUnmounted.current = true;
+        cleanupUserIntent?.();
         if (rateAnimFrame) cancelAnimationFrame(rateAnimFrame);
         player.dispose();
         playerRef.current = null;
         if (videoContainer) videoContainer.innerHTML = "";
       }
     };
-  }, [movieSrc, videoRef, initialTime, isWatchParty]);
+  }, [movieSrc, videoRef, isWatchParty]);
 
   useEffect(() => {
     if (playerSyncRef) {

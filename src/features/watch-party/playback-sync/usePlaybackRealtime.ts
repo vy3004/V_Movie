@@ -294,6 +294,25 @@ export function usePlaybackRealtime(
     };
   }, [broadcastState, roomId, supabase, updateActiveController, userId]);
 
+  const requestControllerSync = useCallback(() => {
+    if (!roomId || !userId || !channelRef.current) return;
+    if (channelRef.current.state !== "joined") return;
+
+    const requestId = `${userId}-${Date.now()}`;
+    pendingSyncRequestIdRef.current = requestId;
+    channelRef.current
+      .send({
+        type: "broadcast",
+        event: "request_sync_from_host",
+        payload: { senderId: userId, requestId },
+      })
+      .catch(() => {
+        if (pendingSyncRequestIdRef.current === requestId) {
+          pendingSyncRequestIdRef.current = null;
+        }
+      });
+  }, [roomId, userId]);
+
   const sendControl = useCallback(
     (action: PlaybackAction, time: number, episodeSlug?: string) => {
       if (!roomId || !channelRef.current) return;
@@ -409,6 +428,7 @@ export function usePlaybackRealtime(
     sendControl,
     sendHeartbeat,
     applyInitialState,
+    requestControllerSync,
     activeControllerId: activeController.id,
     activeControllerName: activeController.name,
     roomData: initialData?.room,

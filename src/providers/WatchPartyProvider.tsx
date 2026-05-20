@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, {
   createContext,
@@ -7,6 +7,7 @@ import React, {
   useRef,
   useMemo,
   useEffect,
+  useLayoutEffect,
 } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -14,12 +15,18 @@ import {
   UserProfile,
   WatchPartyRoom,
   WatchPartyParticipant,
+  PlaylistItem,
+  ChatMessage,
 } from "@/types";
 import {
   usePlaybackRealtime,
   WatchPartyPlayback,
 } from "@/features/watch-party/playback-sync";
-import { useWatchPartyStore } from "@/stores/watch-party";
+import {
+  selectCanControl,
+  selectMyParticipant,
+  useWatchPartyStore,
+} from "@/stores/watch-party";
 
 interface WatchPartyContextType {
   playerSyncRef: React.MutableRefObject<PlayerSyncRef | null>;
@@ -30,6 +37,7 @@ interface WatchPartyContextType {
   ) => void;
   sendHeartbeat: (time: number, isPaused: boolean) => void;
   applyInitialState: () => void;
+  requestControllerSync: () => void;
   isLoadingRoom: boolean;
   initialState: { time?: number; isPaused?: boolean } | null;
   activeControllerId?: string;
@@ -56,47 +64,93 @@ export function WatchPartyProvider({
   const supabase = useMemo(() => createSupabaseClient(), []);
   const playerSyncRef = useRef<PlayerSyncRef | null>(null);
 
-  const hydrated = useRef(false);
-  if (!hydrated.current) {
+  const hydratedRoomId = useRef<string | null>(null);
+  const participantsLoadedRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (hydratedRoomId.current === roomId) return;
+
+    const isSwitchingRoom =
+      hydratedRoomId.current !== null && hydratedRoomId.current !== roomId;
     const store = useWatchPartyStore.getState();
     store.setRoom(initialRoom);
     store.setUser(user);
     store.setMyParticipantId(initialMe.id);
-    hydrated.current = true;
-  }
+    store.setParticipants([]);
+    store.setPlaylist([]);
+    if (isSwitchingRoom) store.clearMessages();
+    useWatchPartyStore.setState({ presenceData: {} });
+    participantsLoadedRef.current = false;
+    hydratedRoomId.current = roomId;
+  }, [initialMe.id, initialRoom, roomId, user]);
 
   useEffect(() => {
-    const fetchInitialParticipants = async () => {
-      const { data, error } = await supabase
-        .from("watch_party_participants")
-        .select(`*, profiles:user_id(full_name, avatar_url)`)
-        .eq("room_id", roomId);
+    let cancelled = false;
 
-      if (!error && data) {
-        useWatchPartyStore
-          .getState()
-          .setParticipants(data as WatchPartyParticipant[]);
+    const fetchInitialData = async () => {
+      const [
+        { data: participants, error: participantsError },
+        { data: playlist, error: playlistError },
+        { data: messages, error: messagesError },
+      ] = await Promise.all([
+        supabase
+          .from("watch_party_participants")
+          .select(`*, profiles:user_id(full_name, avatar_url)`)
+          .eq("room_id", roomId),
+        supabase
+          .from("watch_party_playlist")
+          .select("*")
+          .eq("room_id", roomId),
+        supabase
+          .from("watch_party_messages")
+          .select("*")
+          .eq("room_id", roomId)
+          .order("created_at", { ascending: false })
+          .limit(50),
+      ]);
+
+      if (cancelled || hydratedRoomId.current !== roomId) return;
+
+      const store = useWatchPartyStore.getState();
+
+      if (!participantsError && participants) {
+        store.setParticipants(participants as WatchPartyParticipant[]);
+        participantsLoadedRef.current = true;
+      }
+
+      if (!playlistError && playlist) {
+        store.setPlaylist(playlist as PlaylistItem[]);
+      }
+
+      if (!messagesError && messages) {
+        store.addMessages([...messages].reverse() as ChatMessage[]);
       }
     };
 
-    fetchInitialParticipants();
+    void fetchInitialData().catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
   }, [roomId, supabase]);
 
   const getMyParticipant = useCallback(() => {
     const state = useWatchPartyStore.getState();
     return (
       state.participants.find((participant) => participant.user_id === user.id) ||
-      initialMe
+      (participantsLoadedRef.current ? null : initialMe)
     );
   }, [initialMe, user.id]);
 
   const getIsHost = useCallback(() => {
-    return getMyParticipant().role === "host";
+    const me = getMyParticipant();
+    return me?.status === "approved" && me.role === "host";
   }, [getMyParticipant]);
 
   const getCanControl = useCallback(() => {
     const state = useWatchPartyStore.getState();
     const me = getMyParticipant();
+    if (!me || me.status !== "approved") return false;
 
     return (
       me.role === "host" ||
@@ -109,6 +163,7 @@ export function WatchPartyProvider({
     sendControl,
     sendHeartbeat,
     applyInitialState,
+    requestControllerSync,
     isLoadingRoom,
     initialState,
     activeControllerId,
@@ -128,12 +183,45 @@ export function WatchPartyProvider({
       (time, isPaused) => playerSyncRef.current?.syncHeartbeat(time, isPaused),
     );
 
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development") return;
+
+    (window as typeof window & { __WATCH_PARTY_DEBUG__?: () => unknown }).__WATCH_PARTY_DEBUG__ = () => {
+      const state = useWatchPartyStore.getState();
+      return {
+        userId: state.user?.id,
+        myParticipantId: state.myParticipantId,
+        dataChannelState: state.dataChannel?.state,
+        dataChannelStatus: state.dataChannelStatus,
+        myParticipant: selectMyParticipant(state),
+        canControl: selectCanControl(state),
+        presenceData: state.presenceData,
+        participants: state.participants.map((participant) => ({
+          id: participant.id,
+          user_id: participant.user_id,
+          status: participant.status,
+          role: participant.role,
+          display_name: participant.display_name,
+          profile_name: participant.profiles?.full_name,
+          permissions: participant.permissions,
+          is_muted: participant.is_muted,
+          realtime_revision: participant.realtime_revision,
+        })),
+      };
+    };
+
+    return () => {
+      delete (window as typeof window & { __WATCH_PARTY_DEBUG__?: () => unknown }).__WATCH_PARTY_DEBUG__;
+    };
+  }, []);
+
   const playback = useMemo<WatchPartyPlayback>(
     () => ({
       playerSyncRef,
       sendCommand: sendControl,
       sendHeartbeat,
       applyInitialState,
+      requestControllerSync,
       activeControllerId,
       activeControllerName,
       initialState,
@@ -145,6 +233,7 @@ export function WatchPartyProvider({
       applyInitialState,
       initialState,
       isLoadingRoom,
+      requestControllerSync,
       sendControl,
       sendHeartbeat,
     ],
@@ -156,6 +245,7 @@ export function WatchPartyProvider({
       sendControl: playback.sendCommand,
       sendHeartbeat: playback.sendHeartbeat,
       applyInitialState: playback.applyInitialState,
+      requestControllerSync: playback.requestControllerSync,
       isLoadingRoom: playback.isLoadingRoom,
       initialState: playback.initialState,
       activeControllerId: playback.activeControllerId,
@@ -177,3 +267,6 @@ export const useWatchParty = (): WatchPartyContextType => {
     throw new Error("useWatchParty must be used within a WatchPartyProvider");
   return context;
 };
+
+
+

@@ -53,7 +53,7 @@ describe("API POST /api/watch-party/participant (Quản lý Thành viên)", () =
   beforeEach(() => {
     vi.clearAllMocks(); // Xoá lịch sử gọi hàm của test trước
     // Mặc định cho tất cả bài test: Người gọi API đã đăng nhập thành công
-    mockGetUser.mockResolvedValue({ data: { user: { id: "caller-id" } } });
+    mockGetUser.mockResolvedValue({ data: { user: { id: "00000000-0000-4000-8000-000000000001" } } });
   });
 
   it("🔴 1. Trả về 403 nếu người gọi KHÔNG CÓ QUYỀN quản lý", async () => {
@@ -64,8 +64,8 @@ describe("API POST /api/watch-party/participant (Quản lý Thành viên)", () =
 
     // Hành động: Cố gắng duyệt một người khác
     const req = createMockRequest({
-      roomId: "room-1",
-      targetUserId: "target-1",
+      roomId: "123e4567-e89b-12d3-a456-426614174000",
+      targetUserId: "00000000-0000-4000-8000-000000000002",
       action: "approve",
     });
     const res = await POST(req);
@@ -79,7 +79,11 @@ describe("API POST /api/watch-party/participant (Quản lý Thành viên)", () =
   it("🔴 2. Ngăn chặn Lỗ hổng Lật đổ (Mutiny Bug): KHÔNG THỂ thao tác lên Chủ phòng", async () => {
     // Gọi DB lần 1: Check Caller -> Trả về Guest ĐƯỢC CẤP QUYỀN quản lý
     mockSupabaseChain.single.mockResolvedValueOnce({
-      data: { role: "guest", permissions: { can_manage_users: true } },
+      data: {
+        role: "guest",
+        status: "approved",
+        permissions: { can_manage_users: true },
+      },
     });
     // Gọi DB lần 2: Check Target -> Trả về Target chính là HOST (Chủ phòng)
     mockSupabaseChain.single.mockResolvedValueOnce({
@@ -88,8 +92,8 @@ describe("API POST /api/watch-party/participant (Quản lý Thành viên)", () =
 
     // Hành động: Kẻ lật đổ cố gắng KICK Chủ phòng
     const req = createMockRequest({
-      roomId: "room-1",
-      targetUserId: "host-id",
+      roomId: "123e4567-e89b-12d3-a456-426614174000",
+      targetUserId: "00000000-0000-4000-8000-000000000003",
       action: "kick",
     });
     const res = await POST(req);
@@ -102,18 +106,18 @@ describe("API POST /api/watch-party/participant (Quản lý Thành viên)", () =
     expect(mockSupabaseChain.update).not.toHaveBeenCalled();
   });
 
-  it('🟢 3. Đổi status thành "blocked" khi thực hiện hành động KICK', async () => {
+  it('🟢 3. Đổi status thành "rejected" khi thực hiện hành động KICK', async () => {
     // Gọi DB lần 1: Caller là Host
-    mockSupabaseChain.single.mockResolvedValueOnce({ data: { role: "host" } });
+    mockSupabaseChain.single.mockResolvedValueOnce({ data: { role: "host", status: "approved" } });
     // Gọi DB lần 2: Target là Guest
-    mockSupabaseChain.single.mockResolvedValueOnce({ data: { role: "guest" } });
+    mockSupabaseChain.single.mockResolvedValueOnce({ data: { role: "guest", status: "approved" } });
 
     // ĐÃ XÓA DÒNG MOCK CỦA UPDATE ĐỂ KHÔNG BỊ GÃY CHUỖI .eq()
 
     // Hành động: Host KICK Guest
     const req = createMockRequest({
-      roomId: "room-1",
-      targetUserId: "bad-guest",
+      roomId: "123e4567-e89b-12d3-a456-426614174000",
+      targetUserId: "00000000-0000-4000-8000-000000000004",
       action: "kick",
     });
     const res = await POST(req);
@@ -123,24 +127,24 @@ describe("API POST /api/watch-party/participant (Quản lý Thành viên)", () =
     expect(res.status).toBe(200);
     expect(body.success).toBe(true);
 
-    // Kiểm tra then chốt: Đảm bảo DB được update với status 'blocked'
+    // Kiểm tra then chốt: Đảm bảo DB được update với status 'rejected'
     expect(mockSupabaseChain.update).toHaveBeenCalledWith({
-      status: "blocked",
+      status: "rejected",
     });
   });
 
   it("🟢 4. Dùng lệnh DELETE khi thực hiện hành động REJECT", async () => {
     // Gọi DB lần 1: Caller là Host
-    mockSupabaseChain.single.mockResolvedValueOnce({ data: { role: "host" } });
+    mockSupabaseChain.single.mockResolvedValueOnce({ data: { role: "host", status: "approved" } });
     // Gọi DB lần 2: Target là Guest
-    mockSupabaseChain.single.mockResolvedValueOnce({ data: { role: "guest" } });
+    mockSupabaseChain.single.mockResolvedValueOnce({ data: { role: "guest", status: "approved" } });
 
     // ĐÃ XÓA DÒNG MOCK CỦA DELETE ĐỂ KHÔNG BỊ GÃY CHUỖI .eq()
 
     // Hành động: Host REJECT người đang gõ cửa
     const req = createMockRequest({
-      roomId: "room-1",
-      targetUserId: "pending-guest",
+      roomId: "123e4567-e89b-12d3-a456-426614174000",
+      targetUserId: "00000000-0000-4000-8000-000000000005",
       action: "reject",
     });
     const res = await POST(req);

@@ -3,6 +3,7 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useVideoPlayer } from "@/hooks/useVideoPlayer";
+import type { PlayerSyncRef } from "@/types";
 
 const handlers = new Map<string, Array<() => void>>();
 let player: any;
@@ -84,7 +85,7 @@ describe("useVideoPlayer", () => {
 
   it("does not pull non-host controller back after local seek", () => {
     const videoRef = { current: document.createElement("div") };
-    const playerSyncRef = { current: null };
+    const playerSyncRef: { current: PlayerSyncRef | null } = { current: null };
     const playerEl = document.createElement("div");
     player.el.mockReturnValue(playerEl);
 
@@ -119,14 +120,14 @@ describe("useVideoPlayer", () => {
     });
 
     const lowerSeek = player.currentTime.mock.calls.find(
-      ([time]) => typeof time === "number" && time < 50,
+      ([time]: [unknown]) => typeof time === "number" && time < 50,
     );
     expect(lowerSeek).toBeUndefined();
   });
 
   it("does not send seek control after remote seek without user intent", () => {
     const videoRef = { current: document.createElement("div") };
-    const playerSyncRef = { current: null };
+    const playerSyncRef: { current: PlayerSyncRef | null } = { current: null };
     const onSeekSync = vi.fn();
 
     renderHook(() =>

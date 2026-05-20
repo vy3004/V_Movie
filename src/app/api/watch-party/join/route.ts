@@ -21,7 +21,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing roomId" }, { status: 400 });
     }
 
-    const result = await WatchPartyService.joinRoom(roomId, user.id);
+    const result = await WatchPartyService.joinRoom(roomId, user.id, {
+      fullName: user.user_metadata?.full_name ?? null,
+      avatarUrl: user.user_metadata?.avatar_url ?? null,
+    });
 
     return NextResponse.json(result);
   } catch (error) {

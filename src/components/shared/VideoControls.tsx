@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   MoonIcon,
   SunIcon,
@@ -5,6 +6,7 @@ import {
   BackwardIcon,
   ForwardIcon,
   ArrowsRightLeftIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/solid";
 import { HeartIcon as HeartOutline } from "@heroicons/react/24/outline";
 
@@ -20,6 +22,8 @@ interface VideoControlsProps {
   nextEnabled: boolean;
   isLightsOff: boolean;
   setIsLightsOff: (v: boolean) => void;
+  isWatchParty?: boolean;
+  onManualSync?: () => void;
 }
 
 export default function VideoControls({
@@ -34,7 +38,21 @@ export default function VideoControls({
   nextEnabled,
   isLightsOff,
   setIsLightsOff,
+  isWatchParty = false,
+  onManualSync,
 }: VideoControlsProps) {
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+
+  const handleManualSync = async () => {
+    if (!onManualSync || isManualSyncing) return;
+    setIsManualSyncing(true);
+    try {
+      await onManualSync();
+    } finally {
+      setIsManualSyncing(false);
+    }
+  };
+
   return (
     <div className="flex items-center justify-around gap-3 sm:gap-4 mt-0 py-3 px-3 sm:px-4 rounded-b-xl">
       {/* Nút Theo dõi */}
@@ -86,6 +104,20 @@ export default function VideoControls({
       >
         <ForwardIcon className="w-5 h-5" />
       </button>
+      {isWatchParty && onManualSync && (
+        <button
+          onClick={handleManualSync}
+          disabled={isManualSyncing}
+          aria-label="Đồng bộ tiến độ"
+          title="Đồng bộ tiến độ theo người đang điều khiển"
+          className="p-2 text-gray-300 hover:text-white disabled:text-gray-600 transition"
+        >
+          <ArrowPathIcon
+            className={`w-5 h-5 ${isManualSyncing ? "animate-spin" : ""}`}
+          />
+        </button>
+      )}
+
       {/* Tắt đèn */}
       <button
         onClick={() => setIsLightsOff(!isLightsOff)}

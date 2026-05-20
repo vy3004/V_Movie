@@ -65,6 +65,7 @@ export type WatchPartyPlayback = {
   ) => void;
   sendHeartbeat: (time: number, isPaused: boolean) => void;
   applyInitialState: () => void;
+  requestControllerSync: () => void;
   activeControllerId?: string;
   activeControllerName?: string;
   initialState: { time?: number; isPaused?: boolean } | null;

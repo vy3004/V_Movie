@@ -5,21 +5,22 @@ import { FilmIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import ChatMessageItem from "@/app/(main)/xem-chung/_components/ChatMessageItem";
 import ChatInputForm from "@/app/(main)/xem-chung/_components/ChatInputForm";
 import MediaOverlay from "@/app/(main)/xem-chung/_components/MediaOverlay";
+import { useWatchPartyStore } from "@/stores/watch-party";
+import { selectMessages } from "@/stores/watch-party/selectors";
 import { ChatMessage } from "@/types";
 
 interface ChatOverlayProps {
-  messages: ChatMessage[];
   currentUserId: string;
   isMuted?: boolean;
   onSendMessage: (msg: Partial<ChatMessage>) => void;
 }
 
 export default function ChatOverlay({
-  messages,
   currentUserId,
   isMuted,
   onSendMessage,
 }: ChatOverlayProps) {
+  const messages = useWatchPartyStore(selectMessages);
   const [text, setText] = useState("");
   const [isCinematic, setIsCinematic] = useState(false);
   const [isUIActive, setIsUIActive] = useState(false);
@@ -32,21 +33,28 @@ export default function ChatOverlay({
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const mouseTimer = useRef<NodeJS.Timeout | null>(null);
-  const prevMessagesLength = useRef(messages.length);
+  const mouseFrame = useRef<number | null>(null);
+  const prevLastMessageId = useRef(messages.at(-1)?.id ?? null);
   const timeoutRefs = useRef<Set<NodeJS.Timeout>>(new Set());
 
   // LOGIC: Bắt chuột
   useEffect(() => {
     const handleMouseMove = () => {
-      setIsUIActive(true);
-      if (mouseTimer.current) clearTimeout(mouseTimer.current);
-      if (!isTyping) {
-        mouseTimer.current = setTimeout(() => setIsUIActive(false), 3000);
-      }
+      if (mouseFrame.current !== null) return;
+
+      mouseFrame.current = requestAnimationFrame(() => {
+        mouseFrame.current = null;
+        setIsUIActive(true);
+        if (mouseTimer.current) clearTimeout(mouseTimer.current);
+        if (!isTyping) {
+          mouseTimer.current = setTimeout(() => setIsUIActive(false), 3000);
+        }
+      });
     };
     window.addEventListener("mousemove", handleMouseMove);
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
+      if (mouseFrame.current !== null) cancelAnimationFrame(mouseFrame.current);
       if (mouseTimer.current) clearTimeout(mouseTimer.current);
     };
   }, [isTyping]);
@@ -84,36 +92,40 @@ export default function ChatOverlay({
 
   // LOGIC: Tin nhắn bay
   useEffect(() => {
-    if (messages.length > prevMessagesLength.current) {
-      const newMessages = messages.slice(prevMessagesLength.current);
-      if (!isUIActive && !isTyping && !isCinematic) {
-        const validMsgs = newMessages.filter((m) => m.type !== "system");
+    const lastMessageId = messages.at(-1)?.id ?? null;
+    const previousIndex = prevLastMessageId.current
+      ? messages.findIndex((message) => message.id === prevLastMessageId.current)
+      : messages.length - 1;
+    const newMessages = messages.slice(previousIndex + 1);
 
-        if (validMsgs.length > 0) {
-          const flying = validMsgs.map((m) => ({
-            ...m,
-            uniqueKey: crypto.randomUUID(),
-          }));
+    if (newMessages.length > 0 && !isUIActive && !isTyping && !isCinematic) {
+      const validMsgs = newMessages.filter((m) => m.type !== "system");
 
-          setFlyingMessages((prev) => [...prev, ...flying]);
+      if (validMsgs.length > 0) {
+        const flying = validMsgs.map((m) => ({
+          ...m,
+          uniqueKey: crypto.randomUUID(),
+        }));
 
-          flying.forEach((msg) => {
-            // Đặt giờ cho TỪNG tin nhắn một
-            const timer = setTimeout(() => {
-              setFlyingMessages((current) =>
-                current.filter((m) => m.uniqueKey !== msg.uniqueKey),
-              );
-              // Chạy xong thì xóa timer đó khỏi bộ nhớ
-              timeoutRefs.current.delete(timer);
-            }, 4000);
+        setFlyingMessages((prev) => [...prev, ...flying]);
 
-            // Lưu timer vào bộ nhớ an toàn
-            timeoutRefs.current.add(timer);
-          });
-        }
+        flying.forEach((msg) => {
+          // Đặt giờ cho TỪNG tin nhắn một
+          const timer = setTimeout(() => {
+            setFlyingMessages((current) =>
+              current.filter((m) => m.uniqueKey !== msg.uniqueKey),
+            );
+            // Chạy xong thì xóa timer đó khỏi bộ nhớ
+            timeoutRefs.current.delete(timer);
+          }, 4000);
+
+          // Lưu timer vào bộ nhớ an toàn
+          timeoutRefs.current.add(timer);
+        });
       }
     }
-    prevMessagesLength.current = messages.length;
+
+    prevLastMessageId.current = lastMessageId;
   }, [messages, isUIActive, isTyping, isCinematic]);
 
   // Chỉ dọn dẹp các timer đang chạy dở khi component bị hủy (Unmount)
@@ -153,14 +165,30 @@ export default function ChatOverlay({
     }
   };
 
-  const formatTime = (isoString?: string) => {
-    if (!isoString) return "";
-    const date = new Date(isoString);
-    return date.toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const visibleMessages = useMemo(
+    () => messages.slice(-40).filter((msg) => msg.type !== "system"),
+    [messages],
+  );
+
+  const visibleMessageTimes = useMemo(() => {
+    const times = new Map<string, string>();
+
+    for (const msg of visibleMessages) {
+      if (!msg.created_at) continue;
+      const date = new Date(msg.created_at);
+      if (isNaN(date.getTime())) continue;
+      const key = msg.id ?? msg.created_at;
+      times.set(
+        key,
+        date.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      );
+    }
+
+    return times;
+  }, [visibleMessages]);
 
   const hasUserMessages = useMemo(
     () => messages.some((m) => m.type !== "system"),
@@ -218,18 +246,15 @@ export default function ChatOverlay({
             onPointerDownCapture={stopProp}
             className="overflow-y-auto px-3 py-3 space-y-3 bg-black/10 backdrop-blur-sm [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] [mask-image:linear-gradient(to_bottom,transparent,black_5%,black_95%,transparent)] [-webkit-mask-image:linear-gradient(to_bottom,transparent,black_5%,black_95%,transparent)]"
           >
-            {messages.slice(-40).map((msg, i) => {
-              if (msg.type === "system") return null;
-              return (
-                <ChatMessageItem
-                  key={msg.id || i}
-                  msg={msg}
-                  isMe={msg.user_id === currentUserId}
-                  timeString={formatTime(msg.created_at)}
-                  isOverlay={true}
-                />
-              );
-            })}
+            {visibleMessages.map((msg, i) => (
+              <ChatMessageItem
+                key={msg.id || i}
+                msg={msg}
+                isMe={msg.user_id === currentUserId}
+                timeString={visibleMessageTimes.get(msg.id ?? msg.created_at ?? "") ?? ""}
+                isOverlay={true}
+              />
+            ))}
             <div ref={endRef} />
           </div>
         </div>

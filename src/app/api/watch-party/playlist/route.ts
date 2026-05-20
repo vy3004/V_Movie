@@ -6,6 +6,14 @@ export const runtime = "edge";
 
 export async function GET(request: Request) {
   try {
+    const supabase = await createSupabaseServer();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { searchParams } = new URL(request.url);
     const roomId = searchParams.get("roomId");
 
@@ -13,7 +21,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Missing roomId" }, { status: 400 });
     }
 
-    const playlist = await WatchPartyContentService.getPlaylist(roomId);
+    const playlist = await WatchPartyContentService.getPlaylist(roomId, user.id);
 
     return NextResponse.json(playlist);
   } catch (error) {

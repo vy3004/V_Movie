@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { WatchPartyService } from "@/services/watch-party.service";
 import { getErrorResponse } from "@/lib/errors/watch-party-errors";
+import { syncVideoRouteSchema } from "@/lib/validations/watch-party.validation";
 
 export const runtime = "edge";
 
@@ -15,10 +16,15 @@ export async function POST(request: Request) {
     if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { roomId, status, time, episodeSlug, requestId } = await request.json();
-    if (!roomId)
-      return NextResponse.json({ error: "Missing roomId" }, { status: 400 });
+    const parsed = syncVideoRouteSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message || "Invalid request" },
+        { status: 400 },
+      );
+    }
 
+    const { roomId, status, time, episodeSlug, requestId } = parsed.data;
     const result = await WatchPartyService.syncVideoState({
       roomId,
       userId: user.id,

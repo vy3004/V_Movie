@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+﻿import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// Mock server-only TRƯỚC KHI import service
+// Mock server-only TRÆ¯á»šC KHI import service
 vi.mock("server-only", () => ({}));
 
 import { RecommendationService } from "@/services/recommendation.service";
@@ -44,12 +44,13 @@ vi.mock("@/services/movie.service", () => ({
 describe("RecommendationService - Rate Limiting", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(redis!.set).mockResolvedValue("OK");
   });
 
   it("should allow first generation request", async () => {
     const userId = "test-user-123";
 
-    // Mock: Chưa có cooldown
+    // Mock: ChÆ°a cÃ³ cooldown
     vi.mocked(redis!.get).mockResolvedValue(null);
 
     // Mock Supabase RPC
@@ -65,7 +66,7 @@ describe("RecommendationService - Rate Limiting", () => {
         },
       ],
       error: null,
-    });
+    } as any);
 
     // Mock AI generation
     const { generateObject } = await import("ai");
@@ -73,15 +74,15 @@ describe("RecommendationService - Rate Limiting", () => {
       object: {
         recommendations: [
           { keyword: "Inception", reason: "Phim hay" },
-          { keyword: "Interstellar", reason: "Phim đỉnh" },
-          { keyword: "The Matrix", reason: "Phim kinh điển" },
+          { keyword: "Interstellar", reason: "Phim Ä‘á»‰nh" },
+          { keyword: "The Matrix", reason: "Phim kinh Ä‘iá»ƒn" },
           { keyword: "Fight Club", reason: "Phim cult" },
           { keyword: "Pulp Fiction", reason: "Phim Tarantino" },
           { keyword: "The Godfather", reason: "Phim mafia" },
           { keyword: "The Dark Knight", reason: "Phim Batman" },
-          { keyword: "Forrest Gump", reason: "Phim cảm động" },
-          { keyword: "The Shawshank Redemption", reason: "Phim trốn tù" },
-          { keyword: "Schindler's List", reason: "Phim lịch sử" },
+          { keyword: "Forrest Gump", reason: "Phim cáº£m Ä‘á»™ng" },
+          { keyword: "The Shawshank Redemption", reason: "Phim trá»‘n tÃ¹" },
+          { keyword: "Schindler's List", reason: "Phim lá»‹ch sá»­" },
           { keyword: "The Lord of the Rings", reason: "Phim fantasy" },
           { keyword: "Star Wars", reason: "Phim sci-fi" },
         ],
@@ -97,8 +98,8 @@ describe("RecommendationService - Rate Limiting", () => {
           name: "Inception",
           thumb_url: "thumb.jpg",
           episode_current: "Full",
-          category: [{ name: "Hành Động", slug: "hanh-dong" }],
-        },
+          category: [{ name: "HÃ nh Äá»™ng", slug: "hanh-dong" }],
+        } as any,
       ],
       params: {} as any,
       titlePage: "",
@@ -108,7 +109,7 @@ describe("RecommendationService - Rate Limiting", () => {
 
     await RecommendationService.generateForUser(userId);
 
-    // Verify: Redis set được gọi để lưu cooldown
+    // Verify: Redis set Ä‘Æ°á»£c gá»i Ä‘á»ƒ lÆ°u cooldown
     expect(redis!.set).toHaveBeenCalledWith(
       `recommendation:cooldown:${userId}`,
       expect.any(Number),
@@ -120,15 +121,15 @@ describe("RecommendationService - Rate Limiting", () => {
     const userId = "test-user-123";
     const now = Date.now();
 
-    // Mock: Có cooldown (vừa generate 30 phút trước)
+    // Mock: CÃ³ cooldown (vá»«a generate 30 phút trÆ°á»›c)
     vi.mocked(redis!.get).mockResolvedValue(now - 30 * 60 * 1000); // 30 minutes ago
 
-    // Service giờ đã re-throw rate limit errors
+    // Service giá» Ä‘Ã£ re-throw rate limit errors
     await expect(
       RecommendationService.generateForUser(userId)
     ).rejects.toThrow("Vui lòng đợi");
 
-    // Verify: Không gọi AI
+    // Verify: KhÃ´ng gá»i AI
     const { generateObject } = await import("ai");
     expect(generateObject).not.toHaveBeenCalled();
   });
@@ -137,7 +138,7 @@ describe("RecommendationService - Rate Limiting", () => {
     const userId = "test-user-123";
     const now = Date.now();
 
-    // Mock: Cooldown đã hết (generate 2 giờ trước)
+    // Mock: Cooldown Ä‘Ã£ háº¿t (generate 2 giá» trÆ°á»›c)
     vi.mocked(redis!.get).mockResolvedValue(now - 2 * 60 * 60 * 1000); // 2 hours ago
 
     // Mock Supabase RPC
@@ -153,7 +154,7 @@ describe("RecommendationService - Rate Limiting", () => {
         },
       ],
       error: null,
-    });
+    } as any);
 
     // Mock AI generation
     const { generateObject } = await import("ai");
@@ -175,8 +176,8 @@ describe("RecommendationService - Rate Limiting", () => {
           name: "Test",
           thumb_url: "thumb.jpg",
           episode_current: "Full",
-          category: [{ name: "Hành Động", slug: "hanh-dong" }],
-        },
+          category: [{ name: "HÃ nh Äá»™ng", slug: "hanh-dong" }],
+        } as any,
       ],
       params: {} as any,
       titlePage: "",
@@ -186,10 +187,10 @@ describe("RecommendationService - Rate Limiting", () => {
 
     await RecommendationService.generateForUser(userId);
 
-    // Verify: AI được gọi
+    // Verify: AI Ä‘Æ°á»£c gá»i
     expect(generateObject).toHaveBeenCalled();
 
-    // Verify: Cooldown mới được set
+    // Verify: Cooldown má»›i Ä‘Æ°á»£c set
     expect(redis!.set).toHaveBeenCalledWith(
       `recommendation:cooldown:${userId}`,
       expect.any(Number),
@@ -201,16 +202,17 @@ describe("RecommendationService - Rate Limiting", () => {
     const userId = "test-user-123";
     const now = Date.now();
 
-    // Mock: Generate 45 phút trước (còn 15 phút cooldown)
+    // Mock: Generate 45 phút trÆ°á»›c (cÃ²n 15 phút cooldown)
     vi.mocked(redis!.get).mockResolvedValue(now - 45 * 60 * 1000);
 
-    // Verify: Error chứa thông tin thời gian chờ
+    // Verify: Error chá»©a thÃ´ng tin thá»i gian chá»
     await expect(
       RecommendationService.generateForUser(userId)
     ).rejects.toThrow(/Vui lòng đợi \d+ phút/);
 
-    // Verify: Không gọi AI vì còn cooldown
+    // Verify: KhÃ´ng gá»i AI vÃ¬ cÃ²n cooldown
     const { generateObject } = await import("ai");
     expect(generateObject).not.toHaveBeenCalled();
   });
 });
+

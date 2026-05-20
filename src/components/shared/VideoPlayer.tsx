@@ -33,6 +33,7 @@ interface Props {
   onSeekSync?: (time: number) => void;
   onHeartbeatSync?: (time: number, isPaused: boolean) => void;
   onPlayerReady?: () => void;
+  onManualSync?: () => void;
   playerSyncRef?: React.MutableRefObject<PlayerSyncRef | null>;
   onChangeEpisode?: (slug: string) => void;
   children?: React.ReactNode;
@@ -312,6 +313,8 @@ function VideoPlayer(props: Props) {
           setIsAutoNext={setIsAutoNext}
           isLightsOff={isLightsOff}
           setIsLightsOff={setIsLightsOff}
+          isWatchParty={props.isWatchParty}
+          onManualSync={props.onManualSync}
           onPrev={() => {
             if (!props.prevEpisodeSlug) return;
             if (props.isWatchParty) {

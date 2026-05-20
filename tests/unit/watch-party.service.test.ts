@@ -45,7 +45,18 @@ describe("WatchPartyService", () => {
     describe("createRoom", () => {
       it("should create a room successfully", async () => {
         const mockSupabase = {
-          from: vi.fn().mockReturnThis(),
+          from: vi.fn((table: string) => {
+            if (table === "profiles") {
+              return {
+                select: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  }),
+                }),
+              };
+            }
+            return mockSupabase;
+          }),
           insert: vi.fn().mockReturnThis(),
           select: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({
@@ -90,6 +101,14 @@ describe("WatchPartyService", () => {
               return {
                 insert: participantInsertMock.mockResolvedValue({
                   error: null,
+                }),
+              };
+            } else if (table === "profiles") {
+              return {
+                select: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  }),
                 }),
               };
             }
@@ -163,13 +182,14 @@ describe("WatchPartyService", () => {
     describe("getRoom", () => {
       it("should return room from cache if available", async () => {
         const { redis } = await import("@/lib/redis");
+        const redisMock = redis as NonNullable<typeof redis>;
         const cachedRoom = {
           id: "room-123",
           room_code: "ABC123",
         };
 
-        vi.mocked(redis.get).mockResolvedValueOnce(cachedRoom);
-        vi.mocked(redis.get).mockResolvedValueOnce({
+        vi.mocked(redisMock.get).mockResolvedValueOnce(cachedRoom);
+        vi.mocked(redisMock.get).mockResolvedValueOnce({
           status: "pause",
           time: 10,
           updated_at: Date.now(),
@@ -178,14 +198,15 @@ describe("WatchPartyService", () => {
         const result = await WatchPartyService.getRoom("room-123");
 
         expect(result.room).toEqual(cachedRoom);
-        expect(redis.get).toHaveBeenCalledWith("wp:room:room-123:info");
+        expect(redisMock.get).toHaveBeenCalledWith("wp:room:room-123:info");
       });
 
       it("should fetch from database if cache miss", async () => {
         const { redis } = await import("@/lib/redis");
+        const redisMock = redis as NonNullable<typeof redis>;
         const { createSupabaseServer } = await import("@/lib/supabase/server");
 
-        vi.mocked(redis.get).mockResolvedValue(null);
+        vi.mocked(redisMock.get).mockResolvedValue(null);
 
         const mockSupabase = {
           from: vi.fn().mockReturnThis(),
@@ -205,14 +226,15 @@ describe("WatchPartyService", () => {
         const result = await WatchPartyService.getRoom("room-123");
 
         expect(result.room).toBeDefined();
-        expect(redis.set).toHaveBeenCalled();
+        expect(redisMock.set).toHaveBeenCalled();
       });
 
       it("should throw error if room not found", async () => {
         const { redis } = await import("@/lib/redis");
+        const redisMock = redis as NonNullable<typeof redis>;
         const { createSupabaseServer } = await import("@/lib/supabase/server");
 
-        vi.mocked(redis.get).mockResolvedValue(null);
+        vi.mocked(redisMock.get).mockResolvedValue(null);
 
         const mockSupabase = {
           from: vi.fn().mockReturnThis(),
@@ -235,6 +257,7 @@ describe("WatchPartyService", () => {
     describe("closeRoom", () => {
       it("should close room and cleanup Redis", async () => {
         const { redis } = await import("@/lib/redis");
+        const redisMock = redis as NonNullable<typeof redis>;
         const { createSupabaseServer } = await import("@/lib/supabase/server");
 
         const mockSupabase = {
@@ -253,9 +276,9 @@ describe("WatchPartyService", () => {
 
         await WatchPartyService.closeRoom("room-123", "user-1");
 
-        expect(redis.del).toHaveBeenCalledWith("wp:room:room-123:state");
-        expect(redis.del).toHaveBeenCalledWith("wp:room:room-123:info");
-        expect(redis.del).toHaveBeenCalledWith("wp:room:room-123:lock");
+        expect(redisMock.del).toHaveBeenCalledWith("wp:room:room-123:state");
+        expect(redisMock.del).toHaveBeenCalledWith("wp:room:room-123:info");
+        expect(redisMock.del).toHaveBeenCalledWith("wp:room:room-123:lock");
       });
 
       it("should throw error if non-host tries to close", async () => {
@@ -287,7 +310,18 @@ describe("WatchPartyService", () => {
 
         const selectMock = vi.fn();
         const mockSupabase = {
-          from: vi.fn().mockReturnThis(),
+          from: vi.fn((table: string) => {
+            if (table === "profiles") {
+              return {
+                select: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  }),
+                }),
+              };
+            }
+            return mockSupabase;
+          }),
           insert: vi.fn().mockReturnThis(),
           delete: vi.fn().mockReturnThis(),
           select: selectMock,
@@ -350,7 +384,18 @@ describe("WatchPartyService", () => {
 
         const selectMock = vi.fn();
         const mockSupabase = {
-          from: vi.fn().mockReturnThis(),
+          from: vi.fn((table: string) => {
+            if (table === "profiles") {
+              return {
+                select: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  }),
+                }),
+              };
+            }
+            return mockSupabase;
+          }),
           insert: vi.fn().mockReturnThis(),
           select: selectMock,
           eq: vi.fn().mockReturnThis(),
@@ -471,6 +516,89 @@ describe("WatchPartyService", () => {
         ).rejects.toThrow(RoomFullError);
       });
 
+      it("should allow rejected user to request private room again after row deletion", async () => {
+        const { createSupabaseServer } = await import("@/lib/supabase/server");
+
+        const selectMock = vi.fn();
+        const insertMock = vi.fn().mockResolvedValue({ error: null });
+        const mockSupabase = {
+          from: vi.fn((table: string) => {
+            if (table === "profiles") {
+              return {
+                select: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  }),
+                }),
+              };
+            }
+            return mockSupabase;
+          }),
+          select: selectMock,
+          insert: insertMock,
+          eq: vi.fn().mockReturnThis(),
+        };
+
+        selectMock.mockReturnValueOnce({
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: {
+              is_private: true,
+              max_participants: 20,
+              is_active: true,
+            },
+            error: null,
+          }),
+        });
+
+        const hostRoomEq = vi.fn().mockReturnThis();
+        selectMock.mockReturnValueOnce({ eq: hostRoomEq });
+        hostRoomEq.mockReturnValueOnce({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { user_id: "user-1" },
+              error: null,
+            }),
+          }),
+        });
+
+        selectMock.mockReturnValueOnce({
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: null,
+            error: { code: "PGRST116" },
+          }),
+        });
+
+        const countRoomEq = vi.fn().mockReturnThis();
+        selectMock.mockReturnValueOnce({ eq: countRoomEq });
+        countRoomEq.mockReturnValueOnce({
+          eq: vi.fn().mockResolvedValue({ count: 1 }),
+        });
+
+        vi.mocked(createSupabaseServer).mockResolvedValue(mockSupabase as any);
+
+        const result = await WatchPartyService.joinRoom(
+          "123e4567-e89b-12d3-a456-426614174000",
+          "user-2",
+        );
+
+        expect(insertMock).toHaveBeenCalledWith({
+          room_id: "123e4567-e89b-12d3-a456-426614174000",
+          user_id: "user-2",
+          status: "pending",
+          role: "guest",
+          permissions: undefined,
+          display_name: null,
+          avatar_url: null,
+        });
+        expect(result).toEqual({
+          success: true,
+          status: "pending",
+          promoted_to_host: false,
+        });
+      });
+
       it("should throw error if user is blocked", async () => {
         const { createSupabaseServer } = await import("@/lib/supabase/server");
 
@@ -527,6 +655,7 @@ describe("WatchPartyService", () => {
     describe("syncVideoState", () => {
       it("should sync video state to Redis", async () => {
         const { redis } = await import("@/lib/redis");
+        const redisMock = redis as NonNullable<typeof redis>;
         const { createSupabaseServer } = await import("@/lib/supabase/server");
 
         const mockSupabase = {
@@ -543,7 +672,7 @@ describe("WatchPartyService", () => {
         };
 
         vi.mocked(createSupabaseServer).mockResolvedValue(mockSupabase as any);
-        vi.mocked(redis.get).mockResolvedValue({
+        vi.mocked(redisMock.get).mockResolvedValue({
           status: "pause",
           time: 0,
           updated_at: Date.now(),
@@ -556,7 +685,7 @@ describe("WatchPartyService", () => {
           time: 10,
         });
 
-        expect(redis.set).toHaveBeenCalledWith(
+        expect(redisMock.set).toHaveBeenCalledWith(
           "wp:room:room-123:state",
           expect.objectContaining({
             status: "play",
@@ -568,6 +697,7 @@ describe("WatchPartyService", () => {
 
       it("should allocate canonical versions with Redis atomic counter", async () => {
         const { redis } = await import("@/lib/redis");
+        const redisMock = redis as NonNullable<typeof redis>;
         const { createSupabaseServer } = await import("@/lib/supabase/server");
 
         const mockSupabase = {

@@ -44,7 +44,7 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
   // 2. Xử lý fallback khi không có ảnh
   const fallback = useMemo(() => {
     if (src) return null;
-    const initial = user_name.trim().charAt(0).toUpperCase() || "?";
+    const initial = user_name.trim().charAt(0).toUpperCase() || "U";
     let hash = 0;
     for (let i = 0; i < user_name.length; i++) {
       hash = user_name.charCodeAt(i) + ((hash << 5) - hash);

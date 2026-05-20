@@ -34,7 +34,7 @@ export interface ParticipantPermissions {
 
 // 4. Định nghĩa Thành viên (Bảng watch_party_participants)
 export type ParticipantRole = "host" | "guest";
-export type ParticipantStatus = "pending" | "approved" | "blocked";
+export type ParticipantStatus = "pending" | "approved" | "blocked" | "rejected";
 
 export interface WatchPartyParticipant {
   id: string;
@@ -45,7 +45,11 @@ export interface WatchPartyParticipant {
   permissions: ParticipantPermissions;
   is_muted: boolean;
   is_voice_muted: boolean;
+  display_name?: string | null;
+  avatar_url?: string | null;
   created_at: string;
+  updated_at?: string;
+  realtime_revision?: number;
   profiles?: UserProfile;
 }
 

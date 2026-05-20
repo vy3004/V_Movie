@@ -28,24 +28,27 @@ describe("Watch Party Unit Test Suite - Bộ Test 1", () => {
     it("nên chặn Guest nếu settings tắt quyền guest và guest chưa được cấp quyền riêng", () => {
       const guest = {
         role: "guest",
-        permissions: { can_control_video: false },
+        permissions: { can_control_media: false },
       } as any;
       expect(canUserControlVideo(mockRoom, guest)).toBe(false);
     });
 
-    it("nên cho phép Guest nếu đã được cấp quyền riêng can_control_video: true", () => {
+    it("nên cho phép Guest nếu đã được cấp quyền riêng can_control_media: true", () => {
       const privilegedGuest = {
         role: "guest",
-        permissions: { can_control_video: true },
+        permissions: { can_control_media: true },
       } as any;
       expect(canUserControlVideo(mockRoom, privilegedGuest)).toBe(true);
     });
 
     it("nên cho phép Guest nếu room settings allow_guest_control: true", () => {
-      const openRoom = { ...mockRoom, settings: { allow_guest_control: true } };
+      const openRoom = {
+        ...mockRoom,
+        settings: { ...mockRoom.settings, allow_guest_control: true },
+      };
       const normalGuest = {
         role: "guest",
-        permissions: { can_control_video: false },
+        permissions: { can_control_media: false },
       } as any;
       expect(canUserControlVideo(openRoom, normalGuest)).toBe(true);
     });

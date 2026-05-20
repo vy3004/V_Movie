@@ -27,6 +27,23 @@ import type {
 
 const REDIS_STATE_TTL = 86400; // 24h
 
+async function getParticipantIdentitySnapshot(
+  supabase: Awaited<ReturnType<typeof createSupabaseServer>>,
+  userId: string,
+  fallback?: { fullName?: string | null; avatarUrl?: string | null },
+) {
+  const { data } = await supabase
+    .from("profiles")
+    .select("full_name, avatar_url")
+    .eq("id", userId)
+    .maybeSingle();
+
+  return {
+    display_name: data?.full_name ?? fallback?.fullName ?? null,
+    avatar_url: data?.avatar_url ?? fallback?.avatarUrl ?? null,
+  };
+}
+
 /**
  * Watch Party Service
  * Centralized business logic for watch party feature
@@ -109,6 +126,11 @@ export const WatchPartyService = {
       );
     }
 
+    const hostIdentity = await getParticipantIdentitySnapshot(
+      supabase,
+      params.hostId,
+    );
+
     // Thêm host vào participants
     const { error: participantErr } = await supabase
       .from("watch_party_participants")
@@ -117,6 +139,7 @@ export const WatchPartyService = {
         user_id: params.hostId,
         role: "host",
         status: "approved",
+        ...hostIdentity,
       });
 
     if (participantErr) {
@@ -329,7 +352,11 @@ export const WatchPartyService = {
    * Generate room code
    */
   generateRoomCode: () => {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const bytes = new Uint8Array(6);
+    crypto.getRandomValues(bytes);
+
+    return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
   },
 
   // ==================== PARTICIPANT MANAGEMENT ====================
@@ -337,7 +364,11 @@ export const WatchPartyService = {
   /**
    * Join phòng
    */
-  joinRoom: async (roomId: string, userId: string) => {
+  joinRoom: async (
+    roomId: string,
+    userId: string,
+    identityFallback?: { fullName?: string | null; avatarUrl?: string | null },
+  ) => {
     const supabase = await createSupabaseServer();
 
     // Validate input
@@ -397,6 +428,7 @@ export const WatchPartyService = {
           "USER_BLOCKED",
         );
       }
+
 
       // Nếu phòng không có host và user này chưa phải host → promote
       if (!hasHost && existing.role !== "host") {
@@ -462,6 +494,12 @@ export const WatchPartyService = {
       ? { can_control_media: true, can_manage_users: true }
       : undefined;
 
+    const identity = await getParticipantIdentitySnapshot(
+      supabase,
+      userId,
+      identityFallback,
+    );
+
     const { error } = await supabase
       .from("watch_party_participants")
       .insert({
@@ -470,6 +508,7 @@ export const WatchPartyService = {
         status,
         role,
         permissions,
+        ...identity,
       });
 
     if (error) {
@@ -712,14 +751,16 @@ export const WatchPartyService = {
     // 1. Kiểm tra quyền của caller
     const { data: caller } = await supabase
       .from("watch_party_participants")
-      .select("role, permissions")
+      .select("role, status, permissions")
       .eq("room_id", roomId)
       .eq("user_id", callerId)
       .single();
 
     const callerPermissions = caller?.permissions as ParticipantPermissions;
     const canManageUsers =
-      caller?.role === "host" || callerPermissions?.can_manage_users;
+      caller?.status === "approved" &&
+      (caller?.role === "host" ||
+        (caller?.role === "guest" && callerPermissions?.can_manage_users === true));
 
     if (!canManageUsers) {
       throw new NoPermissionError("Bạn không có quyền quản lý thành viên");
@@ -728,7 +769,7 @@ export const WatchPartyService = {
     // 2. Kiểm tra target user
     const { data: targetUser } = await supabase
       .from("watch_party_participants")
-      .select("role")
+      .select("id, role, status, display_name, avatar_url")
       .eq("room_id", roomId)
       .eq("user_id", targetUserId)
       .single();
@@ -744,6 +785,17 @@ export const WatchPartyService = {
       );
     }
 
+    if (action === "approve" && targetUser.status !== "pending") {
+      throw new BadRequestError("Chỉ có thể duyệt yêu cầu đang chờ", "INVALID_PARTICIPANT_STATUS");
+    }
+
+    if (
+      (action === "reject" || action === "kick") &&
+      targetUser.status !== "pending" &&
+      targetUser.status !== "approved"
+    ) {
+      throw new BadRequestError("Trạng thái thành viên không hợp lệ", "INVALID_PARTICIPANT_STATUS");
+    }
     // 3. Thực hiện action
     if (action === "approve") {
       // Kiểm tra capacity trước khi approve
@@ -763,9 +815,13 @@ export const WatchPartyService = {
         throw new RoomFullError("Phòng đã đạt giới hạn người tham gia tối đa");
       }
 
+      const identity = await getParticipantIdentitySnapshot(supabase, targetUserId, {
+        fullName: targetUser.display_name,
+        avatarUrl: targetUser.avatar_url,
+      });
       const { error: approveErr } = await supabase
         .from("watch_party_participants")
-        .update({ status: "approved" })
+        .update({ status: "approved", ...identity })
         .eq("room_id", roomId)
         .eq("user_id", targetUserId);
 
@@ -798,7 +854,8 @@ export const WatchPartyService = {
         .from("watch_party_participants")
         .delete()
         .eq("room_id", roomId)
-        .eq("user_id", targetUserId);
+        .eq("user_id", targetUserId)
+        .eq("status", "approved");
 
       if (kickErr) {
         logger.error("Failed to kick participant", {
@@ -810,7 +867,25 @@ export const WatchPartyService = {
       }
     }
 
-    return { success: true };
+    if (action === "approve") {
+      const { data: participant, error: participantError } = await supabase
+        .from("watch_party_participants")
+        .select("*, profiles:user_id(full_name, avatar_url)")
+        .eq("room_id", roomId)
+        .eq("user_id", targetUserId)
+        .single();
+
+      if (participantError) throw participantError;
+
+      return { success: true, participant };
+    }
+
+    return {
+      success: true,
+      removedUserId: targetUserId,
+      removedParticipantId: targetUser.id,
+      action,
+    };
   },
 
   // ==================== VIDEO SYNC ====================
@@ -966,3 +1041,7 @@ export const WatchPartyService = {
     return { success: true, state: newState };
   },
 };
+
+
+
+

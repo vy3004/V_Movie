@@ -33,6 +33,7 @@ export const VoiceTokenService = {
       .from("watch_party_rooms")
       .select("id")
       .eq("room_code", params.roomCode)
+      .eq("is_active", true)
       .maybeSingle();
 
     if (roomError || !roomData) {
@@ -48,6 +49,7 @@ export const VoiceTokenService = {
       .select("is_voice_muted, profiles(full_name)")
       .eq("room_id", roomData.id)
       .eq("user_id", params.userId)
+      .eq("status", "approved")
       .maybeSingle();
 
     if (participantError) {
