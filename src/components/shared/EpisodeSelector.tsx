@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useMemo, useEffect } from "react";
 import {
@@ -6,33 +6,50 @@ import {
   MagnifyingGlassIcon,
   XMarkIcon,
 } from "@heroicons/react/24/solid";
-import { FilmIcon } from "@heroicons/react/24/outline";
-import { Episode, ServerData, EpisodeProgress } from "@/types";
+import {
+  getAvailableServersForEpisode,
+  getEpisodeList,
+  getEpisodeProgressKey,
+  getSourceBadge,
+} from "@/services/movie-sources/utils";
+import { Episode, ServerData, EpisodeProgress, MovieSource } from "@/types";
 
 interface EpisodeSelectorProps {
   servers: Episode[];
-  episodeSelected: string | null;
+  episodeSelected?: string | null;
+  selectedEpisodeKey?: string | null;
   onSelect: (data: ServerData) => void;
   episodesProgress?: Record<string, EpisodeProgress>;
-  activeServerIdx: number;
-  onServerChange: (idx: number) => void;
+  activeServerIdx?: number;
+  onServerChange?: (idx: number) => void;
 }
 
 const RANGE_SIZE = 40;
 const THRESHOLD = 80;
 
+const SOURCE_BADGE_CLASS: Record<MovieSource, string> = {
+  ophim: "bg-red-500/15 text-red-400 border-red-500/30",
+  phimapi: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+};
+
+function stripSourcePrefix(name: string): string {
+  return name.replace(/^(OP|PA|NC) - /, "");
+}
+
 const EpisodeSelector = ({
   servers,
   episodeSelected,
+  selectedEpisodeKey,
   onSelect,
   episodesProgress = {},
-  activeServerIdx,
+  activeServerIdx = 0,
   onServerChange,
 }: EpisodeSelectorProps) => {
-  const activeServer = servers[activeServerIdx];
-  const episodes = useMemo(
-    () => activeServer?.server_data || [],
-    [activeServer?.server_data],
+  const selectedKey = selectedEpisodeKey ?? episodeSelected ?? "";
+  const episodes = useMemo(() => getEpisodeList(servers), [servers]);
+  const availableServerEntries = useMemo(
+    () => getAvailableServersForEpisode(servers, selectedKey),
+    [servers, selectedKey],
   );
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -53,22 +70,22 @@ const EpisodeSelector = ({
     return groups;
   }, [episodes]);
 
-  // 2. Tự động nhảy đến dải chứa tập đang xem (Chỉ chạy khi không search)
+  // 2. Tự động chọn dải chứa tập đã chọn hoặc dải đầu tiên nếu chưa có tập nào được chọn
   useEffect(() => {
-    if (!searchTerm && ranges.length > 0 && episodeSelected) {
+    if (!searchTerm && ranges.length > 0 && selectedKey) {
       const currentEpIdx = episodes.findIndex(
-        (ep) => ep.slug === episodeSelected,
+        (ep) => getEpisodeProgressKey(ep) === selectedKey,
       );
       if (currentEpIdx !== -1) {
         const rangeIdx = Math.floor(currentEpIdx / RANGE_SIZE);
         setActiveRangeIdx(Math.min(rangeIdx, ranges.length - 1));
       }
     }
-    // Reset về 0 nếu không tìm thấy tập hiện tại trong server mới
-    if (!searchTerm && ranges.length > 0 && !episodeSelected) {
+    // Nếu không có tập nào được chọn nhưng có dải phân chia, mặc định chọn dải đầu tiên
+    if (!searchTerm && ranges.length > 0 && !selectedKey) {
       setActiveRangeIdx(0);
     }
-  }, [episodeSelected, ranges.length, episodes, searchTerm]);
+  }, [selectedKey, ranges.length, episodes, searchTerm]);
 
   // 3. Logic Tìm kiếm & Hiển thị tập
   const filteredEpisodes = useMemo(() => {
@@ -81,7 +98,7 @@ const EpisodeSelector = ({
     // Nếu không search: Hiển thị theo Range
     if (ranges.length === 0) return episodes;
 
-    // Kiểm tra an toàn: Nếu index hiện tại lớn hơn số lượng dải đang có, tự động rớt về dải số 0.
+    // Kiểm tra an toàn: Nếu index hiện tại lớn hơn số lượng dải đang có, tự động chuyển về dải số 0.
     const safeRangeIdx = activeRangeIdx >= ranges.length ? 0 : activeRangeIdx;
     const range = ranges[safeRangeIdx];
 
@@ -91,32 +108,33 @@ const EpisodeSelector = ({
     return episodes.slice(range.startIdx, range.endIdx);
   }, [episodes, ranges, activeRangeIdx, searchTerm]);
 
-  const showServerTabs =
-    servers.filter((s) => s.server_data.length > 0).length > 1;
+  const showServerTabs = availableServerEntries.length > 1;
 
   return (
     <div className="bg-background p-6 rounded-xl border border-zinc-800 space-y-6">
       {/* 1. Server Tabs */}
       {showServerTabs && (
         <div className="flex flex-wrap gap-2">
-          {servers.map((server, idx) => {
-            const hasEpisodes = server.server_data.length > 0;
+          {availableServerEntries.map(({ server, idx }) => {
             const isActive = idx === activeServerIdx;
             return (
               <button
                 key={idx}
-                onClick={() => hasEpisodes && onServerChange(idx)}
-                disabled={!hasEpisodes}
+                onClick={() => onServerChange?.(idx)}
                 className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-bold transition ${
                   isActive
                     ? "border border-primary text-primary"
-                    : hasEpisodes
-                      ? "bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                      : "bg-zinc-900/40 text-zinc-600 cursor-not-allowed"
+                    : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white"
                 }`}
               >
-                <FilmIcon className="w-4 h-4" />
-                {server.server_name}
+                {server.source ? (
+                  <span
+                    className={`px-1.5 py-0.5 rounded border text-[10px] font-black ${SOURCE_BADGE_CLASS[server.source]}`}
+                  >
+                    {getSourceBadge(server.source)}
+                  </span>
+                ) : null}
+                <span>{stripSourcePrefix(server.server_name)}</span>
               </button>
             );
           })}
@@ -130,7 +148,7 @@ const EpisodeSelector = ({
           <span>Danh sách tập</span>
         </div>
 
-        {/* Ô Search tập */}
+        {/* ? Search tập */}
         <div className="relative w-full sm:w-64 group">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-primary transition-colors" />
           <input
@@ -144,7 +162,7 @@ const EpisodeSelector = ({
           {searchTerm && (
             <button
               onClick={() => setSearchTerm("")}
-              aria-label="Xóa từ khóa tìm kiếm"
+              aria-label="Xóa tìm kiếm"
               className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-zinc-800 rounded-full"
             >
               <XMarkIcon className="w-4 h-4 text-zinc-500" />
@@ -153,7 +171,7 @@ const EpisodeSelector = ({
         </div>
       </div>
 
-      {/* 2. Range Tabs (Ẩn khi đang search) */}
+      {/* 2. Range Tabs (hiển thị khi đang search) */}
       {ranges.length > 0 && !searchTerm && (
         <div className="flex flex-wrap gap-2 pb-6 border-b border-zinc-800/50">
           {ranges.map((range, idx) => (
@@ -176,9 +194,11 @@ const EpisodeSelector = ({
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
         {filteredEpisodes.length > 0 ? (
           filteredEpisodes.map((sv) => {
-            const progress = episodesProgress[sv.slug];
+            const progress =
+              episodesProgress[getEpisodeProgressKey(sv)] ||
+              episodesProgress[sv.slug];
             const isFinished = progress?.ep_is_finished || false;
-            const isSelected = sv.slug === episodeSelected;
+            const isSelected = getEpisodeProgressKey(sv) === selectedKey;
             const progressPercent =
               progress && progress.ep_duration > 0
                 ? Math.min(
@@ -238,7 +258,7 @@ const EpisodeSelector = ({
           })
         ) : (
           <div className="col-span-full py-10 text-center text-zinc-600 italic text-sm">
-            Không tìm thấy tập phim nào khớp với từ khóa...
+            Không tìm thấy tập phim nào phù hợp với từ khóa...
           </div>
         )}
       </div>

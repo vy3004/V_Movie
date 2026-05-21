@@ -1,40 +1,52 @@
-import RecommendSlider from "./RecommendSlider";
-import { createSupabaseServer } from "@/lib/supabase/server";
-import { redis } from "@/lib/redis";
-import { MovieRecommendation } from "@/types/movie";
+"use client";
 
-export default async function RecommendSection() {
-  const supabase = await createSupabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+import { SparklesIcon } from "@heroicons/react/24/solid";
+import MovieCard from "@/components/shared/MovieCard";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/Carousel";
+import { useRecommendations } from "@/hooks/useRecommendations";
 
-  let aiMovies: MovieRecommendation[] = [];
+export default function RecommendSection() {
+  const { movies } = useRecommendations();
 
-  if (user) {
-    try {
-      if (redis) {
-        const cached = await redis.get(`recommendation:user:${user.id}`);
-        if (cached) {
-          aiMovies = typeof cached === "string" ? JSON.parse(cached) : cached;
-        }
-      }
+  if (movies?.length === 0) return null;
 
-      if (!aiMovies || aiMovies.length === 0) {
-        const { data } = await supabase
-          .from("user_recommendations")
-          .select("recommendations")
-          .eq("user_id", user.id)
-          .maybeSingle();
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-700 mb-10">
+      <div className="relative z-20 flex items-center justify-between font-bold mb-4">
+        <div className="flex items-center gap-2">
+          <SparklesIcon className="w-6 h-6 text-primary" />
+          <h2 className="text-xl sm:text-2xl text-white tracking-tight">
+            Có thể bạn sẽ thích
+          </h2>
+        </div>
+      </div>
 
-        if (data && Array.isArray(data.recommendations)) {
-          aiMovies = data.recommendations;
-        }
-      }
-    } catch (error) {
-      console.error("[RecommendSection] Lỗi lấy data AI:", error);
-    }
-  }
-
-  return <RecommendSlider initialMovies={aiMovies} isGuest={!user} />;
+      <Carousel opts={{ align: "start", slidesToScroll: "auto" }}>
+        <CarouselContent>
+          {movies.map((movie) => (
+            <CarouselItem
+              key={movie.movie_slug}
+              className="!basis-[46%] sm:!basis-1/3 md:!basis-1/4 lg:!basis-1/6 py-4"
+            >
+              <MovieCard
+                movie_slug={movie.movie_slug}
+                name={movie.name}
+                thumb_url={movie.thumb_url}
+                episode_current={movie.episode_current || "Tập mới"}
+                reason={movie.reason}
+              />
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+        <CarouselPrevious />
+        <CarouselNext />
+      </Carousel>
+    </div>
+  );
 }

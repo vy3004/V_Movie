@@ -20,6 +20,11 @@ export async function GET(request: Request) {
         category: searchParams.get("category") || "",
         country: searchParams.get("country") || "",
         year: searchParams.get("year") || "",
+        type: searchParams.get("type") || "",
+        status: searchParams.get("status") || "",
+        quality: searchParams.get("quality") || "",
+        lang: searchParams.get("lang") || "",
+        source: searchParams.get("source") || "",
         sort_field: searchParams.get("sort_field") || "",
       };
       data = await MovieService.getList({ slug, page, limit, ...filters });

@@ -4,8 +4,9 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. KIỂM TRA ROUTE TRƯỚC TIÊN (Early Exit)
-  const isProtectedRoute = pathname.startsWith("/dashboard");
+  const isDashboardRoute = pathname.startsWith("/dashboard");
+  const isAdminRoute = pathname.startsWith("/admin");
+  const isProtectedRoute = isDashboardRoute || isAdminRoute;
 
   let supabaseResponse = NextResponse.next({ request });
 
@@ -39,15 +40,28 @@ export async function updateSession(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    // Nếu không có user mà dám vào route bảo mật -> Đuổi về trang chủ
     if (!user) {
       const url = request.nextUrl.clone();
       url.pathname = "/";
       url.searchParams.set("auth", "required");
       return NextResponse.redirect(url);
     }
+
+    if (isAdminRoute) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      const appRole = user.app_metadata?.role || user.user_metadata?.role;
+      if (profile?.role !== "admin" && appRole !== "admin") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/";
+        return NextResponse.redirect(url);
+      }
+    }
   }
 
-  // Đối với các trang public, ta cứ cho đi qua mượt mà
   return supabaseResponse;
 }

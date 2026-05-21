@@ -5,3 +5,4 @@ export * from "./history";
 export * from "./community";
 export * from "./watch-party";
 export * from "./user";
+export * from "./admin-movie-indexer";

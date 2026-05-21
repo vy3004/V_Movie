@@ -10,7 +10,8 @@
     "lint": "next lint",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "index:movies": "tsx scripts/index-movies.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.65",
@@ -68,6 +69,7 @@
     "jsdom": "^29.0.2",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
+    "tsx": "^4.22.2",
     "typescript": "^5",
     "vitest": "^4.1.4",
     "webpack": "^5.95.0"

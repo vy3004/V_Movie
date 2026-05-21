@@ -2,11 +2,16 @@
 import Link from "next/link";
 import { PlayIcon, StarIcon } from "@heroicons/react/24/solid";
 import ExpandableText from "@/components/ui/ExpandableText";
-import { MOVIE_IMG_PATH, WSRV_PROXY } from "@/lib/configs";
+import { WSRV_PROXY } from "@/lib/configs";
 import { Movie } from "@/types";
 
 interface MovieDetailProps {
   movie: Movie;
+}
+
+function proxyImageUrl(url: string, width: number) {
+  if (!url) return "";
+  return `${WSRV_PROXY}/?output=webp&q=65&url=${encodeURIComponent(url)}&w=${width}`;
 }
 
 const MovieDetail = ({ movie }: MovieDetailProps) => {
@@ -15,11 +20,11 @@ const MovieDetail = ({ movie }: MovieDetailProps) => {
       <picture className="col-span-3 sm:col-span-1">
         <source
           media="(min-width: 640px)"
-          srcSet={`${WSRV_PROXY}/?output=webp&q=65&url=${MOVIE_IMG_PATH}${movie.thumb_url}&w=400`}
+          srcSet={proxyImageUrl(movie.thumb_url, 400)}
         />
         <img
-          alt={movie.origin_name}
-          src={`${WSRV_PROXY}/?output=webp&q=65&url=${MOVIE_IMG_PATH}${movie.poster_url}&w=640`}
+          alt={movie.origin_name || movie.name}
+          src={proxyImageUrl(movie.poster_url || movie.thumb_url, 640)}
           className="object-cover rounded-lg"
           loading="eager"
           fetchPriority="high"
@@ -123,7 +128,7 @@ export const MovieTags = ({
 }) => (
   <div className={className}>
     <div className="flex items-center gap-2 overflow-hidden">
-      {movie.tmdb.type && (
+      {movie.tmdb?.type && (
         <Badge className="uppercase">{movie.tmdb.type}</Badge>
       )}
       <Badge>{movie.quality}</Badge>
@@ -133,15 +138,15 @@ export const MovieTags = ({
     </div>
 
     <div className="space-x-2 flex items-center">
-      {movie.tmdb.vote_average > 0 && (
+      {(movie.tmdb?.vote_average || 0) > 0 && (
         <BorderedItem className="text-primary font-semibold flex items-center">
           <StarIcon className="size-4 mr-1" />
-          {movie.tmdb.vote_average.toFixed(0)}
+          {movie.tmdb?.vote_average.toFixed(0)}
         </BorderedItem>
       )}
       <BorderedItem>{movie.year}</BorderedItem>
       {movie.chieurap && <BorderedItem>Chiếu rạp</BorderedItem>}
-      {movie.tmdb.season && (
+      {movie.tmdb?.season && (
         <BorderedItem>Phần {movie.tmdb.season}</BorderedItem>
       )}
       <BorderedItem>{movie.episode_current}</BorderedItem>
@@ -177,8 +182,10 @@ export const ActionButtons = ({
   movie: Movie;
   className?: string;
 }) => {
-  const hrefWatchMovie = movie.episodes?.[0]?.server_data?.[0]?.slug
-    ? `/phim/${movie.slug}?tap=${movie.episodes[0].server_data[0].slug}#video`
+  const firstServer = movie.episodes?.find((server) => server.server_data?.[0]);
+  const firstEpisode = firstServer?.server_data?.[0];
+  const hrefWatchMovie = firstEpisode
+    ? `/phim/${movie.slug}?source=${movie.source || "ophim"}&server=${encodeURIComponent(firstServer.server_name)}&tap=${firstEpisode.slug}`
     : `/phim/${movie.slug}`;
   return (
     <div className={`flex items-center ${className}`}>

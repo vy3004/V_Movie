@@ -171,6 +171,18 @@ export function useHistoryTracker({
     [movie, episodeSlug, lastEpOfMovie, user],
   );
 
+  const getCurrentEpisodeProgress = useCallback((): EpisodeProgress | null => {
+    const data = trackingData.current;
+    if (!data) return null;
+
+    return {
+      ep_last_time: data.current_time,
+      ep_duration: data.duration,
+      ep_is_finished: data.duration > 0 && data.current_time / data.duration > 0.9,
+      ep_updated_at: new Date().toISOString(),
+    };
+  }, []);
+
   // 4. Chốt DB khi thoát (Dùng Blob để chống lỗi rớt Header)
   const syncSupabase = useCallback(() => {
     // Flush throttle trước khi sync
@@ -259,5 +271,9 @@ export function useHistoryTracker({
     };
   }, [syncSupabase]);
 
-  return { handleTimeUpdate, syncToSupabase: syncSupabase };
+  return {
+    handleTimeUpdate,
+    syncToSupabase: syncSupabase,
+    getCurrentEpisodeProgress,
+  };
 }

@@ -4,18 +4,19 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import NProgress from "nprogress";
 import Link from "next/link";
-import { useInView } from "react-intersection-observer";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   MagnifyingGlassIcon,
   XMarkIcon,
   ExclamationCircleIcon,
+  ArrowTrendingUpIcon,
 } from "@heroicons/react/24/outline";
 
-import ImageCustom from "@/components/ui/ImageCustom";
 import { Movie } from "@/types";
 import { useMovieSearch } from "@/hooks/useMovieSearch";
+import { getMovieHref } from "@/services/movie-sources/utils";
+import SearchMovieResultCard from "@/components/shared/SearchMovieResultCard";
 import {
   SearchFormValues,
   searchSchema,
@@ -52,14 +53,51 @@ export default function SearchModal({ isOpen, onClose }: Props) {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    topKeywords,
+    searchPhase,
+    isFallbackSearching,
+    isSearchComplete,
+    selectKeyword,
+    trackTopKeyword,
   } = useMovieSearch(10);
 
-  // Observer cuộn xuống đáy
-  const { ref: loadMoreRef, inView } = useInView();
+  const showNotFound =
+    (keyword || "").trim().length >= 2 &&
+    movies.length === 0 &&
+    !isFetching &&
+    !isFetchingNextPage &&
+    isSearchComplete &&
+    searchPhase === "done";
 
   useEffect(() => {
-    if (inView && hasNextPage && !isFetchingNextPage) fetchNextPage();
-  }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
+    if (
+      isOpen &&
+      (keyword || "").trim().length >= 2 &&
+      movies.length === 0 &&
+      hasNextPage &&
+      !isFetching &&
+      !isFetchingNextPage
+    ) {
+      fetchNextPage();
+    }
+  }, [
+    fetchNextPage,
+    hasNextPage,
+    isFetching,
+    isFetchingNextPage,
+    isOpen,
+    keyword,
+    movies.length,
+  ]);
+
+  const handleResultsScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container || !hasNextPage || isFetchingNextPage) return;
+
+    const distanceToBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceToBottom < 160) fetchNextPage();
+  };
 
   const {
     ref: inputRef,
@@ -78,12 +116,13 @@ export default function SearchModal({ isOpen, onClose }: Props) {
     }
   }, [isOpen]);
 
-  useEffect(() => {
-    if (activeIndex >= 0) {
-      const activeEl = document.getElementById(`search-item-${activeIndex}`);
+  const moveActiveIndex = (nextIndex: number) => {
+    setActiveIndex(nextIndex);
+    requestAnimationFrame(() => {
+      const activeEl = document.getElementById(`search-item-${nextIndex}`);
       activeEl?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
-  }, [activeIndex]);
+    });
+  };
 
   // 4. Functions xử lý Event
   const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,6 +138,19 @@ export default function SearchModal({ isOpen, onClose }: Props) {
     document.getElementById("search-input")?.focus();
   };
 
+  const handleTopKeywordClick = (nextKeyword: string) => {
+    setValue("keyword", nextKeyword);
+    selectKeyword(nextKeyword);
+    setActiveIndex(-1);
+  };
+
+  const handleMovieSelect = (movie: Movie) => {
+    trackTopKeyword(movie.name);
+    NProgress.start();
+    router.push(getMovieHref(movie));
+    onClose();
+  };
+
   const onFormSubmit = (data: SearchFormValues) => {
     if (activeIndex === -1 && data.keyword && data.keyword.trim().length >= 2) {
       NProgress.start();
@@ -112,17 +164,17 @@ export default function SearchModal({ isOpen, onClose }: Props) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIndex((prev) => (prev < movies.length - 1 ? prev + 1 : prev));
+      moveActiveIndex(
+        activeIndex < movies.length - 1 ? activeIndex + 1 : activeIndex,
+      );
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActiveIndex((prev) => (prev > -1 ? prev - 1 : -1));
+      moveActiveIndex(activeIndex > -1 ? activeIndex - 1 : -1);
     } else if (e.key === "Enter" && activeIndex !== -1) {
       e.preventDefault();
       const selectedMovie = movies[activeIndex];
       if (!selectedMovie) return;
-      NProgress.start();
-      router.push(`/phim/${selectedMovie.slug}`);
-      onClose();
+      handleMovieSelect(selectedMovie);
     } else if (e.key === "Escape") {
       onClose();
     }
@@ -157,7 +209,7 @@ export default function SearchModal({ isOpen, onClose }: Props) {
               ref={inputRef}
               onChange={onInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Tìm kiếm phim..."
+              placeholder="Nhập từ khóa (tối thiểu 2 ký tự)"
               className="flex-1 bg-transparent text-white text-lg outline-none"
               autoComplete="off"
             />
@@ -188,12 +240,31 @@ export default function SearchModal({ isOpen, onClose }: Props) {
         {/* RESULTS AREA */}
         <div
           ref={scrollContainerRef}
+          onScroll={handleResultsScroll}
           className="flex-1 overflow-y-auto custom-scrollbar p-2"
         >
           {!keyword || keyword.length < 2 ? (
-            <div className="h-64 flex flex-col items-center justify-center text-zinc-500">
-              <MagnifyingGlassIcon className="w-12 h-12 mb-3 opacity-20" />
-              <p className="text-sm">Nhập từ khóa (tối thiểu 2 ký tự)</p>
+            <div className="h-64 flex flex-col items-center justify-center text-zinc-500 px-4">
+              {topKeywords.length > 0 ? (
+                <div className="w-full h-full space-y-2">
+                  <p className="text-sm font-bold tracking-widest text-zinc-600">
+                    Tìm kiếm hot
+                  </p>
+                  {topKeywords.slice(0, 5).map((topKeyword) => (
+                    <button
+                      key={topKeyword}
+                      type="button"
+                      onClick={() => handleTopKeywordClick(topKeyword)}
+                      className="flex w-full items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-left text-sm font-semibold text-zinc-300 hover:border-primary hover:text-white transition-colors"
+                    >
+                      <ArrowTrendingUpIcon className="h-4 w-4 shrink-0 text-emerald-400" />
+                      <span className="line-clamp-1">{topKeyword}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <MagnifyingGlassIcon className="w-12 h-12 mb-3 opacity-20" />
+              )}
             </div>
           ) : (
             <div className="space-y-1">
@@ -217,8 +288,8 @@ export default function SearchModal({ isOpen, onClose }: Props) {
                 <Link
                   key={movie._id}
                   id={`search-item-${index}`}
-                  href={`/phim/${movie.slug}`}
-                  onClick={onClose}
+                  href={getMovieHref(movie)}
+                  onClick={() => handleMovieSelect(movie)}
                   onMouseEnter={() => setActiveIndex(index)}
                   className={`flex gap-4 p-3 rounded-xl transition-all border border-transparent ${
                     activeIndex === index
@@ -226,43 +297,15 @@ export default function SearchModal({ isOpen, onClose }: Props) {
                       : ""
                   }`}
                 >
-                  <div className="relative w-14 sm:w-16 aspect-[2/3] shrink-0 rounded-lg overflow-hidden bg-zinc-900 shadow-md">
-                    <ImageCustom
-                      alt={movie.name}
-                      src={movie.thumb_url}
-                      widths={[128]}
-                      className="absolute inset-0 size-full object-cover"
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <h3
-                      className={`text-sm sm:text-base font-bold line-clamp-1 ${activeIndex === index ? "text-primary" : "text-zinc-200"}`}
-                    >
-                      {movie.name}
-                    </h3>
-                    <p
-                      className={`text-xs sm:text-sm line-clamp-1 ${activeIndex === index ? "text-indigo-100" : "text-zinc-500"}`}
-                    >
-                      {movie.origin_name} • {movie.year}
-                    </p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-indigo-500/10 text-indigo-400 text-[10px] rounded-lg font-bold">
-                        {movie.episode_current}
-                      </span>
-                      <span className="text-[10px] text-zinc-400">
-                        {movie.quality} • {movie.lang}
-                      </span>
-                    </div>
-                  </div>
-                  {activeIndex === index && (
-                    <div className="flex items-center pr-2">
-                      <span className="text-[10px] bg-white/20 px-2 py-1 rounded text-white uppercase font-black">
-                        Enter
-                      </span>
-                    </div>
-                  )}
+                  <SearchMovieResultCard movie={movie} active={activeIndex === index} showEnterHint={activeIndex === index} className="flex-1" />
                 </Link>
               ))}
+
+              {isFallbackSearching && (
+                <div className="px-3 py-2 text-xs font-semibold text-indigo-300">
+                  Đang tìm trong nguồn phim dự phòng...
+                </div>
+              )}
 
               {isFetchingNextPage && (
                 <div className="space-y-1">
@@ -272,9 +315,9 @@ export default function SearchModal({ isOpen, onClose }: Props) {
                 </div>
               )}
 
-              {hasNextPage && <div ref={loadMoreRef} className="h-4" />}
+              {hasNextPage && <div className="h-4" />}
 
-              {!isFetching && movies.length === 0 && totalItems === 0 && (
+              {showNotFound && (
                 <div className="py-20 flex flex-col items-center text-zinc-500">
                   <ExclamationCircleIcon className="w-12 h-12 mb-3 opacity-20" />
                   <p className="text-sm">Không tìm thấy phim phù hợp</p>

@@ -1,13 +1,11 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import NProgress from "nprogress";
 import { createPortal } from "react-dom";
 import videojs from "video.js";
 import Player from "video.js/dist/types/player";
 import Component from "video.js/dist/types/component";
 import { User } from "@supabase/supabase-js";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useVideoPlayer } from "@/hooks/useVideoPlayer";
 import { useSubscriptionAction } from "@/hooks/useSubscription";
@@ -24,6 +22,8 @@ interface Props {
   initialTime?: number;
   onProgress: (currentTime: number, duration: number) => void;
   onAutoNext: () => void;
+  onPrevEpisode?: () => void;
+  onNextEpisode?: () => void;
   onPause?: () => void;
   isWatchParty?: boolean;
   canControl?: boolean;
@@ -74,7 +74,6 @@ if (!videojs.getComponent("NextEpisodeButton")) {
 // --------------------------------------------------------------------------
 function VideoPlayer(props: Props) {
   const videoRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
 
   // STATE GIAO DIỆN & CẤU HÌNH
   const [isLightsOff, setIsLightsOff] = useState(false);
@@ -324,10 +323,7 @@ function VideoPlayer(props: Props) {
                 props.onChangeEpisode(props.prevEpisodeSlug);
               }
             } else {
-              NProgress.start();
-              router.push(`?tap=${props.prevEpisodeSlug}#video`, {
-                scroll: false,
-              });
+              props.onPrevEpisode?.();
             }
           }}
           onNext={() => {
@@ -337,10 +333,7 @@ function VideoPlayer(props: Props) {
                 props.onChangeEpisode(props.nextEpisodeSlug);
               }
             } else {
-              NProgress.start();
-              router.push(`?tap=${props.nextEpisodeSlug}#video`, {
-                scroll: false,
-              });
+              props.onNextEpisode?.();
             }
           }}
           prevEnabled={

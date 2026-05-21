@@ -18,12 +18,12 @@ interface HistorySectionProps {
 }
 
 export default function HistorySection({ title, type }: HistorySectionProps) {
-  const { historyList, isLoading, authLoading } = useHistoryList({
+  const { historyList } = useHistoryList({
     limit: 16,
     filter: type,
   });
 
-  if (authLoading || isLoading || !historyList?.length) return null;
+  if (historyList?.length === 0) return null;
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-700 mb-10">

@@ -74,6 +74,8 @@ const nextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "wsrv.nl" },
       { protocol: "https", hostname: "img.ophim.live" },
+      { protocol: "https", hostname: "phimimg.com" },
+      { protocol: "https", hostname: "phim.nguonc.com" },
     ],
   },
   compiler: {

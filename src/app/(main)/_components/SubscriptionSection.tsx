@@ -14,16 +14,12 @@ import { formatEpisodeName } from "@/lib/utils";
 import { useSubscriptionList } from "@/hooks/useSubscription";
 
 export default function SubscriptionSection() {
-  const { subscriptions, isLoading } = useSubscriptionList({
+  const { subscriptions } = useSubscriptionList({
     limit: 12,
     filter: "all",
   });
 
-  if (isLoading) {
-    return <div className="h-40 animate-pulse bg-zinc-900 rounded-xl" />;
-  }
-
-  if (!subscriptions || subscriptions.length === 0) return null;
+  if (subscriptions?.length === 0) return null;
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-700 mb-10">

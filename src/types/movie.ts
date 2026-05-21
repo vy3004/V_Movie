@@ -1,5 +1,7 @@
-import { SeoOnPage, BreadCrumb } from "./seo";
+﻿import { SeoOnPage, BreadCrumb } from "./seo";
 import { Pagination, CateCtr } from "./common";
+
+export type MovieSource = "ophim" | "phimapi";
 
 export interface ServerData {
   name: string;
@@ -7,11 +9,13 @@ export interface ServerData {
   filename: string;
   link_embed: string;
   link_m3u8: string;
+  source?: MovieSource;
 }
 
 export interface Episode {
   server_name: string;
   server_data: ServerData[];
+  source?: MovieSource;
 }
 
 export interface Movie {
@@ -50,6 +54,10 @@ export interface Movie {
   category: CateCtr[];
   country: CateCtr[];
   episodes: Episode[];
+  source?: MovieSource;
+  sources?: MovieSource[];
+  sourceKey?: string;
+  sourceSlug?: string;
 }
 
 export interface PageMoviesData {
@@ -85,10 +93,16 @@ export interface MovieQueryParams {
   category?: string;
   country?: string;
   year?: string | number;
+  type?: string;
+  status?: string;
+  quality?: string;
+  lang?: string;
+  source?: string;
 }
 
 export interface MovieRecommendation {
   movie_slug: string;
+  href?: string;
   name: string;
   thumb_url: string;
   episode_current: string;

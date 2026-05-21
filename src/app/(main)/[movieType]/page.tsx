@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 
 // Services & Types
 import { MovieService } from "@/services/movie.service";
+import { getMovieHref } from "@/services/movie-sources/utils";
 import { MovieQueryParams } from "@/types";
 
 // Components
@@ -50,6 +51,11 @@ const getMoviesData = cache(
       category: searchParams.category,
       country: searchParams.country,
       year: searchParams.year,
+      type: searchParams.type,
+      status: searchParams.status,
+      quality: searchParams.quality,
+      lang: searchParams.lang,
+      source: searchParams.source,
       sort_field: searchParams.sort_field,
     };
 
@@ -122,6 +128,7 @@ export default async function MoviesPage({ params, searchParams }: PageProps) {
             <MovieCard
               key={movie._id}
               movie_slug={movie.slug}
+              href={getMovieHref(movie)}
               name={movie.name}
               thumb_url={movie.thumb_url}
               episode_current={movie.episode_current}

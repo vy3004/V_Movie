@@ -21,7 +21,7 @@ import { getLocalHistory, getLocalSubscriptions } from "@/lib/utils";
 import { createSupabaseClient } from "@/lib/supabase/client";
 
 // Chỉ lọc bỏ các nhãn thể loại nhạy cảm khỏi Menu/UI
-const HIDDEN_GENRE_SLUGS = ["phim-18", "nguoi-lon", "xxx", "phim-sex"];
+const HIDDEN_GENRE_SLUGS = ["nguoi-lon", "xxx", "phim-sex"];
 
 interface BaseDataContextType {
   user: UserProfile | null | undefined;

@@ -13,12 +13,11 @@ export const apiConfig = {
   MOVIES_URL: `${BASE_MOVIE_API}/danh-sach/`,
   MOVIE_URL: `${BASE_MOVIE_API}/phim/`,
   CATEGORIES_URL: `${BASE_MOVIE_API}/the-loai/`,
-  COUNTRIES_URL: `${BASE_MOVIE_API}/quoc-gia/`
+  COUNTRIES_URL: `${BASE_MOVIE_API}/quoc-gia/`,
 };
 
 export const typesMovie = {
   NEW: { name: "Phim mới", slug: "phim-moi-cap-nhat" },
-  CHIEU_RAP: { name: "Phim chiếu rạp", slug: "phim-chieu-rap" },
   SINGLE: { name: "Phim lẻ", slug: "phim-le" },
   SERIES: { name: "Phim bộ", slug: "phim-bo" },
   TV_SHOWS: { name: "TV Shows", slug: "tv-shows" },

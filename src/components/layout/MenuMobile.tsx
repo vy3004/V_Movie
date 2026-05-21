@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import {
   Bars3BottomLeftIcon,
   ChevronRightIcon,
@@ -38,12 +38,12 @@ const MenuMobile = () => {
     ...Object.values(typesMovie).slice(0, 5),
     {
       name: "Thể loại",
-      slug: `${typesMovie.NEW.slug}/?category=`,
+      slug: `${typesMovie.NEW.slug}?category=`,
       subItems: categories,
     },
     {
       name: "Quốc gia",
-      slug: `${typesMovie.NEW.slug}/?country=`,
+      slug: `${typesMovie.NEW.slug}?country=`,
       subItems: countries,
     },
   ];

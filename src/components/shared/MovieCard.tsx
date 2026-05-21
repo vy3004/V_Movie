@@ -6,6 +6,7 @@ import { MovieRecommendation } from "@/types";
 
 export default function MovieCard({
   movie_slug,
+  href,
   name,
   thumb_url,
   episode_current,
@@ -13,7 +14,7 @@ export default function MovieCard({
 }: MovieRecommendation) {
   return (
     <Link
-      href={`/phim/${movie_slug}`}
+      href={href || `/phim/${movie_slug}`}
       prefetch={false}
       className="space-y-2 relative group flex flex-col h-full"
     >

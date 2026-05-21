@@ -4,7 +4,6 @@ import MovieSectionSkeleton from "@/components/shared/MovieSectionSkeleton";
 import { typesMovie } from "@/lib/configs";
 
 const SECTIONS = [
-  { type: "CHIEU_RAP", config: typesMovie.CHIEU_RAP },
   { type: "SINGLE", config: typesMovie.SINGLE },
   { type: "SERIES", config: typesMovie.SERIES },
   { type: "TV_SHOWS", config: typesMovie.TV_SHOWS },
