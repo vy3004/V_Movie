@@ -39,7 +39,7 @@ const MenuMobile = () => {
     {
       name: "Thể loại",
       slug: `${typesMovie.NEW.slug}?category=`,
-      subItems: categories,
+      subItems: (categories || []).filter((category) => category.slug !== "phim-18"),
     },
     {
       name: "Quốc gia",

@@ -1,17 +1,17 @@
 import dynamic from "next/dynamic";
 import { Metadata } from "next";
 import Container from "@/components/ui/Container";
+import MovieSection from "@/components/shared/MovieSection";
 import HeroCarousel from "@/app/(main)/_components/HeroCarousel";
 import TopMovieSection from "@/app/(main)/_components/TopMovieSection";
-import RecommendSection from "@/app/(main)/_components/RecommendSection";
+import WatchPartyBanner from "@/app/(main)/_components/WatchPartyBanner";
+import Banner from "@/app/(main)/_components/Banner";
 import { HOME_SECTIONS, IndexedMovieService } from "@/services/indexed-movie.service";
 import { shuffleMovies } from "@/lib/utils";
 
-const MovieSection = dynamic(() => import("@/components/shared/MovieSection"), { ssr: false });
+const RecommendSection = dynamic(() => import("@/app/(main)/_components/RecommendSection"), { ssr: false });
 const HistorySection = dynamic(() => import("@/app/(main)/_components/HistorySection"), { ssr: false });
 const SubscriptionSection = dynamic(() => import("@/app/(main)/_components/SubscriptionSection"), { ssr: false });
-const WatchPartyBanner = dynamic(() => import("@/app/(main)/_components/WatchPartyBanner"), { ssr: false });
-const Banner = dynamic(() => import("@/app/(main)/_components/Banner"), { ssr: false });
 
 export const revalidate = 21600;
 

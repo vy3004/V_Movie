@@ -21,7 +21,7 @@ const STATUS_OPTIONS = [
   { value: "trailer", label: "Trailer" },
 ];
 
-const QUALITY_OPTIONS = ["CAM", "HD", "FHD", "FULLHD", "4K"].map((value) => ({
+const QUALITY_OPTIONS = ["HD", "FHD", "FULLHD"].map((value) => ({
   value,
   label: value,
 }));
@@ -30,11 +30,6 @@ const LANG_OPTIONS = [
   { value: "Vietsub", label: "Vietsub" },
   { value: "Thuyết Minh", label: "Thuyết minh" },
   { value: "Lồng Tiếng", label: "Lồng tiếng" },
-];
-
-const SOURCE_OPTIONS = [
-  { value: "ophim", label: "OPhim" },
-  { value: "phimapi", label: "PhimAPI" },
 ];
 
 const SORT_OPTIONS = [
@@ -59,7 +54,6 @@ type FilterKey =
   | "status"
   | "quality"
   | "lang"
-  | "source"
   | "sort_field";
 
 const withPlaceholder = (
@@ -88,7 +82,6 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
     status: searchParams.get("status") || "",
     quality: searchParams.get("quality") || "",
     lang: searchParams.get("lang") || "",
-    source: searchParams.get("source") || "",
     sort_field: searchParams.get("sort_field") || "year_latest",
   });
 
@@ -105,7 +98,6 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
       status: new Map(STATUS_OPTIONS.map((item) => [item.value, item.label])),
       quality: new Map(QUALITY_OPTIONS.map((item) => [item.value, item.label])),
       lang: new Map(LANG_OPTIONS.map((item) => [item.value, item.label])),
-      source: new Map(SOURCE_OPTIONS.map((item) => [item.value, item.label])),
       sort_field: new Map(SORT_OPTIONS.map((item) => [item.value, item.label])),
       year: new Map(years.map((item) => [item.value, item.label])),
     };
@@ -128,7 +120,6 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
     if (nextFilters.status) query.set("status", nextFilters.status);
     if (nextFilters.quality) query.set("quality", nextFilters.quality);
     if (nextFilters.lang) query.set("lang", nextFilters.lang);
-    if (nextFilters.source) query.set("source", nextFilters.source);
     if (nextFilters.sort_field && nextFilters.sort_field !== "year_latest") {
       query.set("sort_field", nextFilters.sort_field);
     }
@@ -159,7 +150,6 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
       status: "",
       quality: "",
       lang: "",
-      source: "",
       sort_field: "year_latest",
     };
     setFilters(nextFilters);
@@ -205,14 +195,14 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
 
       {showFilters && (
         <form
-          className="relative overflow-hidden rounded-[1.75rem] border border-zinc-800 bg-zinc-950/85 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-5"
+          className="relative z-20 overflow-visible rounded-[1.75rem] border border-zinc-800 bg-zinc-950/85 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-5"
           onSubmit={(event) => {
             event.preventDefault();
             pushFilters();
           }}
         >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(220,38,38,0.16),transparent_28%),radial-gradient(circle_at_100%_0%,rgba(250,204,21,0.08),transparent_26%)]" />
-          <div className="relative grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="pointer-events-none absolute inset-0 rounded-[1.75rem] bg-[radial-gradient(circle_at_0%_0%,rgba(220,38,38,0.16),transparent_28%),radial-gradient(circle_at_100%_0%,rgba(250,204,21,0.08),transparent_26%)]" />
+          <div className="relative z-10 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SelectDropdown
               label="Loại phim"
               value={filters.movieType}
@@ -232,10 +222,12 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
               value={filters.category}
               options={withPlaceholder(
                 "Tất cả thể loại",
-                (categories || []).map((category) => ({
-                  value: category.slug,
-                  label: category.name,
-                })),
+                (categories || [])
+                  .filter((category) => category.slug !== "phim-18")
+                  .map((category) => ({
+                    value: category.slug,
+                    label: category.name,
+                  })),
               )}
               open={openFilter === "category"}
               onToggle={() => setOpenFilter(openFilter === "category" ? null : "category")}
@@ -286,14 +278,6 @@ const MovieFilter = ({ breadCrumb }: MovieFilterProps) => {
               open={openFilter === "lang"}
               onToggle={() => setOpenFilter(openFilter === "lang" ? null : "lang")}
               onChange={(value) => setFilterValue("lang", value)}
-            />
-            <SelectDropdown
-              label="Nguồn"
-              value={filters.source}
-              options={withPlaceholder("Tất cả nguồn", SOURCE_OPTIONS)}
-              open={openFilter === "source"}
-              onToggle={() => setOpenFilter(openFilter === "source" ? null : "source")}
-              onChange={(value) => setFilterValue("source", value)}
             />
             <div className="lg:col-span-2">
               <SelectDropdown

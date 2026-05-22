@@ -11,6 +11,12 @@ const getHistoryKey = (userId?: string, deviceId?: string) => {
   return null;
 };
 
+function parseHistoryCache(cached: string | HistoryItem[]): HistoryItem[] {
+  const list = typeof cached === "string" ? JSON.parse(cached) : cached;
+  if (!Array.isArray(list)) throw new Error("Cache không phải array");
+  return list;
+}
+
 export const HistoryService = {
   /**
    * 1. HỦY CACHE TRANG ĐẦU (Dùng khi Xóa hoặc Sync số lượng lớn)
@@ -54,13 +60,7 @@ export const HistoryService = {
       let list: HistoryItem[] = [];
 
       try {
-        // Parse JSON string
-        list = JSON.parse(cachedData) as HistoryItem[];
-
-        // Validate là array
-        if (!Array.isArray(list)) {
-          throw new Error("Cache không phải array");
-        }
+        list = parseHistoryCache(cachedData);
       } catch {
         // Nếu parse lỗi, dọn dẹp cache
         console.warn(
@@ -159,15 +159,10 @@ export const HistoryService = {
 
     // A. Thử lấy từ Cache trước
     if (cacheKey && redis) {
-      const cached = await redis.get<string>(cacheKey);
+      const cached = await redis.get<string | HistoryItem[]>(cacheKey);
       if (cached) {
         try {
-          // Luôn parse từ string
-          const parsed = JSON.parse(cached) as HistoryItem[];
-
-          if (!Array.isArray(parsed)) {
-            throw new Error("Cache không phải array");
-          }
+          const parsed = parseHistoryCache(cached);
 
           return {
             data: parsed.slice(0, limit),

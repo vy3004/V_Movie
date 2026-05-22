@@ -37,16 +37,36 @@ type IndexedMovieSourceRow = {
   sources: SourceRef[] | null;
 };
 
-const getIndexedMovieRow = cache(async (slug: string) => {
+const getIndexedMovieRow = cache(async (slug: string, source: MovieSource | null) => {
   try {
-    const { data } = await supabaseAdmin
+    const columns = "id, slug, primary_source, primary_source_slug, sources";
+    const { data, error } = await supabaseAdmin
       .from("movies")
-      .select("id, slug, primary_source, primary_source_slug, sources")
-      .eq("slug", slug)
+      .select(columns)
       .eq("is_blocked", false)
+      .or(`slug.eq.${slug},primary_source_slug.eq.${slug}`)
       .maybeSingle();
 
-    return data as IndexedMovieSourceRow | null;
+    if (error) throw error;
+    if (data) return data as IndexedMovieSourceRow;
+    if (!source) return null;
+
+    const { data: sourceRows, error: sourceError } = await supabaseAdmin
+      .from("movies")
+      .select(columns)
+      .eq("is_blocked", false)
+      .filter("sources", "cs", JSON.stringify([{ slug }]));
+
+    if (sourceError) throw sourceError;
+    return (
+      (sourceRows as IndexedMovieSourceRow[] | null)?.find((row) =>
+        row.sources?.some(
+          (item) =>
+            item.slug === slug &&
+            normalizeMovieSource(item.source || null) === source,
+        ),
+      ) || null
+    );
   } catch (error) {
     console.error(`[MoviePage] Failed to load indexed row for ${slug}`, error);
     return null;
@@ -80,7 +100,10 @@ function getSourceSlug(
     return row.primary_source_slug;
   }
 
-  return row?.sources?.find((item) => item.source === source)?.slug || slug;
+  return (
+    row?.sources?.find((item) => normalizeMovieSource(item.source || null) === source)
+      ?.slug || slug
+  );
 }
 
 function hasUsableMovieDetail(
@@ -106,28 +129,31 @@ function hasUsableMovieDetail(
   );
 }
 
-const getMovieDetail = cache(
-  async (
-    slug: string,
-    requestedSource: MovieSource | null,
-    row: IndexedMovieSourceRow | null,
-  ) => {
-    const sources = getSourcesByPriority(requestedSource, row);
+async function loadMovieDetailFromRow(
+  slug: string,
+  requestedSource: MovieSource | null,
+  row: IndexedMovieSourceRow,
+) {
+  const sources = getSourcesByPriority(requestedSource, row);
 
-    for (const source of sources) {
-      const sourceSlug = getSourceSlug(slug, source, row);
-      try {
-        const data = await MovieService.getDetail(sourceSlug, source);
-        if (hasUsableMovieDetail(data?.item)) return data;
-      } catch (error) {
-        console.error(
-          `[MoviePage] Failed to load ${source}:${sourceSlug}`,
-          error,
-        );
-      }
+  for (const source of sources) {
+    const sourceSlug = getSourceSlug(slug, source, row);
+    try {
+      const data = await MovieService.getDetail(sourceSlug, source);
+      if (hasUsableMovieDetail(data?.item)) return data;
+    } catch (error) {
+      console.error(`[MoviePage] Failed to load ${source}:${sourceSlug}`, error);
     }
+  }
 
-    return null;
+  return null;
+}
+
+const getMovieDetailForVisibleSlug = cache(
+  async (slug: string, requestedSource: MovieSource | null) => {
+    const indexedMovie = await getIndexedMovieRow(slug, requestedSource);
+    if (!indexedMovie) return null;
+    return loadMovieDetailFromRow(slug, requestedSource, indexedMovie);
   },
 );
 
@@ -141,8 +167,7 @@ export async function generateMetadata({
   const requestedSource = searchParams.source
     ? normalizeMovieSource(searchParams.source)
     : null;
-  const indexedMovie = await getIndexedMovieRow(params.slug);
-  const data = await getMovieDetail(params.slug, requestedSource, indexedMovie);
+  const data = await getMovieDetailForVisibleSlug(params.slug, requestedSource);
 
   if (!data || !hasUsableMovieDetail(data.item)) {
     return { title: "Không tìm thấy phim" };
@@ -182,11 +207,15 @@ export default async function MoviePage({ params, searchParams }: PageProps) {
   const supabase = await createSupabaseServer();
   const [{ data: authData }, indexedMovie] = await Promise.all([
     supabase.auth.getUser(),
-    getIndexedMovieRow(slug),
+    getIndexedMovieRow(slug, requestedSource),
   ]);
   const user = authData?.user;
 
-  const data = await getMovieDetail(slug, requestedSource, indexedMovie);
+  if (!indexedMovie) {
+    return <MovieNotFoundState />;
+  }
+
+  const data = await getMovieDetailForVisibleSlug(slug, requestedSource);
   const movie = data?.item;
 
   if (!hasUsableMovieDetail(movie)) {
@@ -257,7 +286,7 @@ export default async function MoviePage({ params, searchParams }: PageProps) {
 
       <Suspense fallback={null}>
         <SimilarMovies
-          currentSlug={validMovie.slug}
+          currentSlug={indexedMovie.slug}
           typeSlug={validMovie.type}
           genres={validMovie.category}
           countries={validMovie.country}

@@ -55,7 +55,6 @@ const getMoviesData = cache(
       status: searchParams.status,
       quality: searchParams.quality,
       lang: searchParams.lang,
-      source: searchParams.source,
       sort_field: searchParams.sort_field,
     };
 

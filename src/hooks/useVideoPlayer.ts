@@ -412,18 +412,10 @@ export function useVideoPlayer({
       }
 
       player.on("fullscreenchange", () => {
-        if (player.isFullscreen()) {
-          try {
-            if (
-              window.screen &&
-              window.screen.orientation &&
-              window.screen.orientation.unlock
-            ) {
-              window.screen.orientation.unlock();
-            }
-          } catch (error) {
-            console.warn("Không thể mở khóa xoay màn hình thiết bị:", error);
-          }
+        try {
+          window.screen?.orientation?.unlock?.();
+        } catch (error) {
+          console.warn("Không thể mở khóa xoay màn hình thiết bị:", error);
         }
       });
 

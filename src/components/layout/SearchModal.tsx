@@ -31,6 +31,7 @@ export default function SearchModal({ isOpen, onClose }: Props) {
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(-1);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const lastAutoFetchSizeRef = useRef(-1);
 
   const {
     register,
@@ -46,7 +47,6 @@ export default function SearchModal({ isOpen, onClose }: Props) {
 
   const {
     handleSearchChange: hookSearchChange,
-    setQuery,
     movies,
     totalItems,
     isFetching,
@@ -59,6 +59,7 @@ export default function SearchModal({ isOpen, onClose }: Props) {
     isSearchComplete,
     selectKeyword,
     trackTopKeyword,
+    clearSearch: clearSearchState,
   } = useMovieSearch(10);
 
   const showNotFound =
@@ -68,6 +69,10 @@ export default function SearchModal({ isOpen, onClose }: Props) {
     !isFetchingNextPage &&
     isSearchComplete &&
     searchPhase === "done";
+
+  useEffect(() => {
+    lastAutoFetchSizeRef.current = -1;
+  }, [keyword]);
 
   useEffect(() => {
     if (
@@ -96,7 +101,11 @@ export default function SearchModal({ isOpen, onClose }: Props) {
 
     const distanceToBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
-    if (distanceToBottom < 160) fetchNextPage();
+    if (distanceToBottom < 160) {
+      if (lastAutoFetchSizeRef.current === movies.length) return;
+      lastAutoFetchSizeRef.current = movies.length;
+      fetchNextPage();
+    }
   };
 
   const {
@@ -131,11 +140,18 @@ export default function SearchModal({ isOpen, onClose }: Props) {
     setActiveIndex(-1);
   };
 
-  const clearSearch = () => {
+  const clearSearchInput = () => {
     setValue("keyword", "");
-    setQuery("");
+    clearSearchState();
     setActiveIndex(-1);
     document.getElementById("search-input")?.focus();
+  };
+
+  const handleClose = () => {
+    setValue("keyword", "");
+    clearSearchState();
+    setActiveIndex(-1);
+    onClose();
   };
 
   const handleTopKeywordClick = (nextKeyword: string) => {
@@ -148,7 +164,7 @@ export default function SearchModal({ isOpen, onClose }: Props) {
     trackTopKeyword(movie.name);
     NProgress.start();
     router.push(getMovieHref(movie));
-    onClose();
+    handleClose();
   };
 
   const onFormSubmit = (data: SearchFormValues) => {
@@ -157,7 +173,7 @@ export default function SearchModal({ isOpen, onClose }: Props) {
       router.push(
         `/tim-kiem?keyword=${encodeURIComponent(data.keyword.trim())}`,
       );
-      onClose();
+      handleClose();
     }
   };
 
@@ -176,7 +192,7 @@ export default function SearchModal({ isOpen, onClose }: Props) {
       if (!selectedMovie) return;
       handleMovieSelect(selectedMovie);
     } else if (e.key === "Escape") {
-      onClose();
+      handleClose();
     }
   };
 
@@ -190,7 +206,7 @@ export default function SearchModal({ isOpen, onClose }: Props) {
     >
       <div
         className="absolute inset-0 bg-black/80 backdrop-blur-md"
-        onClick={onClose}
+        onClick={handleClose}
         aria-hidden="true"
       />
 
@@ -219,7 +235,7 @@ export default function SearchModal({ isOpen, onClose }: Props) {
               ) : keyword ? (
                 <button
                   type="button"
-                  onClick={clearSearch}
+                  onClick={clearSearchInput}
                   className="p-1 hover:bg-zinc-800 rounded-full"
                 >
                   <XMarkIcon className="w-5 h-5 text-zinc-400" />
@@ -272,7 +288,7 @@ export default function SearchModal({ isOpen, onClose }: Props) {
                 <div className="px-3 py-2 text-[11px] font-bold text-zinc-500 uppercase tracking-widest flex justify-between">
                   <span>Kết quả tìm kiếm</span>
                   <span className="text-indigo-400">
-                    Tìm thấy {totalItems.toLocaleString()} phim
+                    Tìm thấy {totalItems.toLocaleString()}{hasNextPage ? "+" : ""} phim
                   </span>
                 </div>
               )}
@@ -286,7 +302,7 @@ export default function SearchModal({ isOpen, onClose }: Props) {
 
               {movies.map((movie: Movie, index: number) => (
                 <Link
-                  key={movie._id}
+                  key={`${movie.source || "db"}:${movie.sourceSlug || movie.slug || movie._id}`}
                   id={`search-item-${index}`}
                   href={getMovieHref(movie)}
                   onClick={() => handleMovieSelect(movie)}

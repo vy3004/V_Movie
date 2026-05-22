@@ -18,8 +18,7 @@ import {
 
 const HOME_SELECT =
   "id, slug, name, origin_name, year, type, thumb_url, poster_url, episode_current, episode_number, episode_state, season, quality, lang, category_slugs, country_slugs, vote_average, vote_count, popularity_score, primary_source, primary_source_slug, last_synced_at";
-const HOME_CACHE_KEY = "homepage:v1";
-const HOME_CACHE_TTL = 60 * 60 * 24;
+const MODAL_SEARCH_CACHE_TTL = 60 * 10;
 
 export type IndexedHomeMovie = Pick<
   IndexedMovie,
@@ -56,24 +55,6 @@ export type IndexedHomeResult = {
   items: IndexedHomeMovie[];
   movies: Movie[];
   durationMs: number;
-};
-
-export type IndexedHomeSection = {
-  title: string;
-  slug: string;
-  result: IndexedHomeResult;
-};
-
-export type IndexedHomePayload = {
-  latest: IndexedHomeResult;
-  sections: IndexedHomeSection[];
-  cachedAt: string;
-};
-
-export type IndexedHomeCachedPayload = IndexedHomePayload & {
-  cacheStatus: "hit" | "miss" | "disabled";
-  cacheReadMs: number;
-  cacheBuildMs: number;
 };
 
 function slugItems(slugs: string[]): CateCtr[] {
@@ -131,6 +112,20 @@ function clampLimit(value: number): number {
   return Number.isFinite(value)
     ? Math.max(1, Math.min(48, Math.floor(value)))
     : 24;
+}
+
+function getModalSearchCacheKey(
+  keyword: string,
+  page: number,
+  limit: number,
+  includeSearchText: boolean,
+) {
+  const normalizedKeyword = keyword
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  const phase = includeSearchText ? "text" : "name";
+  return `search_modal:v1:${phase}:${limit}:${page}:${encodeURIComponent(normalizedKeyword)}`;
 }
 
 function emptySearchResult(
@@ -272,6 +267,7 @@ export const IndexedMovieService = {
       .select(HOME_SELECT)
       .eq("is_blocked", false)
       .neq("episode_state", "trailer")
+      .order("year", { ascending: false, nullsFirst: false })
       .order("last_synced_at", { ascending: false, nullsFirst: false })
       .limit(limit);
 
@@ -282,51 +278,6 @@ export const IndexedMovieService = {
     return toResult((data || []) as IndexedHomeMovie[], elapsed(start));
   },
 
-  async buildHomePayload(): Promise<IndexedHomePayload> {
-    const latest = await this.getTopRatedByYear(new Date().getFullYear(), 16);
-    const sections = await Promise.all(
-      HOME_SECTIONS.map(async (section) => ({
-        ...section,
-        result: await this.getSection(section.slug, 12),
-      })),
-    );
-
-    return { latest, sections, cachedAt: new Date().toISOString() };
-  },
-
-  async getCachedHomePayload(): Promise<IndexedHomeCachedPayload> {
-    if (!redis) {
-      const buildStart = performance.now();
-      const payload = await this.buildHomePayload();
-      return {
-        ...payload,
-        cacheStatus: "disabled",
-        cacheReadMs: 0,
-        cacheBuildMs: elapsed(buildStart),
-      };
-    }
-
-    const readStart = performance.now();
-    const cached = await redis.get<IndexedHomePayload>(HOME_CACHE_KEY);
-    const cacheReadMs = elapsed(readStart);
-    if (cached)
-      return { ...cached, cacheStatus: "hit", cacheReadMs, cacheBuildMs: 0 };
-
-    const buildStart = performance.now();
-    const payload = await this.rebuildHomeCache();
-    return {
-      ...payload,
-      cacheStatus: "miss",
-      cacheReadMs,
-      cacheBuildMs: elapsed(buildStart),
-    };
-  },
-
-  async rebuildHomeCache(): Promise<IndexedHomePayload> {
-    const payload = await this.buildHomePayload();
-    if (redis) await redis.set(HOME_CACHE_KEY, payload, { ex: HOME_CACHE_TTL });
-    return payload;
-  },
 
   async listIndexedMovies(params: MovieQueryParams): Promise<PageMoviesData> {
     const slug = params.slug || "phim-moi-cap-nhat";
@@ -449,15 +400,61 @@ export const IndexedMovieService = {
     limit = 10,
     cursor?: ModalSearchCursor | null,
   ): Promise<ModalSearchResponse> {
+    const trimmedKeyword = keyword.trim();
     const safeLimit = clampLimit(limit);
+    if (trimmedKeyword.length < 2) {
+      return {
+        ...emptySearchResult(trimmedKeyword, 1, safeLimit),
+        nextCursor: null,
+        searchPhase: "done",
+        isFallbackSearching: false,
+      };
+    }
+
     const dbPage = cursor?.dbPage || 1;
-    const result = await this.searchIndexedMovies(keyword, dbPage, safeLimit);
-    const totalItems = result.params.pagination.totalItems;
-    const returned = (cursor?.returned || 0) + result.items.length;
-    const seenKeys = [
-      ...(cursor?.seenKeys || []),
-      ...result.items.map(getMovieDedupeKey),
-    ];
+    const includeSearchText = dbPage < 0;
+    const searchPage = Math.abs(dbPage);
+    const cacheKey =
+      trimmedKeyword.length >= 3
+        ? getModalSearchCacheKey(
+            trimmedKeyword,
+            searchPage,
+            safeLimit,
+            includeSearchText,
+          )
+        : null;
+    let dbRows: IndexedSearchMovie[] | null = null;
+
+    if (cacheKey && redis) {
+      dbRows = await redis.get<IndexedSearchMovie[]>(cacheKey);
+    }
+
+    if (!dbRows) {
+      const { data, error } = await supabaseAdmin.rpc("search_movies_modal", {
+        search_keyword: trimmedKeyword,
+        page_number: searchPage,
+        page_size: safeLimit,
+        include_search_text: includeSearchText,
+      });
+
+      if (error) throw error;
+      dbRows = (data || []) as IndexedSearchMovie[];
+
+      if (cacheKey && redis && dbRows.length > 0) {
+        await redis.set(cacheKey, dbRows, { ex: MODAL_SEARCH_CACHE_TTL });
+      }
+    }
+
+    const existingSeenKeys = cursor?.seenKeys || [];
+    const rows = dbRows.filter((row) => {
+      const key = getMovieDedupeKey(indexedMovieToMovie(row));
+      return !existingSeenKeys.includes(key);
+    });
+    const hasMore = rows.length > safeLimit;
+    const pageItems = rows.slice(0, safeLimit).map(indexedMovieToMovie);
+    const returned = (cursor?.returned || 0) + pageItems.length;
+    const seenKeys = [...existingSeenKeys, ...pageItems.map(getMovieDedupeKey)];
+    const result = emptySearchResult(trimmedKeyword, searchPage, safeLimit);
     const fallbackCursor: ModalSearchCursor = {
       pages: { ophim: 1, phimapi: 1 },
       exhausted: { ophim: false, phimapi: false },
@@ -466,33 +463,34 @@ export const IndexedMovieService = {
       phase: "fallback",
     };
 
-    if (keyword.trim().length < 2) {
-      return {
-        ...result,
-        nextCursor: null,
-        searchPhase: "done",
-        isFallbackSearching: false,
-      };
-    }
-
-    if (dbPage * safeLimit < totalItems) {
-      return {
-        ...result,
-        nextCursor: {
+    const nextDbPage = includeSearchText ? -(searchPage + 1) : searchPage + 1;
+    const nextCursor = hasMore
+      ? {
           ...fallbackCursor,
-          phase: "db",
-          dbPage: dbPage + 1,
-        },
-        searchPhase: "db",
-        isFallbackSearching: false,
-      };
-    }
+          phase: "db" as const,
+          dbPage: nextDbPage,
+        }
+      : includeSearchText
+        ? fallbackCursor
+        : {
+            ...fallbackCursor,
+            phase: "db" as const,
+            dbPage: -1,
+          };
 
     return {
       ...result,
-      nextCursor: fallbackCursor,
-      searchPhase: "db",
-      isFallbackSearching: false,
+      items: pageItems,
+      nextCursor,
+      searchPhase: includeSearchText ? "fallback" : "db",
+      isFallbackSearching: includeSearchText,
+      params: {
+        ...result.params,
+        pagination: {
+          ...result.params.pagination,
+          totalItems: hasMore ? returned + 1 : returned,
+        },
+      },
     };
   },
 

@@ -7,7 +7,7 @@ import React, {
   useMemo,
   useRef,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CateCtr,
@@ -19,6 +19,7 @@ import {
 } from "@/types";
 import { getLocalHistory, getLocalSubscriptions } from "@/lib/utils";
 import { createSupabaseClient } from "@/lib/supabase/client";
+import { shouldSkipAuthRefresh } from "@/lib/public-routes";
 
 // Chỉ lọc bỏ các nhãn thể loại nhạy cảm khỏi Menu/UI
 const HIDDEN_GENRE_SLUGS = ["nguoi-lon", "xxx", "phim-sex"];
@@ -47,6 +48,7 @@ export default function BaseDataContextProvider({
   const supabase = createSupabaseClient();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const pathname = usePathname();
   const lastEventTime = useRef<number>(0);
 
   // 1. Auth User
@@ -159,6 +161,11 @@ export default function BaseDataContextProvider({
     );
   }, [user, queryClient]);
 
+  const shouldRefreshOnAuthChange = useMemo(
+    () => !shouldSkipAuthRefresh(pathname),
+    [pathname],
+  );
+
   // 5. Auth Listener
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
@@ -172,7 +179,7 @@ export default function BaseDataContextProvider({
         if (event === "SIGNED_IN") {
           queryClient.setQueryData(["auth-user"], currentUser);
 
-          if (!previousUser) router.refresh();
+          if (!previousUser && shouldRefreshOnAuthChange) router.refresh();
         }
 
         if (event === "SIGNED_OUT") {
@@ -184,7 +191,7 @@ export default function BaseDataContextProvider({
           queryClient.removeQueries({ queryKey: ["subscriptions-list"] });
           queryClient.removeQueries({ queryKey: ["subscriptions-stats"] });
 
-          if (previousUser) router.refresh();
+          if (previousUser && shouldRefreshOnAuthChange) router.refresh();
         }
         if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
           queryClient.setQueryData(["auth-user"], currentUser);
@@ -193,7 +200,7 @@ export default function BaseDataContextProvider({
     );
 
     return () => authListener.subscription.unsubscribe();
-  }, [supabase, queryClient, router]);
+  }, [supabase, queryClient, router, shouldRefreshOnAuthChange]);
 
   // 6. Xử lý dữ liệu (Chỉ lọc ở tầng Category)
   const processedData = useMemo(() => {

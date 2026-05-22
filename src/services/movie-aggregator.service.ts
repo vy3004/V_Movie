@@ -146,12 +146,18 @@ async function searchModalSources(
     const totalPages =
       pagination?.totalPages ||
       Math.ceil((pagination?.totalItems || 0) / (pagination?.totalItemsPerPage || limit));
-    if (!pagination || nextCursor.pages[source] > totalPages || (data.items || []).length === 0) {
+    const sourceItems = data.items || [];
+    if (
+      !pagination ||
+      nextCursor.pages[source] > totalPages ||
+      sourceItems.length < limit
+    ) {
       nextCursor.exhausted[source] = true;
     }
   }
 
   const hasMore =
+    items.length > 0 &&
     nextCursor.returned < MODAL_MAX_RETURNED &&
     sources.some((source) => !nextCursor.exhausted[source]);
 
