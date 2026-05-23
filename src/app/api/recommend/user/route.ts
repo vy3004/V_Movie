@@ -7,6 +7,22 @@ export const maxDuration = 60;
 // Hàm ép hệ thống tạm nghỉ
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function getAppBaseUrl() {
+  const rawBaseUrl = process.env.NEXT_PUBLIC_PORT;
+  if (!rawBaseUrl) return null;
+
+  try {
+    const url = new URL(
+      rawBaseUrl.startsWith("http://") || rawBaseUrl.startsWith("https://")
+        ? rawBaseUrl
+        : `https://${rawBaseUrl}`,
+    );
+    return url.protocol === "http:" || url.protocol === "https:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 interface RequestBody {
   totalProcessed?: number;
 }
@@ -112,11 +128,10 @@ export async function POST(req: Request) {
     // ==========================================
     const qstashToken = process.env.QSTASH_TOKEN;
     const qstashUrl = process.env.QSTASH_URL;
-    const rawBaseUrl = process.env.NEXT_PUBLIC_PORT;
+    const appBaseUrl = getAppBaseUrl();
 
-    if (qstashToken && qstashUrl && rawBaseUrl) {
-      const cleanBaseUrl = rawBaseUrl.replace(/^https?:\/\//, "");
-      const targetUrl = `https://${cleanBaseUrl}/api/recommend/user`;
+    if (qstashToken && qstashUrl && appBaseUrl) {
+      const targetUrl = new URL("/api/recommend/user", appBaseUrl).toString();
 
       const response = await fetch(`${qstashUrl}/v2/publish/${targetUrl}`, {
         method: "POST",
@@ -142,7 +157,7 @@ export async function POST(req: Request) {
         message: `Đã xử lý xong ${newTotalProcessed} users. Đã lên lịch QStash chạy lô tiếp theo.`,
       });
     } else {
-      console.warn("Missing QSTASH_TOKEN or NEXT_PUBLIC_PORT. Dừng đệ quy.");
+      console.warn("Missing QSTASH_TOKEN, QSTASH_URL, or NEXT_PUBLIC_PORT. Dừng đệ quy.");
       return NextResponse.json({
         success: false,
         message: `Đã xử lý ${newTotalProcessed} users. Không thể chạy tiếp do thiếu Config môi trường.`,
