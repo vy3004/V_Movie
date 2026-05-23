@@ -2,6 +2,7 @@ import { z } from "zod";
 import { generateObject } from "ai";
 import { google } from "@ai-sdk/google";
 import { MovieService } from "@/services/movie.service";
+import { IndexedMovieService } from "@/services/indexed-movie.service";
 import { redis } from "@/lib/redis";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { MOVIE_IMG_PATH } from "@/lib/configs";
@@ -28,6 +29,12 @@ export interface DBBatchContext {
 }
 
 const GEMINI_MODEL = "gemini-2.5-flash";
+const RECOMMENDATION_CACHE_BUFFER_SECONDS = 2 * 60 * 60;
+const COOLDOWN_MS = 2 * 60 * 60 * 1000;
+
+function createBatchError(message: string, failedUserIds: string[]) {
+  return Object.assign(new Error(message), { failedUserIds });
+}
 
 // ==========================================
 // LUẬT AI DÙNG CHUNG CỦA HỆ THỐNG
@@ -51,7 +58,6 @@ VÍ DỤ VỀ CÁCH VIẾT "REASON" TỐT (Hãy học theo phong cách này):
 
 // In-memory rate limit fallback khi Redis unavailable (chỉ hoạt động trong 1 instance)
 const inMemoryRateLimit = new Map<string, number>();
-const COOLDOWN_MS = 3600000; // 1 giờ
 
 // Cleanup entries đã hết hạn mỗi 10 phút để tránh memory leak
 if (typeof setInterval !== "undefined") {
@@ -68,9 +74,9 @@ if (typeof setInterval !== "undefined") {
 
 export const RecommendationService = {
   /**
-   * Tính toán thời gian (số giây) từ hiện tại đến 2:00 AM sáng hôm sau.
+   * Tính TTL cache từ hiện tại đến 2:00 AM sáng hôm sau, cộng buffer để cron mới kịp ghi cache.
    */
-  getSecondsUntilNext2AM: (): number => {
+  getRecommendationCacheTtl: (): number => {
     const now = new Date();
     const next2AM = new Date();
 
@@ -78,52 +84,56 @@ export const RecommendationService = {
     if (now.getTime() > next2AM.getTime()) {
       next2AM.setDate(next2AM.getDate() + 1);
     }
-    return Math.floor((next2AM.getTime() - now.getTime()) / 1000);
+    return (
+      Math.floor((next2AM.getTime() - now.getTime()) / 1000) +
+      RECOMMENDATION_CACHE_BUFFER_SECONDS
+    );
   },
 
   /**
-   * Kiểm chứng danh sách phim do AI gợi ý với cơ sở dữ liệu thực tế của OPhim.
+   * Kiểm chứng danh sách phim do AI gợi ý với kho phim indexed nội bộ.
    */
   validateWithOphim: async (
     aiRecommendations: AIRecommendation[],
     targetLimit: number = 12,
   ): Promise<MovieRecommendation[]> => {
     const validMovies: MovieRecommendation[] = [];
+    const seenSlugs = new Set<string>();
     const chunkSize = 5;
 
     for (let i = 0; i < aiRecommendations.length; i += chunkSize) {
       if (validMovies.length >= targetLimit) break;
 
       const chunk = aiRecommendations.slice(i, i + chunkSize);
-
       const searchPromises = chunk.map(async (item) => {
         try {
-          const searchResult = await MovieService.search(item.keyword, 1, 1);
+          const searchResult = await IndexedMovieService.searchIndexedMoviesModal(
+            item.keyword,
+            3,
+          );
+          const firstMovie = searchResult.items.find((movie) => {
+            const currentEp = (movie.episode_current || "").toLowerCase();
+            return (
+              movie.slug &&
+              !seenSlugs.has(movie.slug) &&
+              !currentEp.includes("trailer") &&
+              currentEp !== ""
+            );
+          });
 
-          if (searchResult.items && searchResult.items.length > 0) {
-            const firstMovie = searchResult.items[0];
-            const currentEp = (firstMovie.episode_current || "").toLowerCase();
+          if (!firstMovie) return null;
 
-            if (currentEp.includes("trailer") || currentEp === "") return null;
-
-            // Lấy danh sách thể loại từ API OPhim (Thường trả về dạng mảng object {name: "Hành Động", ...})
-            const extractedCategories = firstMovie.category
-              ? firstMovie.category.map((c: CateCtr) => c.name)
-              : [];
-
-            return {
-              movie_slug: firstMovie.slug,
-              name: firstMovie.name,
-              thumb_url: `${MOVIE_IMG_PATH}${firstMovie.thumb_url}`,
-              episode_current: firstMovie.episode_current,
-              reason: item.reason,
-              categories: extractedCategories,
-            } as MovieRecommendation;
-          }
-          return null;
+          return {
+            movie_slug: firstMovie.slug,
+            name: firstMovie.name,
+            thumb_url: firstMovie.thumb_url,
+            episode_current: firstMovie.episode_current,
+            reason: item.reason,
+            categories: firstMovie.category?.map((c: CateCtr) => c.name) || [],
+          } as MovieRecommendation;
         } catch (error) {
           console.error(
-            `[OPHIM] Lỗi tìm kiếm MovieService cho: ${item.keyword}`,
+            `[INDEXED_SEARCH] Lỗi tìm kiếm phim cho: ${item.keyword}`,
             error,
           );
           return null;
@@ -133,17 +143,15 @@ export const RecommendationService = {
       const results = await Promise.all(searchPromises);
 
       results.forEach((m: MovieRecommendation | null) => {
-        if (m !== null && validMovies.length < targetLimit) {
+        if (
+          m !== null &&
+          validMovies.length < targetLimit &&
+          !seenSlugs.has(m.movie_slug)
+        ) {
+          seenSlugs.add(m.movie_slug);
           validMovies.push(m);
         }
       });
-
-      if (
-        i + chunkSize < aiRecommendations.length &&
-        validMovies.length < targetLimit
-      ) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
     }
 
     return validMovies;
@@ -158,11 +166,9 @@ export const RecommendationService = {
 
     if (!redisClient || movies.length === 0) return;
     try {
-      const ttl = RecommendationService.getSecondsUntilNext2AM();
-
       // Lưu nguyên mẻ vào pool tổng
       await redisClient.set(`guest_pool:all`, JSON.stringify(movies), {
-        ex: ttl,
+        ex: RecommendationService.getRecommendationCacheTtl(),
       });
 
       // Lọc phim theo từng thể loại rồi mới lưu vào pool riêng
@@ -180,7 +186,7 @@ export const RecommendationService = {
           return redisClient.set(
             `guest_pool:${genre}`,
             JSON.stringify(filteredMovies),
-            { ex: ttl },
+            { ex: RecommendationService.getRecommendationCacheTtl() },
           );
         }
         return Promise.resolve(); // Bỏ qua nếu mảng rỗng
@@ -210,30 +216,34 @@ export const RecommendationService = {
       12, // Chốt sổ 12 phim
     );
 
-    if (cleanMovies.length > 0) {
-      const { error: upsertError } = await supabaseAdmin
-        .from("user_recommendations")
-        .upsert({
+    if (cleanMovies.length === 0) {
+      throw new Error(`No valid recommendations found for user: ${userId}`);
+    }
+
+    const { error: upsertError } = await supabaseAdmin
+      .from("user_recommendations")
+      .upsert({
           user_id: userId,
           recommendations: cleanMovies,
           updated_at: new Date().toISOString(),
-        });
+      });
 
-      if (upsertError) {
-        console.error(`[SUPABASE_UPSERT_ERROR] User: ${userId}`, upsertError);
-      }
-
-      if (redis) {
-        const ttlTo2AM = RecommendationService.getSecondsUntilNext2AM();
-        await redis.set(
-          `recommendation:user:${userId}`,
-          JSON.stringify(cleanMovies),
-          { ex: ttlTo2AM },
-        );
-      }
-
-      await RecommendationService.saveToGuestPool(cleanMovies, topGenres);
+    if (upsertError) {
+      console.error(`[SUPABASE_UPSERT_ERROR] User: ${userId}`, upsertError);
+      throw new Error(
+        `Supabase upsert failed for user ${userId}: ${upsertError.message || JSON.stringify(upsertError)}`,
+      );
     }
+
+    if (redis) {
+      await redis.set(
+        `recommendation:user:${userId}`,
+        JSON.stringify(cleanMovies),
+        { ex: RecommendationService.getRecommendationCacheTtl() },
+      );
+    }
+
+    await RecommendationService.saveToGuestPool(cleanMovies, topGenres);
   },
 
   /**
@@ -249,12 +259,11 @@ export const RecommendationService = {
         const lastGenTime = await redis.get<number>(rateLimitKey);
 
         if (lastGenTime) {
-          const cooldownMs = 3600000; // 1 giờ
           const timeElapsed = Date.now() - lastGenTime;
 
-          if (timeElapsed < cooldownMs) {
+          if (timeElapsed < COOLDOWN_MS) {
             const remainingMinutes = Math.ceil(
-              (cooldownMs - timeElapsed) / 60000,
+              (COOLDOWN_MS - timeElapsed) / 60000,
             );
             throw new Error(
               `Vui lòng đợi ${remainingMinutes} phút trước khi yêu cầu gợi ý mới`,
@@ -269,12 +278,11 @@ export const RecommendationService = {
 
         const lastGenTime = inMemoryRateLimit.get(userId);
         if (lastGenTime) {
-          const cooldownMs = 3600000; // 1 giờ
           const timeElapsed = Date.now() - lastGenTime;
 
-          if (timeElapsed < cooldownMs) {
+          if (timeElapsed < COOLDOWN_MS) {
             const remainingMinutes = Math.ceil(
-              (cooldownMs - timeElapsed) / 60000,
+              (COOLDOWN_MS - timeElapsed) / 60000,
             );
             throw new Error(
               `Vui lòng đợi ${remainingMinutes} phút trước khi yêu cầu gợi ý mới`,
@@ -287,7 +295,7 @@ export const RecommendationService = {
       const { data: batchContext, error } = await supabaseAdmin.rpc(
         "get_ai_context_batch",
         {
-          p_user_ids: [userId],
+          user_ids: [userId],
         },
       );
 
@@ -337,17 +345,17 @@ export const RecommendationService = {
 
       // Lưu timestamp để enforce cooldown (SAU KHI thành công)
       if (redis) {
-        await redis.set(rateLimitKey, Date.now(), { ex: 3600 }); // 1 giờ
+        await redis.set(rateLimitKey, Date.now(), { ex: COOLDOWN_MS / 1000 });
       } else {
         // In-memory fallback: Chỉ set timestamp SAU KHI AI call thành công
         inMemoryRateLimit.set(userId, Date.now());
       }
     } catch (error) {
-      // Re-throw rate limit errors để caller có thể xử lý (trả 429 cho client)
       if (error instanceof Error && error.message.includes("Vui lòng đợi")) {
         throw error;
       }
       console.error(`[RECOMMENDATION_ERROR] User: ${userId}`, error);
+      throw error;
     }
   },
 
@@ -357,13 +365,30 @@ export const RecommendationService = {
   generateForBatch: async (userIds: string[]) => {
     try {
       const { data, error } = await supabaseAdmin.rpc("get_ai_context_batch", {
-        p_user_ids: userIds,
+        user_ids: userIds,
       });
 
-      if (error) throw error;
-      if (!data || data.length === 0) return;
+      if (error) {
+        throw new Error(
+          `get_ai_context_batch RPC failed: ${error.message || JSON.stringify(error)}`,
+        );
+      }
+      if (!data || data.length === 0) {
+        throw new Error(`No recommendation context found for users: ${userIds.join(",")}`);
+      }
 
       const batchContext = data as DBBatchContext[];
+      const contextUserIds = batchContext.map((ctx) => String(ctx.user_id));
+      const missingContextUserIds = userIds.filter(
+        (userId) => !contextUserIds.includes(userId),
+      );
+
+      if (missingContextUserIds.length > 0) {
+        throw createBatchError(
+          `No recommendation context found for users: ${missingContextUserIds.join(",")}`,
+          missingContextUserIds,
+        );
+      }
 
       const aiPayload = batchContext.map((ctx) => ({
         userId: ctx.user_id,
@@ -405,22 +430,63 @@ export const RecommendationService = {
         prompt: expertPrompt,
       });
 
-      const processPromises = aiResult.batch_results.map((result) => {
-        const originData = batchContext.find(
-          (u) => String(u.user_id) === String(result.userId),
+      const contextByUserId = new Map(
+        batchContext.map((ctx) => [String(ctx.user_id), ctx]),
+      );
+      const resultUserIds = new Set(
+        aiResult.batch_results.map((result) => String(result.userId)),
+      );
+      const unknownUserIds = aiResult.batch_results
+        .map((result) => String(result.userId))
+        .filter((userId) => !contextByUserId.has(userId));
+
+      if (unknownUserIds.length > 0) {
+        throw new Error(
+          `AI response included unknown users: ${unknownUserIds.join(",")}`,
         );
-        if (originData) {
+      }
+
+      const missingUserIds = contextUserIds.filter(
+        (userId) => !resultUserIds.has(userId),
+      );
+
+      if (missingUserIds.length > 0) {
+        throw createBatchError(
+          `AI response missing recommendations for users: ${missingUserIds.join(",")}`,
+          missingUserIds,
+        );
+      }
+
+      const processResults = await Promise.allSettled(
+        aiResult.batch_results.map((result) => {
+          const originData = contextByUserId.get(String(result.userId));
+          if (!originData) {
+            throw new Error(`AI response included unknown user: ${result.userId}`);
+          }
+
           return RecommendationService._processAndSaveResults(
-            result.userId,
+            String(result.userId),
             result.recommendations,
             originData.top_genres,
           );
-        }
-      });
+        }),
+      );
 
-      await Promise.all(processPromises);
+      const failedUserIds = processResults.flatMap((result, index) =>
+        result.status === "rejected"
+          ? [String(aiResult.batch_results[index].userId)]
+          : [],
+      );
+
+      if (failedUserIds.length > 0) {
+        throw createBatchError(
+          `Failed to save recommendations for users: ${failedUserIds.join(",")}`,
+          failedUserIds,
+        );
+      }
     } catch (error) {
       console.error(`[RECOMMENDATION_BATCH_ERROR]`, error);
+      throw error;
     }
   },
 
@@ -444,34 +510,38 @@ export const RecommendationService = {
     // ƯU TIÊN 1: LẤY KÉ TỪ POOL CỦA AI
     // ==========================================
     if (redis && topGenres.length > 0) {
-      for (const genre of topGenres) {
-        const cached = await redis.get(`guest_pool:${genre}`);
-        if (cached) {
-          const parsed =
-            typeof cached === "string" ? JSON.parse(cached) : cached;
-          if (parsed && parsed.length >= targetTotal) {
-            return parsed
-              .slice(0, targetTotal)
-              .map((m: MovieRecommendation) => ({
-                ...m,
-                movie_slug: m.movie_slug,
-              }));
+      try {
+        for (const genre of topGenres) {
+          const cached = await redis.get(`guest_pool:${genre}`);
+          if (cached) {
+            const parsed =
+              typeof cached === "string" ? JSON.parse(cached) : cached;
+            if (parsed && parsed.length >= targetTotal) {
+              return parsed
+                .slice(0, targetTotal)
+                .map((m: MovieRecommendation) => ({
+                  ...m,
+                  movie_slug: m.movie_slug,
+                }));
+            }
           }
         }
-      }
 
-      const generalCached = await redis.get(`guest_pool:all`);
-      if (generalCached) {
-        const parsed =
-          typeof generalCached === "string"
-            ? JSON.parse(generalCached)
-            : generalCached;
-        if (parsed && parsed.length >= targetTotal) {
-          return parsed.slice(0, targetTotal).map((m: MovieRecommendation) => ({
-            ...m,
-            movie_slug: m.movie_slug,
-          }));
+        const generalCached = await redis.get(`guest_pool:all`);
+        if (generalCached) {
+          const parsed =
+            typeof generalCached === "string"
+              ? JSON.parse(generalCached)
+              : generalCached;
+          if (parsed && parsed.length >= targetTotal) {
+            return parsed.slice(0, targetTotal).map((m: MovieRecommendation) => ({
+              ...m,
+              movie_slug: m.movie_slug,
+            }));
+          }
         }
+      } catch (error) {
+        console.error("[GUEST_POOL_ERROR]", error);
       }
     }
 

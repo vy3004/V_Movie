@@ -52,14 +52,15 @@ export async function POST(req: Request) {
       Date.now() - 24 * 60 * 60 * 1000,
     ).toISOString();
 
-    const { data: usersToProcess, error: userError } = await supabaseAdmin
-      .from("profiles")
-      .select("id")
-      .or(
-        `last_ai_recommendation_at.is.null,last_ai_recommendation_at.lt.${twentyFourHoursAgo}`,
-      )
-      .order("last_ai_recommendation_at", { ascending: true, nullsFirst: true })
-      .limit(BATCH_SIZE);
+    const processingTimestamp = new Date().toISOString();
+    const { data: usersToProcess, error: userError } = await supabaseAdmin.rpc(
+      "claim_ai_recommendation_users",
+      {
+        batch_size: BATCH_SIZE,
+        eligible_before: twentyFourHoursAgo,
+        claim_timestamp: processingTimestamp,
+      },
+    );
 
     if (userError) throw userError;
 
@@ -69,23 +70,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const currentBatchUserIds = usersToProcess.map((u) => String(u.id));
-
-    // ==========================================
-    // 2. CLAIM USERS (Khóa dữ liệu chống Race Condition)
-    // Cập nhật timestamp NGAY LẬP TỨC để các Cron khác không bốc trúng 4 ông này nữa
-    // ==========================================
-    const processingTimestamp = new Date().toISOString();
-    const { error: updateError } = await supabaseAdmin
-      .from("profiles")
-      .update({ last_ai_recommendation_at: processingTimestamp })
-      .in("id", currentBatchUserIds);
-
-    if (updateError) {
-      throw new Error(
-        `Failed to update user timestamps: ${updateError.message}`,
-      );
-    }
+    const currentBatchUserIds = usersToProcess.map((u: { id: string }) => String(u.id));
 
     // ==========================================
     // 3. GIAO KHOÁN CHO SERVICE XỬ LÝ AI
@@ -98,16 +83,23 @@ export async function POST(req: Request) {
         batchError,
       );
 
-      // ROLLBACK MỀM: Lùi thời gian về 24h trước thay vì set null.
-      // Tránh việc QStash vừa chạy mẻ tiếp theo lại bốc trúng đúng 4 ông này gây Loop vô tận.
-      // Đêm mai họ sẽ lại là những người được ưu tiên cao nhất.
-      const yesterday = new Date(
-        Date.now() - 24 * 60 * 60 * 1000,
+      // ROLLBACK MỀM: Lùi thời gian về 22h trước để user lỗi retry sau khoảng 2h.
+      const failedUserIds =
+        batchError instanceof Error &&
+        "failedUserIds" in batchError &&
+        Array.isArray(batchError.failedUserIds)
+          ? batchError.failedUserIds.map(String)
+          : currentBatchUserIds;
+
+      const retryTimestamp = new Date(
+        Date.now() - 22 * 60 * 60 * 1000,
       ).toISOString();
       await supabaseAdmin
         .from("profiles")
-        .update({ last_ai_recommendation_at: yesterday })
-        .in("id", currentBatchUserIds);
+        .update({ last_ai_recommendation_at: retryTimestamp })
+        .in("id", failedUserIds);
+
+      throw batchError;
     }
 
     const newTotalProcessed = totalProcessed + currentBatchUserIds.length;
@@ -164,8 +156,13 @@ export async function POST(req: Request) {
       });
     }
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : "Unknown error";
-    console.error("[CRON_AI_ERROR]:", msg);
+    const msg =
+      error instanceof Error
+        ? error.message
+        : typeof error === "object" && error !== null
+          ? JSON.stringify(error)
+          : String(error);
+    console.error("[CRON_AI_ERROR]:", msg, error);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
