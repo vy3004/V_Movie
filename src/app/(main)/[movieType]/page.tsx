@@ -20,6 +20,8 @@ const Pagination = dynamic(
   },
 );
 
+export const revalidate = 21600;
+
 interface PageProps {
   params: { movieType: string };
   searchParams: Record<string, string | undefined>;

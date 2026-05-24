@@ -1,6 +1,7 @@
 ﻿import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { redis } from "@/lib/redis";
 
 export type MovieCollectionLink = {
   movie_id: string;
@@ -35,6 +36,15 @@ type CollectionItemRow = {
 
 export const MovieCollectionsService = {
   async getForMovieId(movieId: string): Promise<MovieCollectionResult | null> {
+    // Redis cache check
+    const cacheKey = `collection:movie:${movieId}`;
+    if (redis) {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        return typeof cached === "string" ? JSON.parse(cached) as MovieCollectionResult : cached as MovieCollectionResult;
+      }
+    }
+
     const { data: membership, error: membershipError } = await supabaseAdmin
       .from("movie_collection_items")
       .select("collection_id, movie_id")
@@ -58,7 +68,7 @@ export const MovieCollectionsService = {
     const collection = visibleRows[0]?.movie_collections;
     if (!collection) return null;
 
-    return {
+    const result = {
       id: collection.id,
       slug: collection.slug,
       name: collection.name,
@@ -71,5 +81,12 @@ export const MovieCollectionsService = {
         isCurrent: item.movie_id === movieId,
       })),
     };
+
+    // Cache 1h
+    if (redis && result.items.length > 0) {
+      await redis.set(cacheKey, JSON.stringify(result), { ex: 3600 });
+    }
+
+    return result;
   },
 };

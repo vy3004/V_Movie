@@ -54,6 +54,7 @@ export default function SearchModal({ isOpen, onClose }: Props) {
     hasNextPage,
     isFetchingNextPage,
     topKeywords,
+    loadTopKeywords,
     searchPhase,
     isFallbackSearching,
     isSearchComplete,
@@ -117,13 +118,14 @@ export default function SearchModal({ isOpen, onClose }: Props) {
   // Focus ô input khi mở Modal
   useEffect(() => {
     if (isOpen) {
+      loadTopKeywords();
       const timer = setTimeout(
         () => document.getElementById("search-input")?.focus(),
         100,
       );
       return () => clearTimeout(timer);
     }
-  }, [isOpen]);
+  }, [isOpen, loadTopKeywords]);
 
   const moveActiveIndex = (nextIndex: number) => {
     setActiveIndex(nextIndex);

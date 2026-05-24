@@ -1,6 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
-import Link from "next/link";
-import { PlayIcon, StarIcon } from "@heroicons/react/24/solid";
+import { StarIcon } from "@heroicons/react/24/solid";
 import ExpandableText from "@/components/ui/ExpandableText";
 import { WSRV_PROXY } from "@/lib/configs";
 import { Movie } from "@/types";
@@ -128,9 +127,6 @@ export const MovieTags = ({
 }) => (
   <div className={className}>
     <div className="flex items-center gap-2 overflow-hidden">
-      {movie.tmdb?.type && (
-        <Badge className="uppercase">{movie.tmdb.type}</Badge>
-      )}
       <Badge>{movie.quality}</Badge>
       <Badge>
         {movie.lang} {movie.sub_docquyen && "độc quyền"}
@@ -175,28 +171,3 @@ export const CategoryAndCountry = ({
   </div>
 );
 
-export const ActionButtons = ({
-  movie,
-  className = "",
-}: {
-  movie: Movie;
-  className?: string;
-}) => {
-  const firstServer = movie.episodes?.find((server) => server.server_data?.[0]);
-  const firstEpisode = firstServer?.server_data?.[0];
-  const hrefWatchMovie = firstEpisode
-    ? `/phim/${movie.slug}?source=${movie.source || "ophim"}&server=${encodeURIComponent(firstServer.server_name)}&tap=${firstEpisode.slug}`
-    : `/phim/${movie.slug}`;
-  return (
-    <div className={`flex items-center ${className}`}>
-      <Link
-        aria-label="Xem phim"
-        href={hrefWatchMovie}
-        className="flex items-center font-bold bg-primary hover:bg-main rounded px-4 py-3"
-      >
-        <PlayIcon className="size-4 md:size-8" />
-        <span className="hidden md:block">Xem Phim</span>
-      </Link>
-    </div>
-  );
-};

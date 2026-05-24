@@ -10,7 +10,23 @@ export function useMovieSearch(limit: number = 10) {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [topKeywords, setTopKeywords] = useState<string[]>([]);
+  const topKeywordsRequestedRef = useRef(false);
   const queuedFallbackKeysRef = useRef(new Set<string>());
+
+  const loadTopKeywords = useCallback(async () => {
+    if (topKeywordsRequestedRef.current) return;
+
+    try {
+      topKeywordsRequestedRef.current = true;
+      const res = await fetch("/api/movies/search-top?limit=5");
+      const data: { items?: string[] } = res.ok ? await res.json() : { items: [] };
+      setTopKeywords(data.items || []);
+      if (!res.ok) topKeywordsRequestedRef.current = false;
+    } catch {
+      topKeywordsRequestedRef.current = false;
+      setTopKeywords([]);
+    }
+  }, []);
 
   const debouncedSetQuery = useMemo(
     () =>
@@ -20,13 +36,7 @@ export function useMovieSearch(limit: number = 10) {
     [],
   );
 
-  // Cleanup debounce khi unmount để tránh memory leak
   useEffect(() => {
-    fetch("/api/movies/search-top?limit=5")
-      .then((res) => (res.ok ? res.json() : { items: [] }))
-      .then((data: { items?: string[] }) => setTopKeywords(data.items || []))
-      .catch(() => setTopKeywords([]));
-
     return () => {
       debouncedSetQuery.cancel();
     };
@@ -179,6 +189,7 @@ export function useMovieSearch(limit: number = 10) {
     movies,
     totalItems,
     topKeywords,
+    loadTopKeywords,
     searchPhase,
     isFallbackSearching,
     isSearchComplete,

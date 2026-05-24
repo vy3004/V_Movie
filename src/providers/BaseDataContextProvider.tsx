@@ -50,6 +50,8 @@ export default function BaseDataContextProvider({
   const router = useRouter();
   const pathname = usePathname();
   const lastEventTime = useRef<number>(0);
+  const syncedHistoryUserIdsRef = useRef<Set<string>>(new Set());
+  const syncedSubscriptionUserIdsRef = useRef<Set<string>>(new Set());
 
   // 1. Auth User
   const { data: user, isLoading: authLoading } = useQuery<
@@ -121,44 +123,73 @@ export default function BaseDataContextProvider({
   // 4. Đồng bộ Lịch sử & Theo dõi
   useEffect(() => {
     if (!user) return;
-    const handleSync = async (
-      url: string,
-      localData: HistoryItem[] | SubscriptionItem[],
-      storageKey: string,
-      queryKey: string[],
-    ) => {
-      if (localData.length === 0) return;
+
+    const syncGuestHistory = async () => {
+      if (syncedHistoryUserIdsRef.current.has(user.id)) return;
+
+      const localHistory: HistoryItem[] = getLocalHistory();
+      if (localHistory.length === 0) {
+        syncedHistoryUserIdsRef.current.add(user.id);
+        return;
+      }
+
+      syncedHistoryUserIdsRef.current.add(user.id);
+
       try {
-        const res = await fetch(url, {
+        const res = await fetch("/api/history/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            [storageKey === "v_movie_guest_history"
-              ? "localHistory"
-              : "localSubscriptions"]: localData,
-          }),
+          body: JSON.stringify({ localHistory }),
         });
-        if (res.ok) {
-          localStorage.removeItem(storageKey);
 
-          queryClient.invalidateQueries({ queryKey });
+        if (!res.ok) {
+          syncedHistoryUserIdsRef.current.delete(user.id);
+          return;
         }
+
+        await queryClient.invalidateQueries({ queryKey: ["history-list", user.id] });
+        localStorage.removeItem("v_movie_guest_history");
       } catch (error) {
-        console.error(`[Sync Error: ${url}]`, error);
+        syncedHistoryUserIdsRef.current.delete(user.id);
+        console.error("[Sync Error: /api/history/sync]", error);
       }
     };
-    handleSync(
-      "/api/history/sync",
-      getLocalHistory(),
-      "v_movie_guest_history",
-      ["history-list", user.id],
-    );
-    handleSync(
-      "/api/subscriptions/sync",
-      getLocalSubscriptions(),
-      "v_movie_guest_subscriptions",
-      ["subscriptions-list", user.id],
-    );
+
+    const syncGuestSubscriptions = async () => {
+      if (syncedSubscriptionUserIdsRef.current.has(user.id)) return;
+
+      const localSubscriptions: SubscriptionItem[] = getLocalSubscriptions();
+      if (localSubscriptions.length === 0) {
+        syncedSubscriptionUserIdsRef.current.add(user.id);
+        return;
+      }
+
+      syncedSubscriptionUserIdsRef.current.add(user.id);
+
+      try {
+        const res = await fetch("/api/subscriptions/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ localSubscriptions }),
+        });
+
+        if (!res.ok) {
+          syncedSubscriptionUserIdsRef.current.delete(user.id);
+          return;
+        }
+
+        await queryClient.invalidateQueries({
+          queryKey: ["subscriptions-list", user.id],
+        });
+        localStorage.removeItem("v_movie_guest_subscriptions");
+      } catch (error) {
+        syncedSubscriptionUserIdsRef.current.delete(user.id);
+        console.error("[Sync Error: /api/subscriptions/sync]", error);
+      }
+    };
+
+    void syncGuestHistory();
+    void syncGuestSubscriptions();
   }, [user, queryClient]);
 
   const shouldRefreshOnAuthChange = useMemo(
@@ -184,6 +215,8 @@ export default function BaseDataContextProvider({
 
         if (event === "SIGNED_OUT") {
           queryClient.setQueryData(["auth-user"], null);
+          syncedHistoryUserIdsRef.current.clear();
+          syncedSubscriptionUserIdsRef.current.clear();
 
           // Xóa cache các query liên quan đến người dùng cũ
           queryClient.removeQueries({ queryKey: ["history-list"] });

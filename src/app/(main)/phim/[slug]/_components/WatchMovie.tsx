@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import dynamic from "next/dynamic";
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { User } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
@@ -123,6 +123,12 @@ export default function WatchMovie({ movie, history, user }: Props) {
   const [activeServerIdx, setActiveServerIdx] = useState(() =>
     getPlayableServerIndex(movie.episodes),
   );
+  const episodeCount = useMemo(
+    () => movie.episodes.reduce((total, server) => total + server.server_data.length, 0),
+    [movie.episodes],
+  );
+  const lastEnrichKeyRef = useRef<string | null>(null);
+  const enrichRequestKey = `${movie.source || "ophim"}:${movie.slug}:${episodeCount}`;
 
   useEffect(() => {
     const preferredTap = initialTap || historyTap;
@@ -160,6 +166,9 @@ export default function WatchMovie({ movie, history, user }: Props) {
   }, [watchMovie]);
 
   useEffect(() => {
+    if (lastEnrichKeyRef.current === enrichRequestKey) return;
+    lastEnrichKeyRef.current = enrichRequestKey;
+
     let cancelled = false;
 
     const enrich = async () => {
@@ -171,15 +180,11 @@ export default function WatchMovie({ movie, history, user }: Props) {
       if (!res.ok) return;
       const data = await res.json();
       const enrichedEpisodes = data.item?.episodes || [];
-      const currentEpisodeCount = movie.episodes.reduce(
-        (total, server) => total + server.server_data.length,
-        0,
-      );
       const enrichedEpisodeCount = enrichedEpisodes.reduce(
         (total: number, server: Episode) => total + server.server_data.length,
         0,
       );
-      if (!cancelled && enrichedEpisodeCount > currentEpisodeCount) {
+      if (!cancelled && enrichedEpisodeCount > episodeCount) {
         setwatchMovie(data.item);
       }
     };
@@ -189,7 +194,7 @@ export default function WatchMovie({ movie, history, user }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [movie]);
+  }, [movie.slug, movie.source, episodeCount, enrichRequestKey]);
 
   const updateWatchUrl = useCallback(
     (
@@ -204,8 +209,9 @@ export default function WatchMovie({ movie, history, user }: Props) {
       setTap(nextTap);
 
       if (server?.server_name) {
+        const serverKey = `v-movie:watch-server:${watchMovie.source || "ophim"}:${watchMovie.slug}`;
         localStorage.setItem(
-          getServerPreferenceKey(watchMovie),
+          serverKey,
           server.server_name,
         );
       }
@@ -333,7 +339,7 @@ export default function WatchMovie({ movie, history, user }: Props) {
     if (hasNew) {
       clearBadge(); // Gọi hàm từ hook đã tích hợp
     }
-  }, [movie.slug, user, clearBadge, queryClient]);
+  }, [movie.slug, user?.id, queryClient, clearBadge]);
 
   useEffect(() => {
     const loadInitialHistory = () => {

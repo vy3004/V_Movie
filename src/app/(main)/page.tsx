@@ -6,7 +6,7 @@ import HeroCarousel from "@/app/(main)/_components/HeroCarousel";
 import TopMovieSection from "@/app/(main)/_components/TopMovieSection";
 import WatchPartyBanner from "@/app/(main)/_components/WatchPartyBanner";
 import Banner from "@/app/(main)/_components/Banner";
-import { HOME_SECTIONS, IndexedMovieService } from "@/services/indexed-movie.service";
+import { IndexedMovieService } from "@/services/indexed-movie.service";
 import { shuffleMovies } from "@/lib/utils";
 
 const RecommendSection = dynamic(() => import("@/app/(main)/_components/RecommendSection"), { ssr: false });
@@ -29,12 +29,10 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const latest = await IndexedMovieService.getTopRatedByYear(new Date().getFullYear(), 16);
-  const sections = await Promise.all(
-    HOME_SECTIONS.map(async (section) => ({
-      ...section,
-      result: await IndexedMovieService.getSection(section.slug, 12),
-    })),
+  const { latest, sections } = await IndexedMovieService.getHomePagePayload(
+    new Date().getFullYear(),
+    16,
+    12,
   );
   const shuffledItems = shuffleMovies(latest.movies);
   const visibleSections = sections.filter((section) => section.result.movies.length >= 4);

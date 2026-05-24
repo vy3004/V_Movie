@@ -259,15 +259,29 @@ export function useHistoryTracker({
       .catch(console.error);
   }, [user, movie, episodeSlug, lastEpOfMovie, queryClient]);
 
-  // Gắn event cho việc đóng tab / chuyển trang
+  // Ref luôn giữ reference syncSupabase mới nhất cho event listeners
+  const syncSupabaseRef = useRef(syncSupabase);
+  syncSupabaseRef.current = syncSupabase;
+
+  // Effect 1: Event listeners (chạy 1 lần, cleanup k gọi API khi deps thay đổi)
   useEffect(() => {
-    window.addEventListener("beforeunload", syncSupabase);
-    window.addEventListener("pagehide", syncSupabase);
+    const handleUnload = () => {
+      syncSupabaseRef.current();
+    };
+
+    window.addEventListener("beforeunload", handleUnload);
+    window.addEventListener("pagehide", handleUnload);
 
     return () => {
-      window.removeEventListener("beforeunload", syncSupabase);
-      window.removeEventListener("pagehide", syncSupabase);
-      syncSupabase(); // Đảm bảo lưu lần cuối khi component unmount
+      window.removeEventListener("beforeunload", handleUnload);
+      window.removeEventListener("pagehide", handleUnload);
+    };
+  }, []);
+
+  // Effect 2: Sync khi rời movie/tập hiện tại
+  useEffect(() => {
+    return () => {
+      syncSupabase();
     };
   }, [syncSupabase]);
 

@@ -98,14 +98,20 @@ export function useRecommendations() {
       const isGuest = Boolean(data.isGuest);
       const movies = Array.isArray(data.movies) ? data.movies : [];
 
+      // Có movies từ DB rồi → k cần gọi guest API
+      if (!isGuest || movies.length > 0) {
+        return { movies, isGuest };
+      }
+
+      // Guest + không có movies từ DB → gọi AI guest nếu có context
       return {
-        movies: isGuest ? await fetchGuestRecommendations() : movies,
+        movies: await fetchGuestRecommendations(),
         isGuest,
       };
     },
     enabled: !authLoading,
     staleTime: 1000 * 60 * 5,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: false, // mutateTopCache đã đảm bảo cache fresh
   });
 
   return {

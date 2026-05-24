@@ -1,5 +1,6 @@
 ﻿import "server-only";
 
+import { unstable_cache } from "next/cache";
 import { redis } from "@/lib/redis";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getMovieDedupeKey } from "@/services/movie-sources/dedupe";
@@ -95,8 +96,8 @@ export function indexedMovieToMovie(row: IndexedHomeMovie): Movie {
     view: 0,
     actor: [],
     director: [],
-    category: slugItems(row.category_slugs || []),
-    country: slugItems(row.country_slugs || []),
+    category: row.category_slugs ? slugItems(row.category_slugs) : [],
+    country: row.country_slugs ? slugItems(row.country_slugs) : [],
     episodes: [],
     source: row.primary_source || undefined,
     sources: row.primary_source ? [row.primary_source] : [],
@@ -173,10 +174,6 @@ function toResult(
   };
 }
 
-function elapsed(start: number): number {
-  return Math.round((performance.now() - start) * 100) / 100;
-}
-
 function typeForSlug(slug: string): string | null {
   if (slug === "phim-le") return "single";
   if (slug === "phim-bo") return "series";
@@ -226,58 +223,69 @@ export const HOME_SECTIONS = [
   { title: "Hoạt hình", slug: "hoat-hinh" },
 ];
 
+type HomeSectionRow = {
+  slug: string;
+  title: string;
+  items: IndexedHomeMovie[];
+};
+
+type HomeRpcRow = {
+  top_movies: IndexedHomeMovie[];
+  sections: HomeSectionRow[];
+};
+
+type HomePagePayload = {
+  latest: IndexedHomeResult;
+  sections: Array<(typeof HOME_SECTIONS)[number] & { result: IndexedHomeResult }>;
+};
+
 export const IndexedMovieService = {
-  async getTopRatedByYear(
+  async getHomePagePayload(
     year = new Date().getFullYear(),
-    limit = 16,
-  ): Promise<IndexedHomeResult> {
-    const start = performance.now();
-    const currentYearLimit = Math.max(limit, 1);
-    const { data, error } = await supabaseAdmin
-      .from("movies")
-      .select(HOME_SELECT)
-      .eq("is_blocked", false)
-      .in("year", [year, year - 1])
-      .not("vote_average", "is", null)
-      .neq("episode_state", "trailer")
-      .gt("vote_count", 0)
-      .order("year", { ascending: false })
-      .order("popularity_score", { ascending: false })
-      .limit(currentYearLimit * 2);
+    topLimit = 16,
+    sectionLimit = 12,
+  ): Promise<HomePagePayload> {
+    const rpcParams = {
+      target_year: year,
+      top_limit: topLimit,
+      section_limit: sectionLimit,
+    };
 
-    if (error) throw error;
+    const getCachedData = unstable_cache(
+      async () => {
+        const { data, error } = await supabaseAdmin.rpc("get_homepage_movies", rpcParams);
+        if (error) throw error;
+        return data;
+      },
+      ['homepage-payload'], // Key
+      {
+        revalidate: 21600,
+        tags: ['home-tag']
+      }
+    );
 
-    const rows = ((data || []) as IndexedHomeMovie[]).filter(
-      (movie) => movie.year === year,
+    const data = await getCachedData();
+    const row = data as HomeRpcRow | null;
+    if (!row) return { latest: toResult([], 0), sections: HOME_SECTIONS.map((section) => ({ ...section, result: toResult([], 0) })) };
+
+    const topItems = Array.isArray(row.top_movies) ? row.top_movies : [];
+    const latest = toResult(topItems, 0);
+
+    const sectionMap = new Map(
+      (Array.isArray(row.sections) ? row.sections : []).map((section) => [section.slug, section]),
     );
-    const fallbackRows = ((data || []) as IndexedHomeMovie[]).filter(
-      (movie) => movie.year === year - 1,
-    );
-    return toResult(
-      [...rows, ...fallbackRows].slice(0, currentYearLimit),
-      elapsed(start),
-    );
+
+    const sections = HOME_SECTIONS.map((section) => {
+      const matched = sectionMap.get(section.slug);
+      const items = Array.isArray(matched?.items) ? matched.items : [];
+      return {
+        ...section,
+        result: toResult(items, 0),
+      };
+    });
+
+    return { latest, sections };
   },
-
-  async getSection(slug: string, limit = 12): Promise<IndexedHomeResult> {
-    const start = performance.now();
-    const type = typeForSlug(slug);
-    let query = supabaseAdmin
-      .from("movies")
-      .select(HOME_SELECT)
-      .eq("is_blocked", false)
-      .neq("episode_state", "trailer")
-      .order("year", { ascending: false, nullsFirst: false })
-      .order("last_synced_at", { ascending: false, nullsFirst: false })
-      .limit(limit);
-
-    if (type) query = query.eq("type", type);
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return toResult((data || []) as IndexedHomeMovie[], elapsed(start));
-  },
-
 
   async listIndexedMovies(params: MovieQueryParams): Promise<PageMoviesData> {
     const slug = params.slug || "phim-moi-cap-nhat";
@@ -417,11 +425,11 @@ export const IndexedMovieService = {
     const cacheKey =
       trimmedKeyword.length >= 3
         ? getModalSearchCacheKey(
-            trimmedKeyword,
-            searchPage,
-            safeLimit,
-            includeSearchText,
-          )
+          trimmedKeyword,
+          searchPage,
+          safeLimit,
+          includeSearchText,
+        )
         : null;
     let dbRows: IndexedSearchMovie[] | null = null;
 
@@ -466,17 +474,17 @@ export const IndexedMovieService = {
     const nextDbPage = includeSearchText ? -(searchPage + 1) : searchPage + 1;
     const nextCursor = hasMore
       ? {
-          ...fallbackCursor,
-          phase: "db" as const,
-          dbPage: nextDbPage,
-        }
+        ...fallbackCursor,
+        phase: "db" as const,
+        dbPage: nextDbPage,
+      }
       : includeSearchText
         ? fallbackCursor
         : {
-            ...fallbackCursor,
-            phase: "db" as const,
-            dbPage: -1,
-          };
+          ...fallbackCursor,
+          phase: "db" as const,
+          dbPage: -1,
+        };
 
     return {
       ...result,

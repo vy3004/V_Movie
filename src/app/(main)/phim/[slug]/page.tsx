@@ -40,15 +40,36 @@ type IndexedMovieSourceRow = {
 const getIndexedMovieRow = cache(async (slug: string, source: MovieSource | null) => {
   try {
     const columns = "id, slug, primary_source, primary_source_slug, sources";
-    const { data, error } = await supabaseAdmin
+    const { data: directRows, error } = await supabaseAdmin
       .from("movies")
       .select(columns)
       .eq("is_blocked", false)
-      .or(`slug.eq.${slug},primary_source_slug.eq.${slug}`)
-      .maybeSingle();
+      .or(`slug.eq.${slug},primary_source_slug.eq.${slug}`);
 
     if (error) throw error;
-    if (data) return data as IndexedMovieSourceRow;
+
+    const directMatches = (directRows as IndexedMovieSourceRow[] | null) || [];
+    if (directMatches.length > 0) {
+      if (source) {
+        const sourceMatch = directMatches.find(
+          (row) =>
+            row.primary_source === source ||
+            row.sources?.some(
+              (item) =>
+                item.slug === slug &&
+                normalizeMovieSource(item.source || null) === source,
+            ),
+        );
+        if (sourceMatch) return sourceMatch;
+      }
+
+      return (
+        directMatches.find((row) => row.slug === slug) ||
+        directMatches.find((row) => row.primary_source_slug === slug) ||
+        directMatches[0]
+      );
+    }
+
     if (!source) return null;
 
     const { data: sourceRows, error: sourceError } = await supabaseAdmin
@@ -252,23 +273,26 @@ export default async function MoviePage({ params, searchParams }: PageProps) {
     }
   }
 
-  let history = null;
-  if (hasValidEpisodes && user) {
-    try {
-      history = await HistoryService.getLatest(user.id, slug);
-    } catch (error) {
-      console.error(`[MoviePage] Failed to load history for ${slug}`, error);
-    }
-  }
-
-  let collection = null;
-  if (indexedMovie?.id) {
-    try {
-      collection = await MovieCollectionsService.getForMovieId(indexedMovie.id);
-    } catch (error) {
-      console.error(`[MoviePage] Failed to load collection for ${slug}`, error);
-    }
-  }
+  const [history, collection] = await Promise.all([
+    (async () => {
+      if (!hasValidEpisodes || !user) return null;
+      try {
+        return await HistoryService.getLatest(user.id, slug);
+      } catch (error) {
+        console.error(`[MoviePage] Failed to load history for ${slug}`, error);
+        return null;
+      }
+    })(),
+    (async () => {
+      if (!indexedMovie?.id) return null;
+      try {
+        return await MovieCollectionsService.getForMovieId(indexedMovie.id);
+      } catch (error) {
+        console.error(`[MoviePage] Failed to load collection for ${slug}`, error);
+        return null;
+      }
+    })(),
+  ]);
 
   return (
     <div className="col-span-12 xl:col-span-8 py-4 space-y-4 sm:space-y-8 animate-in fade-in duration-500">

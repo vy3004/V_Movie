@@ -10,25 +10,17 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/Carousel";
+import Link from "next/link";
+import { PlayIcon } from "@heroicons/react/24/solid";
 import {
-  ActionButtons,
-  // CategoryAndCountry,
   MovieTags,
 } from "@/components/shared/MovieDetail";
 import ImageCustom from "@/components/ui/ImageCustom";
 
 import { Movie } from "@/types";
 import { formatMovieTitle } from "@/lib/utils";
-// import { useData } from "@/providers/BaseDataContextProvider";
 
 const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
-  // const { categories, countries } = useData();
-
-  // const getCategoryName = (slug: string, fallback: string) =>
-  //   categories?.find((category) => category.slug === slug)?.name || fallback;
-  // const getCountryName = (slug: string, fallback: string) =>
-  //   countries?.find((country) => country.slug === slug)?.name || fallback;
-
   return (
     <Carousel
       opts={{
@@ -48,17 +40,6 @@ const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
             movie.name,
             movie.origin_name,
           );
-          // const displayMovie = {
-          //   ...movie,
-          //   category: movie.category?.map((category) => ({
-          //     ...category,
-          //     name: getCategoryName(category.slug, category.name),
-          //   })),
-          //   country: movie.country?.map((country) => ({
-          //     ...country,
-          //     name: getCountryName(country.slug, country.name),
-          //   })),
-          // };
 
           return (
             <CarouselItem
@@ -93,15 +74,17 @@ const HeroCarousel = ({ movies }: { movies: Movie[] }) => {
                     {subtitle}
                   </h2>
                 </div>
-                <div className="space-y-2">
-                  <MovieTags className="space-y-2" movie={movie} />
-                  {/* <CategoryAndCountry
-                    className="hidden md:flex"
-                    movie={displayMovie}
-                  /> */}
-                </div>
 
-                <ActionButtons movie={movie} />
+                <MovieTags className="space-y-2" movie={movie} />
+
+                <Link
+                  aria-label="Xem phim"
+                  href={`/phim/${movie.slug}`}
+                  className="flex items-center w-fit font-bold bg-primary hover:bg-main rounded px-4 py-3"
+                >
+                  <PlayIcon className="size-4 md:size-8" />
+                  <span className="hidden md:block">Xem Phim</span>
+                </Link>
               </div>
             </CarouselItem>
           );

@@ -383,14 +383,7 @@ export const HistoryService = {
           );
         }
       }
-
-      // SỬA TOP CACHE
-      await HistoryService.mutateTopCache(
-        payload.user_id,
-        payload.device_id,
-        historyItem,
-      );
-
+     
       if (payload.user_id)
         await DashboardService.invalidateStatsCache(payload.user_id);
     } catch (error) {
@@ -479,12 +472,9 @@ export const HistoryService = {
         await redis.expire(key, 604800);
       }
     }
-    // Sửa cache trang chủ tại chỗ (KHÔNG invalidate để giữ cache hit rate cao)
-    await HistoryService.mutateTopCache(
-      userId,
-      undefined,
-      finalItem,
-    );
+
+    // Sửa cache trang chủ tại chỗ (CHỈ nếu cache đã tồn tại)
+    await HistoryService.mutateTopCache(userId, undefined, finalItem);
 
     // Chỉ invalidate dashboard stats cache (vì cần tính toán lại)
     await DashboardService.invalidateStatsCache(userId);
