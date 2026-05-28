@@ -29,13 +29,19 @@ describe("WatchPartyContentService", () => {
           eq: vi.fn().mockReturnThis(),
           order: vi.fn().mockReturnThis(),
           limit: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValueOnce({
-            data: {
-              role: "host",
-              permissions: { can_control_media: true },
-            },
-            error: null,
-          }),
+          single: vi
+            .fn()
+            .mockResolvedValueOnce({
+              data: {
+                role: "host",
+                permissions: { can_control_media: true },
+              },
+              error: null,
+            })
+            .mockResolvedValueOnce({
+              data: { id: "playlist-1" },
+              error: null,
+            }),
           maybeSingle: vi
             .fn()
             .mockResolvedValueOnce({
@@ -51,7 +57,7 @@ describe("WatchPartyContentService", () => {
         vi.mocked(createSupabaseServer).mockResolvedValue(mockSupabase as any);
 
         const result = await WatchPartyContentService.addToPlaylist({
-          roomId: "room-123",
+          roomId: "550e8400-e29b-41d4-a716-446655440000",
           userId: "user-1",
           movieSlug: "one-piece",
           movieName: "One Piece",
@@ -87,7 +93,59 @@ describe("WatchPartyContentService", () => {
 
         await expect(
           WatchPartyContentService.addToPlaylist({
-            roomId: "room-123",
+            roomId: "550e8400-e29b-41d4-a716-446655440000",
+            userId: "user-1",
+            movieSlug: "one-piece",
+            movieName: "One Piece",
+            episodeSlug: "tap-1",
+            thumbUrl: "thumb.jpg",
+          }),
+        ).rejects.toThrow("Phim này đã có trong danh sách chờ");
+      });
+
+      it("should treat database unique constraint race as duplicate playlist item", async () => {
+        const { createSupabaseServer } = await import("@/lib/supabase/server");
+
+        const mockSupabase = {
+          from: vi.fn().mockReturnThis(),
+          select: vi.fn().mockReturnThis(),
+          insert: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          single: vi
+            .fn()
+            .mockResolvedValueOnce({
+              data: {
+                role: "host",
+                permissions: { can_control_media: true },
+              },
+              error: null,
+            })
+            .mockResolvedValueOnce({
+              data: null,
+              error: {
+                code: "23505",
+                message: "duplicate key value violates unique constraint",
+              },
+            }),
+          maybeSingle: vi
+            .fn()
+            .mockResolvedValueOnce({
+              data: null,
+              error: null,
+            })
+            .mockResolvedValueOnce({
+              data: { sort_order: 5 },
+              error: null,
+            }),
+        };
+
+        vi.mocked(createSupabaseServer).mockResolvedValue(mockSupabase as any);
+
+        await expect(
+          WatchPartyContentService.addToPlaylist({
+            roomId: "550e8400-e29b-41d4-a716-446655440000",
             userId: "user-1",
             movieSlug: "one-piece",
             movieName: "One Piece",
@@ -117,7 +175,7 @@ describe("WatchPartyContentService", () => {
 
         await expect(
           WatchPartyContentService.addToPlaylist({
-            roomId: "room-123",
+            roomId: "550e8400-e29b-41d4-a716-446655440000",
             userId: "user-2",
             movieSlug: "one-piece",
             movieName: "One Piece",
@@ -144,7 +202,7 @@ describe("WatchPartyContentService", () => {
 
         await expect(
           WatchPartyContentService.addToPlaylist({
-            roomId: "room-123",
+            roomId: "550e8400-e29b-41d4-a716-446655440000",
             userId: "user-3",
             movieSlug: "one-piece",
             movieName: "One Piece",
@@ -167,7 +225,7 @@ describe("WatchPartyContentService", () => {
           single: vi
             .fn()
             .mockResolvedValueOnce({
-              data: { room_id: "room-123" },
+              data: { room_id: "550e8400-e29b-41d4-a716-446655440000" },
               error: null,
             })
             .mockResolvedValueOnce({
@@ -200,7 +258,7 @@ describe("WatchPartyContentService", () => {
           single: vi
             .fn()
             .mockResolvedValueOnce({
-              data: { room_id: "room-123" },
+              data: { room_id: "550e8400-e29b-41d4-a716-446655440000" },
               error: null,
             })
             .mockResolvedValueOnce({
@@ -221,7 +279,7 @@ describe("WatchPartyContentService", () => {
     });
 
     describe("getPlaylist", () => {
-      it("should return playlist items sorted by order", async () => {
+      it("should return playlist items sorted by order for approved room member", async () => {
         const { createSupabaseServer } = await import("@/lib/supabase/server");
 
         const mockPlaylist = [
@@ -233,6 +291,10 @@ describe("WatchPartyContentService", () => {
           from: vi.fn().mockReturnThis(),
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: "participant-1" },
+            error: null,
+          }),
           order: vi.fn().mockResolvedValue({
             data: mockPlaylist,
             error: null,
@@ -241,12 +303,38 @@ describe("WatchPartyContentService", () => {
 
         vi.mocked(createSupabaseServer).mockResolvedValue(mockSupabase as any);
 
-        const result = await WatchPartyContentService.getPlaylist("room-123");
+        const result = await WatchPartyContentService.getPlaylist(
+          "550e8400-e29b-41d4-a716-446655440000",
+          "user-1",
+        );
 
         expect(result).toEqual(mockPlaylist);
+        expect(mockSupabase.eq).toHaveBeenCalledWith("status", "approved");
         expect(mockSupabase.order).toHaveBeenCalledWith("sort_order", {
           ascending: true,
         });
+      });
+
+      it("should reject playlist access for non-members", async () => {
+        const { createSupabaseServer } = await import("@/lib/supabase/server");
+
+        const mockSupabase = {
+          from: vi.fn().mockReturnThis(),
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          order: vi.fn().mockResolvedValue({ data: [], error: null }),
+        };
+
+        vi.mocked(createSupabaseServer).mockResolvedValue(mockSupabase as any);
+
+        await expect(
+          WatchPartyContentService.getPlaylist(
+            "550e8400-e29b-41d4-a716-446655440000",
+            "user-2",
+          ),
+        ).rejects.toThrow("Bạn không có trong phòng này");
+        expect(mockSupabase.order).not.toHaveBeenCalled();
       });
     });
   });
@@ -291,8 +379,10 @@ describe("WatchPartyContentService", () => {
 
         const result = await WatchPartyContentService.sendMessage({
           id: "msg-123",
-          roomId: "room-123",
+          roomId: "550e8400-e29b-41d4-a716-446655440000",
           userId: "user-1",
+          userName: "Test User",
+          avatarUrl: "https://example.com/avatar.png",
           text: "Hello",
           type: "chat",
         });
@@ -331,8 +421,10 @@ describe("WatchPartyContentService", () => {
         await expect(
           WatchPartyContentService.sendMessage({
             id: "msg-123",
-            roomId: "room-123",
+            roomId: "550e8400-e29b-41d4-a716-446655440000",
             userId: "user-1",
+            userName: "Test User",
+            avatarUrl: "https://example.com/avatar.png",
             text: "Hello",
             type: "chat",
           }),
@@ -369,8 +461,10 @@ describe("WatchPartyContentService", () => {
         await expect(
           WatchPartyContentService.sendMessage({
             id: "msg-123",
-            roomId: "room-123",
+            roomId: "550e8400-e29b-41d4-a716-446655440000",
             userId: "user-1",
+            userName: "Test User",
+            avatarUrl: "https://example.com/avatar.png",
             text: "Hello",
             type: "chat",
           }),
@@ -407,8 +501,10 @@ describe("WatchPartyContentService", () => {
         await expect(
           WatchPartyContentService.sendMessage({
             id: "msg-123",
-            roomId: "room-123",
+            roomId: "550e8400-e29b-41d4-a716-446655440000",
             userId: "user-1",
+            userName: "Test User",
+            avatarUrl: "https://example.com/avatar.png",
             text: "System message",
             type: "system",
           }),
@@ -444,7 +540,7 @@ describe("WatchPartyContentService", () => {
         vi.mocked(createSupabaseServer).mockResolvedValue(mockSupabase as any);
 
         const result = await WatchPartyContentService.getMessages(
-          "room-123",
+          "550e8400-e29b-41d4-a716-446655440000",
           "user-1",
         );
 
@@ -468,7 +564,7 @@ describe("WatchPartyContentService", () => {
         vi.mocked(createSupabaseServer).mockResolvedValue(mockSupabase as any);
 
         await expect(
-          WatchPartyContentService.getMessages("room-123", "user-3"),
+          WatchPartyContentService.getMessages("550e8400-e29b-41d4-a716-446655440000", "user-3"),
         ).rejects.toThrow("Bạn không phải thành viên phòng");
       });
     });

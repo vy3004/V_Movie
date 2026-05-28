@@ -6,6 +6,7 @@ import {
   ClockIcon,
   UserIcon,
   ArrowLeftEndOnRectangleIcon,
+  WrenchScrewdriverIcon,
 } from "@heroicons/react/24/solid";
 import NotificationBell from "@/components/shared/NotificationBell";
 import UserAvatar from "@/components/shared/UserAvatar";
@@ -54,6 +55,8 @@ export default function UserButton() {
   // 3. Trường hợp đã đăng nhập (USER)
   const avatarUrl = user.avatar_url;
   const fullName = user.full_name || "";
+  const isAdmin = user.role === "admin";
+
   return (
     <div className="flex items-center gap-2">
       <NotificationBell />
@@ -102,6 +105,14 @@ export default function UserButton() {
                 icon={<UserIcon className="w-5 h-5" />}
                 label="Hồ sơ"
               />
+
+              {isAdmin && (
+                <MenuLink
+                  href="/admin/movies"
+                  icon={<WrenchScrewdriverIcon className="w-5 h-5" />}
+                  label="Quản trị viên"
+                />
+              )}
 
               <hr className="my-1 border-zinc-800" />
 

@@ -77,39 +77,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true });
     }
 
-    // Nếu là guest → gửi broadcast request cho host xóa
-    // Broadcast qua Supabase Realtime channel
-    const channel = supabase.channel(`wp_ui_${roomId}`);
+    await WatchPartyService.leaveRoom(roomId, user.id);
 
-    // Subscribe channel trước khi send với timeout
-    await Promise.race([
-      new Promise<void>((resolve, reject) => {
-        channel.subscribe((status) => {
-          if (status === "SUBSCRIBED") resolve();
-          else if (status === "CHANNEL_ERROR") reject(new Error("Channel error"));
-        });
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Channel subscription timeout")), 5000)
-      ),
-    ]);
-
-    await channel.send({
-      type: "broadcast",
-      event: "request_leave",
-      payload: {
-        userId: user.id,
-        timestamp: Date.now(),
-      },
-    });
-
-    // Đợi 1 giây để host nhận được request
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Cleanup channel
-    await supabase.removeChannel(channel);
-
-    return NextResponse.json({ success: true, pending: true });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[LEAVE_ROOM_ERROR]:", error);
     return NextResponse.json(

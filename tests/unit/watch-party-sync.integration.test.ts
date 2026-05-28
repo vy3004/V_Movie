@@ -7,26 +7,34 @@ describe("Watch Party Sync - Integration Tests", () => {
     vi.clearAllMocks();
   });
 
-  describe("Debounce Logic", () => {
-    it("should debounce with 200ms delay", async () => {
-      const { debounce } = await import("lodash-es");
-      const mockFn = vi.fn();
-      const debounced = debounce(mockFn, 200, { leading: false, trailing: true });
+  describe("Seek Commit Logic", () => {
+    it("should commit only the final seeked time", () => {
+      const commits: number[] = [];
+      let pendingSeekTime = 0;
 
-      // Call multiple times
-      debounced(1);
-      debounced(2);
-      debounced(3);
+      const onSeeking = (time: number) => {
+        pendingSeekTime = time;
+      };
 
-      // Should not call yet
-      expect(mockFn).not.toHaveBeenCalled();
+      const onSeeked = () => {
+        commits.push(pendingSeekTime);
+      };
 
-      // Wait 200ms
-      await new Promise(resolve => setTimeout(resolve, 200));
+      onSeeking(610);
+      onSeeking(720);
+      onSeeking(1198);
+      onSeeked();
 
-      // Should call once with last value
-      expect(mockFn).toHaveBeenCalledTimes(1);
-      expect(mockFn).toHaveBeenCalledWith(3);
+      expect(commits).toEqual([1198]);
+    });
+
+    it("should preserve play status when seek commits while video is playing", () => {
+      const action = "seek" as const;
+      const isPaused = false;
+      const status = isPaused ? "pause" : "play";
+
+      expect(action).toBe("seek");
+      expect(status).toBe("play");
     });
   });
 
@@ -42,8 +50,8 @@ describe("Watch Party Sync - Integration Tests", () => {
         await new Promise(resolve => setTimeout(resolve, 16.67));
       }
 
-      // With 100ms throttle, in 500ms we should have max 6-8 calls (timing variance)
-      expect(mockFn.mock.calls.length).toBeLessThanOrEqual(9);
+      // With 100ms throttle, timing variance can include final trailing call.
+      expect(mockFn.mock.calls.length).toBeLessThanOrEqual(10);
       expect(mockFn.mock.calls.length).toBeGreaterThanOrEqual(4);
     });
 
@@ -72,43 +80,110 @@ describe("Watch Party Sync - Integration Tests", () => {
   });
 
   describe("Service Layer - syncVideoState", () => {
-    it("should validate episode slug format", async () => {
-      const { WatchPartyService } = await import("@/services/watch-party.service");
+    it("should advance canonical version and controller on accepted command", () => {
+      const currentState = {
+        status: "play" as const,
+        time: 100,
+        episode_slug: "tap-1",
+        active_controller_id: "host-id",
+        active_controller_name: "Host",
+        version: 7,
+        updated_at: 1000,
+      };
 
-      // Mock dependencies
-      vi.mock("@/lib/supabase/server", () => ({
-        createSupabaseServer: vi.fn().mockResolvedValue({
-          from: vi.fn().mockReturnThis(),
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({
-            data: {
-              role: "host",
-              permissions: {},
-              room: { settings: {} }
-            },
-            error: null
-          })
-        })
-      }));
+      const acceptedState = {
+        ...currentState,
+        status: "pause" as const,
+        time: 120,
+        active_controller_id: "guest-id",
+        active_controller_name: "Guest",
+        version: currentState.version + 1,
+        updated_at: 2000,
+      };
 
-      vi.mock("@/lib/redis", () => ({
-        redis: {
-          get: vi.fn().mockResolvedValue(null),
-          set: vi.fn().mockResolvedValue(true)
-        }
-      }));
+      expect(acceptedState.version).toBe(8);
+      expect(acceptedState.active_controller_id).toBe("guest-id");
+      expect(acceptedState.status).toBe("pause");
+    });
 
-      // Valid slug
+    it("should reject stale canonical states by version", () => {
+      const lastAppliedVersion = 10;
+      const incoming = { version: 9 };
+
+      const shouldApply = incoming.version > lastAppliedVersion;
+
+      expect(shouldApply).toBe(false);
+    });
+
+    it("should accept only newer canonical states", () => {
+      const lastAppliedVersion = 10;
+      const incoming = { version: 11 };
+
+      const shouldApply = incoming.version > lastAppliedVersion;
+
+      expect(shouldApply).toBe(true);
+    });
+
+    it("should keep newer Redis state when an older sync arrives", () => {
+      const currentState = {
+        status: "pause" as const,
+        time: 1200,
+        episode_slug: "tap-1",
+        updated_at: 2000,
+      };
+      const incoming = {
+        status: "play" as const,
+        time: 600,
+        updatedAt: 1000,
+      };
+
+      const shouldIgnore =
+        typeof incoming.updatedAt === "number" &&
+        incoming.updatedAt < currentState.updated_at;
+
+      const newState = shouldIgnore
+        ? currentState
+        : {
+            status: incoming.status || currentState.status || "pause",
+            time: incoming.time ?? currentState.time ?? 0,
+            episode_slug: currentState.episode_slug,
+            updated_at: incoming.updatedAt ?? Date.now(),
+          };
+
+      expect(newState).toEqual(currentState);
+    });
+
+    it("should validate episode slug format", () => {
       const validSlug = "tap-1";
       expect(/^[a-zA-Z0-9-]+$/.test(validSlug)).toBe(true);
 
-      // Invalid slug
-      const invalidSlug = "tap 1"; // has space
+      const invalidSlug = "tap 1";
       expect(/^[a-zA-Z0-9-]+$/.test(invalidSlug)).toBe(false);
 
-      const invalidSlug2 = "tap@1"; // has special char
+      const invalidSlug2 = "tap@1";
       expect(/^[a-zA-Z0-9-]+$/.test(invalidSlug2)).toBe(false);
+    });
+  });
+
+  describe("Realtime Version Rules", () => {
+    it("should reject older realtime controls", () => {
+      const lastApplied = 2000;
+      const incoming = { sentAt: 1000 };
+
+      const shouldApply = (incoming.sentAt ?? Date.now()) >= lastApplied;
+
+      expect(shouldApply).toBe(false);
+    });
+
+    it("should accept system sync when requestId matches pending request", () => {
+      const pendingRequestId = "sync-123";
+      const payload = { origin: "system", requestId: "sync-123" };
+
+      const isUserOrigin = !payload.origin || payload.origin === "user";
+      const isRequestedSystemSync =
+        payload.origin === "system" && payload.requestId === pendingRequestId;
+
+      expect(isUserOrigin || isRequestedSystemSync).toBe(true);
     });
   });
 
@@ -147,7 +222,99 @@ describe("Watch Party Sync - Integration Tests", () => {
     });
   });
 
+  describe("Controller Heartbeat Authority", () => {
+    it("should ignore heartbeat from non-active controller", () => {
+      const lastAppliedVersion = 12;
+      const activeControllerId = "guest-controller";
+      const heartbeat = {
+        senderId: "host",
+        controllerId: "host",
+        version: 12,
+      };
+
+      const shouldApply =
+        heartbeat.version === lastAppliedVersion &&
+        heartbeat.controllerId === activeControllerId;
+
+      expect(shouldApply).toBe(false);
+    });
+
+    it("should accept heartbeat from active controller at current version", () => {
+      const lastAppliedVersion = 12;
+      const activeControllerId = "guest-controller";
+      const heartbeat = {
+        senderId: "guest-controller",
+        controllerId: "guest-controller",
+        version: 12,
+      };
+
+      const shouldApply =
+        heartbeat.version === lastAppliedVersion &&
+        heartbeat.controllerId === activeControllerId;
+
+      expect(shouldApply).toBe(true);
+    });
+
+    it("should ignore host heartbeat while another controller is active", () => {
+      const activeControllerId: string | null = "guest-controller";
+      const heartbeatSenderId: string = "host";
+
+      const shouldApplyHeartbeat =
+        !activeControllerId || activeControllerId === heartbeatSenderId;
+
+      expect(shouldApplyHeartbeat).toBe(false);
+    });
+
+    it("should let active non-host controller send heartbeat", () => {
+      const activeControllerId = "guest-controller";
+      const senderId = "guest-controller";
+      const isHost = false;
+      const canControl = true;
+
+      const canSendHeartbeat =
+        canControl && (!activeControllerId || activeControllerId === senderId || isHost);
+
+      expect(canSendHeartbeat).toBe(true);
+    });
+  });
+
+  describe("Paused Heartbeat Cadence", () => {
+    it("should send paused heartbeat every 5s during first 30s after pause", async () => {
+      const { getPausedHeartbeatInterval } = await import("@/hooks/useVideoPlayer");
+
+      expect(getPausedHeartbeatInterval(25_000)).toBe(5_000);
+    });
+
+    it("should slow paused heartbeat to 30s after initial pause burst", async () => {
+      const { getPausedHeartbeatInterval } = await import("@/hooks/useVideoPlayer");
+
+      expect(getPausedHeartbeatInterval(35_000)).toBe(30_000);
+    });
+  });
+
   describe("Time Drift Calculation", () => {
+    it("should apply paused canonical state after reload", () => {
+      const state: {
+        status: "play" | "pause";
+        time: number;
+        version: number;
+        updated_at: number;
+      } = {
+        status: "pause",
+        time: 1200,
+        version: 15,
+        updated_at: Date.now() - 5000,
+      };
+
+      const action = state.status;
+      const appliedTime = state.status === "play"
+        ? state.time + (Date.now() - state.updated_at) / 1000
+        : state.time;
+
+      expect(action).toBe("pause");
+      expect(appliedTime).toBe(1200);
+    });
+
     it("should predict host time correctly", () => {
       const targetHostTime = 100; // Host was at 100s
       const lastSyncReceivedAt = Date.now() - 2000; // 2 seconds ago

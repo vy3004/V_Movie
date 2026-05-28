@@ -1,567 +1,831 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useVideoControl } from "@/app/(main)/xem-chung/_hooks/useVideoControl";
 import React from "react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderHook, waitFor, act } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { usePlaybackRealtime as useVideoControl } from "@/features/watch-party/playback-sync";
 
-// Mock Supabase
-const mockChannel = {
-  on: vi.fn().mockReturnThis(),
-  subscribe: vi.fn().mockReturnThis(),
-  send: vi.fn().mockResolvedValue({ error: null }),
-  track: vi.fn().mockResolvedValue({ error: null }),
-  untrack: vi.fn().mockResolvedValue({ error: null }),
-  state: "joined",
+const createTestQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+
+const createWrapper = (queryClient = createTestQueryClient()) => {
+  return ({ children }: { children: React.ReactNode }) =>
+    React.createElement(QueryClientProvider, { client: queryClient }, children);
 };
 
-const mockSupabase = {
-  channel: vi.fn().mockReturnValue(mockChannel),
-  removeChannel: vi.fn(),
-} as any;
-
-// Mock fetch
-global.fetch = vi.fn();
+const createChannel = () => ({
+  state: "joined",
+  on: vi.fn().mockReturnThis(),
+  subscribe: vi.fn(function (this: any, callback: (status: string) => void) {
+    callback("SUBSCRIBED");
+    return this;
+  }),
+  send: vi.fn().mockResolvedValue({ error: null }),
+});
 
 describe("useVideoControl", () => {
-  let queryClient: QueryClient;
-
   beforeEach(() => {
-    queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
     vi.clearAllMocks();
-    vi.useFakeTimers();
-
-    // Mock fetch for initial room query
-    (global.fetch as any).mockImplementation((url: string) => {
-      if (url.includes('/api/watch-party?roomId=')) {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/watch-party?roomId=")) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            room: { id: 'room-123', room_code: 'ABC123' },
-            state: { status: 'pause', time: 0 }
-          })
+          json: () =>
+            Promise.resolve({
+              room: { id: "room-123", room_code: "ABC123" },
+              state: {
+                status: "pause",
+                time: 0,
+                active_controller_id: "user-1",
+                active_controller_name: "Host",
+                version: 3,
+                updated_at: Date.now(),
+                calculated_at: Date.now(),
+              },
+            }),
         });
       }
+
+      if (url.includes("/api/watch-party/sync")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              state: {
+                status: "play",
+                time: 12,
+                active_controller_id: "user-1",
+                active_controller_name: "Host",
+                version: 4,
+                updated_at: Date.now(),
+              },
+            }),
+        });
+      }
+
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  it("posts control to canonical sync API and broadcasts accepted state", async () => {
+    const channel = createChannel();
+    const supabase = {
+      channel: vi.fn().mockReturnValue(channel),
+      removeChannel: vi.fn(),
+    } as any;
 
-  const wrapper = ({ children }: { children: React.ReactNode }) => {
-    return React.createElement(QueryClientProvider, { client: queryClient }, children);
-  };
+    const { result } = renderHook(
+      () =>
+        useVideoControl(
+          "room-123",
+          "user-1",
+          () => true,
+          () => true,
+          supabase,
+          vi.fn(),
+        ),
+      { wrapper: createWrapper() },
+    );
 
-  describe("Broadcast", () => {
-    it("should send broadcast immediately when sendControl is called", async () => {
-      const syncFromRemote = vi.fn();
-      const { result } = renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            true,
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
+    await waitFor(() => expect(supabase.channel).toHaveBeenCalled());
+
+    act(() => result.current.sendControl("play", 12));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/watch-party/sync",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"requestId":"user-1-'),
+        }),
       );
+      const syncCall = vi.mocked(global.fetch).mock.calls.find(
+        ([url]) => typeof url === "string" && url.includes("/api/watch-party/sync"),
+      );
+      const requestId = JSON.parse(syncCall?.[1]?.body as string).requestId;
 
-      await waitFor(() => expect(result.current.sendControl).toBeDefined());
-
-      // Call sendControl
-      result.current.sendControl("play", 10.5);
-
-      // Verify broadcast sent immediately
-      expect(mockChannel.send).toHaveBeenCalledWith({
+      expect(channel.send).toHaveBeenCalledWith({
         type: "broadcast",
         event: "video_control",
-        payload: {
+        payload: expect.objectContaining({
+          status: "play",
           action: "play",
-          time: 10.5,
-          episodeSlug: undefined,
+          time: 12,
+          activeControllerId: "user-1",
+          activeControllerName: "Host",
+          version: 4,
           senderId: "user-1",
+          requestId,
+          origin: "user",
+        }),
+      });
+    });
+  });
+
+  it("ignores stale realtime state by version", async () => {
+    const channel = createChannel();
+    let videoHandler: ((event: { payload: unknown }) => void) | undefined;
+    channel.on.mockImplementation((type: string, config: { event: string }, handler: any) => {
+      if (type === "broadcast" && config.event === "video_control") videoHandler = handler;
+      return channel;
+    });
+    const syncFromRemote = vi.fn();
+    const supabase = {
+      channel: vi.fn().mockReturnValue(channel),
+      removeChannel: vi.fn(),
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useVideoControl(
+          "room-123",
+          "user-1",
+          () => true,
+          () => true,
+          supabase,
+          syncFromRemote,
+        ),
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() => expect(videoHandler).toBeDefined());
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-1"));
+
+    act(() => {
+      videoHandler?.({
+        payload: {
+          status: "play",
+          action: "play",
+          time: 20,
+          version: 2,
+          updatedAt: Date.now(),
+          senderId: "user-2",
+          origin: "user",
         },
       });
     });
 
-    it("should not send broadcast when user has no control permission", async () => {
-      const syncFromRemote = vi.fn();
-      const { result } = renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            false, // canControl = false
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
-      );
+    expect(syncFromRemote).not.toHaveBeenCalled();
+  });
 
-      await waitFor(() => expect(result.current.sendControl).toBeDefined());
-
-      result.current.sendControl("play", 10.5);
-
-      // Should not send broadcast
-      expect(mockChannel.send).not.toHaveBeenCalled();
+  it("applies newer realtime state and updates active controller", async () => {
+    const channel = createChannel();
+    let videoHandler: ((event: { payload: unknown }) => void) | undefined;
+    channel.on.mockImplementation((type: string, config: { event: string }, handler: any) => {
+      if (type === "broadcast" && config.event === "video_control") videoHandler = handler;
+      return channel;
     });
+    const syncFromRemote = vi.fn();
+    const supabase = {
+      channel: vi.fn().mockReturnValue(channel),
+      removeChannel: vi.fn(),
+    } as any;
 
-    it("should include episodeSlug in broadcast when provided", async () => {
-      const syncFromRemote = vi.fn();
-      const { result } = renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            true,
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
-      );
+    const { result } = renderHook(
+      () =>
+        useVideoControl(
+          "room-123",
+          "user-1",
+          () => true,
+          () => true,
+          supabase,
+          syncFromRemote,
+        ),
+      { wrapper: createWrapper() },
+    );
 
-      await waitFor(() => expect(result.current.sendControl).toBeDefined());
+    await waitFor(() => expect(videoHandler).toBeDefined());
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-1"));
 
-      result.current.sendControl("play", 0, "tap-1");
-
-      expect(mockChannel.send).toHaveBeenCalledWith({
-        type: "broadcast",
-        event: "video_control",
+    act(() => {
+      videoHandler?.({
         payload: {
-          action: "play",
-          time: 0,
-          episodeSlug: "tap-1",
-          senderId: "user-1",
+          status: "pause",
+          action: "pause",
+          time: 30,
+          activeControllerId: "user-2",
+          activeControllerName: "Guest",
+          version: 4,
+          updatedAt: Date.now(),
+          senderId: "user-2",
+          origin: "user",
         },
       });
     });
-  });
 
-  describe("Debounced API Sync", () => {
-    it("should debounce API calls with 200ms delay", async () => {
-      (global.fetch as any).mockResolvedValue({ ok: true });
-
-      const syncFromRemote = vi.fn();
-      const { result } = renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            true,
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
-      );
-
-      await waitFor(() => expect(result.current.sendControl).toBeDefined());
-
-      // Call sendControl multiple times rapidly
-      result.current.sendControl("play", 1);
-      result.current.sendControl("play", 2);
-      result.current.sendControl("play", 3);
-
-      // API should not be called yet
-      expect(global.fetch).not.toHaveBeenCalled();
-
-      // Fast-forward 200ms
-      vi.advanceTimersByTime(200);
-
-      // Now API should be called once with the last value
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledTimes(1);
-        expect(global.fetch).toHaveBeenCalledWith(
-          "/api/watch-party/sync",
-          expect.objectContaining({
-            method: "POST",
-            body: JSON.stringify({
-              roomId: "room-123",
-              status: "play",
-              time: 3,
-              episodeSlug: undefined,
-            }),
-          }),
-        );
-      });
-    });
-
-    it("should use trailing edge of debounce", async () => {
-      (global.fetch as any).mockResolvedValue({ ok: true });
-
-      const syncFromRemote = vi.fn();
-      const { result } = renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            true,
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
-      );
-
-      await waitFor(() => expect(result.current.sendControl).toBeDefined());
-
-      // Call at t=0
-      result.current.sendControl("play", 1);
-
-      // Should not call immediately (leading: false)
-      expect(global.fetch).not.toHaveBeenCalled();
-
-      // Call again at t=200ms
-      vi.advanceTimersByTime(200);
-      result.current.sendControl("play", 2);
-
-      // Still no call
-      expect(global.fetch).not.toHaveBeenCalled();
-
-      // Wait 200ms from last call
-      vi.advanceTimersByTime(200);
-
-      // Now should call with last value
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledTimes(1);
-        expect(global.fetch).toHaveBeenCalledWith(
-          "/api/watch-party/sync",
-          expect.objectContaining({
-            body: JSON.stringify({
-              roomId: "room-123",
-              status: "play",
-              time: 2,
-              episodeSlug: undefined,
-            }),
-          }),
-        );
-      });
-    });
-
-    it("should not send API call when user has no control permission", async () => {
-      (global.fetch as any).mockResolvedValue({ ok: true });
-
-      const syncFromRemote = vi.fn();
-      const { result } = renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            false, // canControl = false
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
-      );
-
-      await waitFor(() => expect(result.current.sendControl).toBeDefined());
-
-      result.current.sendControl("play", 10);
-      vi.advanceTimersByTime(200);
-
-      await waitFor(() => {
-        expect(global.fetch).not.toHaveBeenCalled();
-      });
-    });
-
-    it("should set status to undefined for seek action", async () => {
-      (global.fetch as any).mockResolvedValue({ ok: true });
-
-      const syncFromRemote = vi.fn();
-      const { result } = renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            true,
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
-      );
-
-      await waitFor(() => expect(result.current.sendControl).toBeDefined());
-
-      result.current.sendControl("seek", 50);
-      vi.advanceTimersByTime(200);
-
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          "/api/watch-party/sync",
-          expect.objectContaining({
-            body: JSON.stringify({
-              roomId: "room-123",
-              status: undefined, // seek doesn't change play/pause status
-              time: 50,
-              episodeSlug: undefined,
-            }),
-          }),
-        );
-      });
+    expect(syncFromRemote).toHaveBeenCalledWith("pause", 30);
+    await waitFor(() => {
+      expect(result.current.activeControllerId).toBe("user-2");
+      expect(result.current.activeControllerName).toBe("Guest");
     });
   });
 
-  describe("Throttled Seek Broadcast", () => {
-    it("should throttle seek broadcasts to max 10 times/second", async () => {
-      const syncFromRemote = vi.fn();
-      const { result } = renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            true,
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
-      );
-
-      await waitFor(() => expect(result.current.sendControl).toBeDefined());
-
-      // Simulate user dragging seek bar (60fps = 16.67ms per frame)
-      for (let i = 0; i < 20; i++) {
-        result.current.sendControl("seek", i);
-        vi.advanceTimersByTime(16.67);
+  it("ignores stale accepted sync response after newer realtime state", async () => {
+    const channel = createChannel();
+    let videoHandler: ((event: { payload: unknown }) => void) | undefined;
+    channel.on.mockImplementation((type: string, config: { event: string }, handler: any) => {
+      if (type === "broadcast" && config.event === "video_control") videoHandler = handler;
+      return channel;
+    });
+    let resolveSync: ((value: unknown) => void) | undefined;
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/watch-party?roomId=")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              room: { id: "room-123", room_code: "ABC123" },
+              state: {
+                status: "pause",
+                time: 0,
+                active_controller_id: "user-1",
+                active_controller_name: "Host",
+                version: 3,
+                updated_at: Date.now(),
+                calculated_at: Date.now(),
+              },
+            }),
+        });
       }
 
-      // With 100ms throttle, in 333ms (20 frames) we should have max 4 broadcasts
-      // (leading + 2 intermediate + trailing)
-      await waitFor(() => {
-        const seekCalls = (mockChannel.send as any).mock.calls.filter(
-          (call: any) => call[0]?.payload?.action === "seek"
-        );
-        expect(seekCalls.length).toBeLessThanOrEqual(5);
-        expect(seekCalls.length).toBeGreaterThanOrEqual(3);
+      if (url.includes("/api/watch-party/sync")) {
+        return new Promise((resolve) => {
+          resolveSync = resolve;
+        });
+      }
+
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    const supabase = {
+      channel: vi.fn().mockReturnValue(channel),
+      removeChannel: vi.fn(),
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useVideoControl(
+          "room-123",
+          "user-1",
+          () => true,
+          () => true,
+          supabase,
+          vi.fn(),
+        ),
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() => expect(videoHandler).toBeDefined());
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-1"));
+
+    act(() => result.current.sendControl("play", 12));
+
+    act(() => {
+      videoHandler?.({
+        payload: {
+          status: "pause",
+          action: "pause",
+          time: 20,
+          activeControllerId: "user-2",
+          activeControllerName: "Guest",
+          version: 5,
+          updatedAt: Date.now(),
+          senderId: "user-2",
+          origin: "user",
+        },
       });
     });
 
-    it("should NOT throttle play/pause broadcasts", async () => {
-      const syncFromRemote = vi.fn();
-      const { result } = renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            true,
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
-      );
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-2"));
 
-      await waitFor(() => expect(result.current.sendControl).toBeDefined());
-
-      // Call play/pause rapidly
-      result.current.sendControl("play", 1);
-      vi.advanceTimersByTime(50);
-      result.current.sendControl("pause", 1);
-      vi.advanceTimersByTime(50);
-      result.current.sendControl("play", 1);
-
-      // All play/pause should be sent immediately (not throttled)
-      await waitFor(() => {
-        const playCalls = (mockChannel.send as any).mock.calls.filter(
-          (call: any) => call[0]?.payload?.action === "play"
-        );
-        const pauseCalls = (mockChannel.send as any).mock.calls.filter(
-          (call: any) => call[0]?.payload?.action === "pause"
-        );
-        expect(playCalls.length).toBe(2);
-        expect(pauseCalls.length).toBe(1);
+    act(() => {
+      resolveSync?.({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            state: {
+              status: "play",
+              time: 12,
+              active_controller_id: "user-1",
+              active_controller_name: "Host",
+              version: 4,
+              updated_at: Date.now(),
+            },
+          }),
       });
+    });
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      "/api/watch-party/sync",
+      expect.any(Object),
+    ));
+    expect(result.current.activeControllerId).toBe("user-2");
+    expect(channel.send).not.toHaveBeenCalledWith({
+      type: "broadcast",
+      event: "video_control",
+      payload: expect.objectContaining({ version: 4 }),
     });
   });
 
-  describe("Realtime Channel", () => {
-    it("should setup channel with correct config", async () => {
-      const syncFromRemote = vi.fn();
-      renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            true,
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
-      );
+  it("buffers remote control while local control waits for server acceptance", async () => {
+    const channel = createChannel();
+    let videoHandler: ((event: { payload: unknown }) => void) | undefined;
+    channel.on.mockImplementation((type: string, config: { event: string }, handler: any) => {
+      if (type === "broadcast" && config.event === "video_control") videoHandler = handler;
+      return channel;
+    });
+    let resolveSync: ((value: unknown) => void) | undefined;
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/watch-party?roomId=")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              room: { id: "room-123", room_code: "ABC123" },
+              state: {
+                status: "pause",
+                time: 10,
+                active_controller_id: "user-2",
+                active_controller_name: "Guest",
+                version: 4,
+                updated_at: Date.now(),
+                calculated_at: Date.now(),
+              },
+            }),
+        });
+      }
 
-      await waitFor(() => {
-        expect(mockSupabase.channel).toHaveBeenCalledWith("wp_video_room-123", {
-          config: {
-            presence: { key: "room-123" },
-            broadcast: { ack: false, self: false },
+      if (url.includes("/api/watch-party/sync")) {
+        return new Promise((resolve) => {
+          resolveSync = resolve;
+        });
+      }
+
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    const syncFromRemote = vi.fn();
+    const supabase = {
+      channel: vi.fn().mockReturnValue(channel),
+      removeChannel: vi.fn(),
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useVideoControl(
+          "room-123",
+          "user-1",
+          () => true,
+          () => true,
+          supabase,
+          syncFromRemote,
+        ),
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() => expect(videoHandler).toBeDefined());
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-2"));
+
+    act(() => result.current.sendControl("seek", 60));
+
+    act(() => {
+      videoHandler?.({
+        payload: {
+          status: "pause",
+          action: "pause",
+          time: 10,
+          activeControllerId: "user-2",
+          activeControllerName: "Guest",
+          version: 5,
+          updatedAt: Date.now(),
+          senderId: "user-2",
+          origin: "user",
+        },
+      });
+    });
+
+    expect(syncFromRemote).not.toHaveBeenCalledWith("pause", 10);
+
+    act(() => {
+      resolveSync?.({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            state: {
+              status: "pause",
+              time: 60,
+              active_controller_id: "user-1",
+              active_controller_name: "Host",
+              version: 6,
+              updated_at: Date.now(),
+            },
+          }),
+      });
+    });
+
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-1"));
+    expect(syncFromRemote).not.toHaveBeenCalledWith("pause", 10);
+  });
+
+  it("keeps accepted controller when room refetch returns same-version stale controller", async () => {
+    const channel = createChannel();
+    let resolveSync: ((value: unknown) => void) | undefined;
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/watch-party?roomId=")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              room: { id: "room-123", room_code: "ABC123" },
+              state: {
+                status: "pause",
+                time: 10,
+                active_controller_id: "user-2",
+                active_controller_name: "Guest",
+                version: 4,
+                updated_at: Date.now(),
+                calculated_at: Date.now(),
+              },
+            }),
+        });
+      }
+
+      if (url.includes("/api/watch-party/sync")) {
+        return new Promise((resolve) => {
+          resolveSync = resolve;
+        });
+      }
+
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    const queryClient = createTestQueryClient();
+    const supabase = {
+      channel: vi.fn().mockReturnValue(channel),
+      removeChannel: vi.fn(),
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useVideoControl(
+          "room-123",
+          "user-1",
+          () => true,
+          () => true,
+          supabase,
+          vi.fn(),
+        ),
+      { wrapper: createWrapper(queryClient) },
+    );
+
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-2"));
+
+    act(() => result.current.sendControl("seek", 60));
+
+    act(() => {
+      resolveSync?.({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            requestId: JSON.parse(
+              vi.mocked(global.fetch).mock.calls.find(
+                ([url]) => typeof url === "string" && url.includes("/api/watch-party/sync"),
+              )?.[1]?.body as string,
+            ).requestId,
+            state: {
+              status: "pause",
+              time: 60,
+              active_controller_id: "user-1",
+              active_controller_name: "Host",
+              version: 6,
+              updated_at: Date.now(),
+            },
+          }),
+      });
+    });
+
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-1"));
+
+    queryClient.setQueryData(["watch-party", "room-123"], {
+      room: { id: "room-123", room_code: "ABC123" },
+      state: {
+        status: "pause",
+        time: 10,
+        active_controller_id: "user-2",
+        active_controller_name: "Guest",
+        version: 6,
+        updated_at: Date.now(),
+        calculated_at: Date.now(),
+      },
+    });
+
+    await waitFor(() => {
+      expect(result.current.activeControllerId).toBe("user-1");
+      expect(result.current.activeControllerName).toBe("Host");
+    });
+  });
+
+  it("keeps accepted controller when old controller replies to reconnect sync", async () => {
+    const channel = createChannel();
+    let videoHandler: ((event: { payload: unknown }) => void) | undefined;
+    channel.on.mockImplementation((type: string, config: { event: string }, handler: any) => {
+      if (type === "broadcast" && config.event === "video_control") videoHandler = handler;
+      return channel;
+    });
+    let resolveSync: ((value: unknown) => void) | undefined;
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/watch-party?roomId=")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              room: { id: "room-123", room_code: "ABC123" },
+              state: {
+                status: "pause",
+                time: 10,
+                active_controller_id: "user-2",
+                active_controller_name: "Guest",
+                version: 4,
+                updated_at: Date.now(),
+                calculated_at: Date.now(),
+              },
+            }),
+        });
+      }
+
+      if (url.includes("/api/watch-party/sync")) {
+        return new Promise((resolve) => {
+          resolveSync = resolve;
+        });
+      }
+
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    const supabase = {
+      channel: vi.fn().mockReturnValue(channel),
+      removeChannel: vi.fn(),
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useVideoControl(
+          "room-123",
+          "user-1",
+          () => true,
+          () => true,
+          supabase,
+          vi.fn(),
+        ),
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() => expect(videoHandler).toBeDefined());
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-2"));
+
+    act(() => result.current.sendControl("seek", 60));
+
+    act(() => {
+      resolveSync?.({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            requestId: JSON.parse(
+              vi.mocked(global.fetch).mock.calls.find(
+                ([url]) => typeof url === "string" && url.includes("/api/watch-party/sync"),
+              )?.[1]?.body as string,
+            ).requestId,
+            state: {
+              status: "pause",
+              time: 60,
+              active_controller_id: "user-1",
+              active_controller_name: "Host",
+              version: 6,
+              updated_at: Date.now(),
+            },
+          }),
+      });
+    });
+
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-1"));
+
+    const syncRequest = vi.mocked(channel.send).mock.calls.find(
+      ([message]) => message.event === "request_sync_from_host",
+    )?.[0].payload.requestId;
+
+    act(() => {
+      videoHandler?.({
+        payload: {
+          status: "pause",
+          action: "pause",
+          time: 60,
+          activeControllerId: "user-2",
+          activeControllerName: "Guest",
+          version: 7,
+          updatedAt: Date.now(),
+          senderId: "user-2",
+          requestId: syncRequest,
+          origin: "system",
+        },
+      });
+    });
+
+    expect(result.current.activeControllerId).toBe("user-1");
+    expect(result.current.activeControllerName).toBe("Host");
+  });
+
+  it("ignores stale same-version heartbeat after accepted seek", async () => {
+    const channel = createChannel();
+    let heartbeatHandler: ((event: { payload: unknown }) => void) | undefined;
+    channel.on.mockImplementation((type: string, config: { event: string }, handler: any) => {
+      if (type === "broadcast" && config.event === "heartbeat_sync") heartbeatHandler = handler;
+      return channel;
+    });
+    const syncHeartbeat = vi.fn();
+    const supabase = {
+      channel: vi.fn().mockReturnValue(channel),
+      removeChannel: vi.fn(),
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useVideoControl(
+          "room-123",
+          "host-1",
+          () => true,
+          () => true,
+          supabase,
+          vi.fn(),
+          undefined,
+          undefined,
+          syncHeartbeat,
+        ),
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() => expect(heartbeatHandler).toBeDefined());
+
+    act(() => {
+      channel.on.mock.calls
+        .find(([, config]) => config.event === "video_control")?.[2]({
+          payload: {
+            status: "pause",
+            action: "seek",
+            time: 60,
+            activeControllerId: "user-1",
+            activeControllerName: "Guest",
+            version: 4,
+            updatedAt: Date.now(),
+            senderId: "user-1",
+            origin: "user",
           },
         });
-      });
     });
 
-    it("should listen for video_control events", async () => {
-      const syncFromRemote = vi.fn();
-      renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            true,
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
-      );
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-1"));
 
-      await waitFor(() => {
-        expect(mockChannel.on).toHaveBeenCalledWith(
-          "broadcast",
-          { event: "video_control" },
-          expect.any(Function),
-        );
-      });
-    });
-
-    it("should call syncFromRemote when receiving broadcast", async () => {
-      const syncFromRemote = vi.fn();
-      let broadcastHandler: any;
-
-      mockChannel.on.mockImplementation((type, config, handler) => {
-        if (config.event === "video_control") {
-          broadcastHandler = handler;
-        }
-        return mockChannel;
-      });
-
-      renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            true,
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
-      );
-
-      await waitFor(() => expect(broadcastHandler).toBeDefined());
-
-      // Simulate receiving broadcast
-      broadcastHandler({
+    act(() => {
+      heartbeatHandler?.({
         payload: {
-          action: "play",
-          time: 15.5,
-          senderId: "user-2", // different user
+          time: 10,
+          senderId: "user-1",
+          controllerId: "user-1",
+          version: 4,
+          status: "pause",
+          isPaused: true,
         },
       });
-
-      expect(syncFromRemote).toHaveBeenCalledWith("play", 15.5, undefined);
     });
 
-    it("should ignore broadcast from self", async () => {
-      const syncFromRemote = vi.fn();
-      let broadcastHandler: any;
-
-      mockChannel.on.mockImplementation((type, config, handler) => {
-        if (config.event === "video_control") {
-          broadcastHandler = handler;
-        }
-        return mockChannel;
-      });
-
-      renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            true,
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
-      );
-
-      await waitFor(() => expect(broadcastHandler).toBeDefined());
-
-      // Simulate receiving broadcast from self
-      broadcastHandler({
-        payload: {
-          action: "play",
-          time: 15.5,
-          senderId: "user-1", // same user
-        },
-      });
-
-      expect(syncFromRemote).not.toHaveBeenCalled();
-    });
-
-    it("should call onChangeEpisode when episodeSlug is in payload", async () => {
-      const syncFromRemote = vi.fn();
-      const onChangeEpisode = vi.fn();
-      let broadcastHandler: any;
-
-      mockChannel.on.mockImplementation((type, config, handler) => {
-        if (config.event === "video_control") {
-          broadcastHandler = handler;
-        }
-        return mockChannel;
-      });
-
-      renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            true,
-            mockSupabase,
-            syncFromRemote,
-            onChangeEpisode,
-          ),
-        { wrapper },
-      );
-
-      await waitFor(() => expect(broadcastHandler).toBeDefined());
-
-      broadcastHandler({
-        payload: {
-          action: "play",
-          time: 0,
-          episodeSlug: "tap-2",
-          senderId: "user-2",
-        },
-      });
-
-      expect(onChangeEpisode).toHaveBeenCalledWith("tap-2");
-      expect(syncFromRemote).toHaveBeenCalledWith("play", 0, "tap-2");
-    });
+    expect(syncHeartbeat).not.toHaveBeenCalled();
   });
 
-  describe("Cleanup", () => {
-    it("should cleanup channel on unmount", async () => {
-      const syncFromRemote = vi.fn();
-      const { unmount } = renderHook(
-        () =>
-          useVideoControl(
-            "room-123",
-            "user-1",
-            true,
-            mockSupabase,
-            syncFromRemote,
-          ),
-        { wrapper },
-      );
+  it("clears pending local control after rejected sync response", async () => {
+    const channel = createChannel();
+    let heartbeatHandler: ((event: { payload: unknown }) => void) | undefined;
+    channel.on.mockImplementation((type: string, config: { event: string }, handler: any) => {
+      if (type === "broadcast" && config.event === "heartbeat_sync") heartbeatHandler = handler;
+      return channel;
+    });
+    let resolveSync: ((value: unknown) => void) | undefined;
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/watch-party?roomId=")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              room: { id: "room-123", room_code: "ABC123" },
+              state: {
+                status: "pause",
+                time: 10,
+                active_controller_id: "user-2",
+                active_controller_name: "Guest",
+                version: 4,
+                updated_at: Date.now(),
+                calculated_at: Date.now(),
+              },
+            }),
+        });
+      }
 
-      await waitFor(() => expect(mockSupabase.channel).toHaveBeenCalled());
+      if (url.includes("/api/watch-party/sync")) {
+        return new Promise((resolve) => {
+          resolveSync = resolve;
+        });
+      }
 
-      unmount();
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    const syncHeartbeat = vi.fn();
+    const supabase = {
+      channel: vi.fn().mockReturnValue(channel),
+      removeChannel: vi.fn(),
+    } as any;
 
-      expect(mockChannel.untrack).toHaveBeenCalled();
-      expect(mockSupabase.removeChannel).toHaveBeenCalledWith(mockChannel);
+    const { result } = renderHook(
+      () =>
+        useVideoControl(
+          "room-123",
+          "user-1",
+          () => true,
+          () => true,
+          supabase,
+          vi.fn(),
+          undefined,
+          undefined,
+          syncHeartbeat,
+        ),
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() => expect(heartbeatHandler).toBeDefined());
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-2"));
+
+    act(() => result.current.sendControl("seek", 60));
+
+    act(() => {
+      resolveSync?.({ ok: false, json: () => Promise.resolve({ error: "denied" }) });
+    });
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      "/api/watch-party/sync",
+      expect.any(Object),
+    ));
+
+    act(() => {
+      heartbeatHandler?.({
+        payload: {
+          time: 10,
+          senderId: "user-2",
+          controllerId: "user-2",
+          version: 4,
+          status: "pause",
+          isPaused: true,
+        },
+      });
+    });
+
+    expect(syncHeartbeat).toHaveBeenCalledWith(10, true);
+  });
+
+  it("only sends heartbeat from active controller", async () => {
+    const channel = createChannel();
+    const supabase = {
+      channel: vi.fn().mockReturnValue(channel),
+      removeChannel: vi.fn(),
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useVideoControl(
+          "room-123",
+          "user-1",
+          () => true,
+          () => true,
+          supabase,
+          vi.fn(),
+        ),
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() => expect(result.current.activeControllerId).toBe("user-1"));
+
+    act(() => result.current.sendHeartbeat(10, true));
+
+    await waitFor(() => {
+      expect(channel.send).toHaveBeenCalledWith({
+        type: "broadcast",
+        event: "heartbeat_sync",
+        payload: expect.objectContaining({
+          time: 10,
+          senderId: "user-1",
+          controllerId: "user-1",
+          version: 3,
+          status: "pause",
+          isPaused: true,
+        }),
+      });
     });
   });
 });

@@ -1,4 +1,4 @@
-import { createSupabaseServer } from "@/lib/supabase/server";
+﻿import { createSupabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { ParticipantPermissions } from "@/types/watch-party";
 
@@ -14,7 +14,6 @@ export async function PATCH(request: Request) {
   try {
     const supabase = await createSupabaseServer();
 
-    // 1. Kiểm tra Auth
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -44,22 +43,31 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // 2. Kiểm tra quyền của người ĐANG GỌI API (Caller)
-    const { data: caller } = await supabase
-      .from("watch_party_participants")
-      .select("role, permissions")
-      .eq("room_id", roomId)
-      .eq("user_id", user.id)
-      .single();
+    const [{ data: caller }, { data: room }] = await Promise.all([
+      supabase
+        .from("watch_party_participants")
+        .select("role, status, permissions")
+        .eq("room_id", roomId)
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("watch_party_rooms")
+        .select("host_id")
+        .eq("id", roomId)
+        .maybeSingle(),
+    ]);
 
-    // LOGIC QUYỀN LỰC:
-    // - Đổi quyền Control/Manage: CHỈ HOST
-    // - Mute chat: HOST hoặc MOD
-    const isHost = caller?.role === "host";
-    const isMod = caller?.permissions?.can_manage_users === true;
+    const isApprovedCaller = caller?.status === "approved";
+    const isHost =
+      isApprovedCaller &&
+      caller?.role === "host" &&
+      room?.host_id === user.id;
+    const isMod =
+      caller?.status === "approved" &&
+      caller?.role === "guest" &&
+      caller?.permissions?.can_manage_users === true;
 
     if (!isHost && !isMod) {
-      // Nếu không phải Host hoặc Mod, thì không được sửa bất kỳ quyền gì
       return NextResponse.json(
         { error: "Bạn không có quyền" },
         { status: 403 },
@@ -71,18 +79,15 @@ export async function PATCH(request: Request) {
       (permissionKey === "can_control_media" ||
         permissionKey === "can_manage_users")
     ) {
-      // Mod thì được cấm chat/cấm mic, nhưng KHÔNG ĐƯỢC phân quyền Mod/Media cho người khác
       return NextResponse.json(
         { error: "Chỉ Chủ phòng mới có quyền phân quyền hệ thống" },
         { status: 403 },
       );
     }
 
-    // 3. Lấy thông tin người bị đổi quyền (TargetUser)
-    // Lấy thêm is_muted
     const { data: targetUser } = await supabase
       .from("watch_party_participants")
-      .select("role, permissions, is_muted, is_voice_muted")
+      .select("role, status, permissions, is_muted, is_voice_muted")
       .eq("room_id", roomId)
       .eq("user_id", targetUserId)
       .single();
@@ -101,7 +106,13 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // 4. Chuẩn bị dữ liệu cập nhật (Phân loại Cột vs JSONB)
+    if (targetUser.status !== "approved") {
+      return NextResponse.json(
+        { error: "Chỉ có thể cập nhật thành viên đã được duyệt" },
+        { status: 400 },
+      );
+    }
+
     let updateData: ParticipantUpdate = {};
 
     if (permissionKey === "is_muted") {
@@ -124,7 +135,6 @@ export async function PATCH(request: Request) {
       };
     }
 
-    // 5. Cập nhật Database
     const { error } = await supabase
       .from("watch_party_participants")
       .update(updateData)
@@ -133,7 +143,20 @@ export async function PATCH(request: Request) {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, updatedKey: permissionKey });
+    const { data: participant, error: participantError } = await supabase
+      .from("watch_party_participants")
+      .select("*, profiles:user_id(full_name, avatar_url)")
+      .eq("room_id", roomId)
+      .eq("user_id", targetUserId)
+      .single();
+
+    if (participantError) throw participantError;
+
+    return NextResponse.json({
+      success: true,
+      updatedKey: permissionKey,
+      participant,
+    });
   } catch (error) {
     console.error("[WP_PERMISSIONS_ERROR]:", error);
     return NextResponse.json(
@@ -142,3 +165,8 @@ export async function PATCH(request: Request) {
     );
   }
 }
+
+
+
+
+

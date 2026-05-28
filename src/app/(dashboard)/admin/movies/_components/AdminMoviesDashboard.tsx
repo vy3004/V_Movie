@@ -12,6 +12,7 @@ import MovieCollectionDrawer from "@/app/(dashboard)/admin/movies/_components/Mo
 import MovieEditDrawer from "@/app/(dashboard)/admin/movies/_components/MovieEditDrawer";
 import MovieMergeDrawer from "@/app/(dashboard)/admin/movies/_components/MovieMergeDrawer";
 import SearchMovieResultCard from "@/components/shared/SearchMovieResultCard";
+import LoadingToggle from "@/components/ui/LoadingToggle";
 import { useData } from "@/providers/BaseDataContextProvider";
 import SelectDropdown from "@/components/shared/SelectDropdown";
 import type { CateCtr, MovieSource } from "@/types";
@@ -575,23 +576,13 @@ export default function AdminMoviesDashboard() {
                     </td>
                     <td className="px-4 py-3 align-middle">
                       <div className="flex items-center">
-                        <button
-                          type="button"
+                        <LoadingToggle
+                          checked={!movie.is_blocked}
+                          loading={blockingMovieId === movie.id}
                           onClick={() => void toggleBlocked(movie)}
-                          disabled={blockingMovieId === movie.id}
-                          role="switch"
-                          aria-checked={!movie.is_blocked}
+                          activeClassName="bg-red-600"
                           aria-label={`${movie.is_blocked ? "Unblock" : "Block"} ${movie.name}`}
-                          className={`relative h-6 w-12 shrink-0 rounded-full transition-all ${blockingMovieId === movie.id ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${movie.is_blocked ? "bg-zinc-500" : "bg-red-600"}`}
-                        >
-                          <span
-                            className={`absolute left-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white transition-transform ${movie.is_blocked ? "" : "translate-x-6"}`}
-                          >
-                            {blockingMovieId === movie.id ? (
-                              <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-zinc-300 border-t-red-600" />
-                            ) : null}
-                          </span>
-                        </button>
+                        />
                       </div>
                     </td>
                     <td className="relative px-5 py-3 align-middle">
@@ -710,23 +701,13 @@ export default function AdminMoviesDashboard() {
                     >
                       {movie.merge_status}
                     </span>
-                    <button
-                      type="button"
+                    <LoadingToggle
+                      checked={!movie.is_blocked}
+                      loading={blockingMovieId === movie.id}
                       onClick={() => void toggleBlocked(movie)}
-                      disabled={blockingMovieId === movie.id}
-                      role="switch"
-                      aria-checked={!movie.is_blocked}
+                      activeClassName="bg-red-600"
                       aria-label={`${movie.is_blocked ? "Unblock" : "Block"} ${movie.name}`}
-                      className={`relative h-6 w-12 shrink-0 rounded-full transition-all ${blockingMovieId === movie.id ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${movie.is_blocked ? "bg-zinc-500" : "bg-red-600"}`}
-                    >
-                      <span
-                        className={`absolute left-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white transition-transform ${movie.is_blocked ? "" : "translate-x-6"}`}
-                      >
-                        {blockingMovieId === movie.id ? (
-                          <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-zinc-300 border-t-red-600" />
-                        ) : null}
-                      </span>
-                    </button>
+                    />
                   </div>
                   <div className="relative shrink-0">
                     <button

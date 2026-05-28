@@ -18,6 +18,7 @@ import {
 import NotificationCard from "@/components/shared/NotificationCard";
 import NotificationSkeleton from "@/components/shared/NotificationSkeleton";
 import LoadingPage from "@/components/ui/LoadingPage";
+import LoadingToggle from "@/components/ui/LoadingToggle";
 import { useNotification, FilterType } from "@/hooks/useNotification";
 
 export default function NotificationsPage() {
@@ -273,27 +274,13 @@ export default function NotificationsPage() {
                   </div>
                 </div>
 
-                <button
+                <LoadingToggle
+                  checked={prefs.web_push}
+                  loading={isPushLoading}
                   onClick={handleToggleWebPush}
-                  disabled={isPushLoading}
-                  role="switch"
-                  aria-checked={prefs.web_push}
-                  className={`w-11 h-6 sm:w-12 sm:h-6 rounded-full transition-all relative flex-shrink-0 ${
-                    isPushLoading
-                      ? "opacity-60 cursor-not-allowed"
-                      : "cursor-pointer"
-                  } ${prefs.web_push ? "bg-red-600" : "bg-zinc-500"}`}
-                >
-                  <div
-                    className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform flex items-center justify-center ${
-                      prefs.web_push ? "translate-x-5 sm:translate-x-6" : ""
-                    }`}
-                  >
-                    {isPushLoading && (
-                      <div className="w-2.5 h-2.5 border-2 border-zinc-300 border-t-red-600 rounded-full animate-spin" />
-                    )}
-                  </div>
-                </button>
+                  activeClassName="bg-red-600"
+                  aria-label="Đăng ký Web Push"
+                />
               </div>
 
               {/* --- CÁC KÊNH THÔNG BÁO --- */}

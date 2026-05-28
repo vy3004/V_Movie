@@ -27,6 +27,23 @@ import type {
 
 const REDIS_STATE_TTL = 86400; // 24h
 
+async function getParticipantIdentitySnapshot(
+  supabase: Awaited<ReturnType<typeof createSupabaseServer>>,
+  userId: string,
+  fallback?: { fullName?: string | null; avatarUrl?: string | null },
+) {
+  const { data } = await supabase
+    .from("profiles")
+    .select("full_name, avatar_url")
+    .eq("id", userId)
+    .maybeSingle();
+
+  return {
+    display_name: data?.full_name ?? fallback?.fullName ?? null,
+    avatar_url: data?.avatar_url ?? fallback?.avatarUrl ?? null,
+  };
+}
+
 /**
  * Watch Party Service
  * Centralized business logic for watch party feature
@@ -109,6 +126,11 @@ export const WatchPartyService = {
       );
     }
 
+    const hostIdentity = await getParticipantIdentitySnapshot(
+      supabase,
+      params.hostId,
+    );
+
     // Thêm host vào participants
     const { error: participantErr } = await supabase
       .from("watch_party_participants")
@@ -117,6 +139,7 @@ export const WatchPartyService = {
         user_id: params.hostId,
         role: "host",
         status: "approved",
+        ...hostIdentity,
       });
 
     if (participantErr) {
@@ -138,11 +161,18 @@ export const WatchPartyService = {
         status: "pause",
         time: 0,
         episode_slug: params.episodeSlug,
+        active_controller_id: params.hostId,
+        version: 0,
         updated_at: Date.now(),
       };
-      await redis.set(`wp:room:${room.id}:state`, initialState, {
-        ex: REDIS_STATE_TTL,
-      });
+      await Promise.all([
+        redis.set(`wp:room:${room.id}:state`, initialState, {
+          ex: REDIS_STATE_TTL,
+        }),
+        redis.set(`wp:room:${room.id}:state:version`, 0, {
+          ex: REDIS_STATE_TTL,
+        }),
+      ]);
     }
 
     logger.info("Room created successfully", {
@@ -176,16 +206,23 @@ export const WatchPartyService = {
           `wp:room:${roomId}:state`,
         );
 
+        const calculatedAt = Date.now();
         let actualTime = state?.time || 0;
         if (state?.status === "play") {
-          actualTime += (Date.now() - state.updated_at) / 1000;
+          actualTime += (calculatedAt - state.updated_at) / 1000;
         }
 
         return {
           room: cached,
           state: state
-            ? { ...state, time: actualTime }
-            : { status: "pause" as const, time: 0 },
+            ? { ...state, time: actualTime, calculated_at: calculatedAt }
+            : {
+                status: "pause" as const,
+                time: 0,
+                version: 0,
+                updated_at: calculatedAt,
+                calculated_at: calculatedAt,
+              },
         };
       }
     }
@@ -223,18 +260,19 @@ export const WatchPartyService = {
       state = await redis.get(`wp:room:${room.id}:state`);
     }
 
+    const calculatedAt = Date.now();
     let actualTime = state?.time || 0;
 
     // Tính toán time drift nếu đang play
     if (state?.status === "play") {
-      actualTime += (Date.now() - state.updated_at) / 1000;
+      actualTime += (calculatedAt - state.updated_at) / 1000;
     }
 
     return {
       room,
       state: state
-        ? { ...state, time: actualTime }
-        : { status: "pause" as const, time: 0 },
+        ? { ...state, time: actualTime, calculated_at: calculatedAt }
+        : { status: "pause" as const, time: 0, calculated_at: calculatedAt },
     };
   },
 
@@ -314,7 +352,11 @@ export const WatchPartyService = {
    * Generate room code
    */
   generateRoomCode: () => {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const bytes = new Uint8Array(6);
+    crypto.getRandomValues(bytes);
+
+    return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
   },
 
   // ==================== PARTICIPANT MANAGEMENT ====================
@@ -322,7 +364,11 @@ export const WatchPartyService = {
   /**
    * Join phòng
    */
-  joinRoom: async (roomId: string, userId: string) => {
+  joinRoom: async (
+    roomId: string,
+    userId: string,
+    identityFallback?: { fullName?: string | null; avatarUrl?: string | null },
+  ) => {
     const supabase = await createSupabaseServer();
 
     // Validate input
@@ -382,6 +428,7 @@ export const WatchPartyService = {
           "USER_BLOCKED",
         );
       }
+
 
       // Nếu phòng không có host và user này chưa phải host → promote
       if (!hasHost && existing.role !== "host") {
@@ -447,6 +494,12 @@ export const WatchPartyService = {
       ? { can_control_media: true, can_manage_users: true }
       : undefined;
 
+    const identity = await getParticipantIdentitySnapshot(
+      supabase,
+      userId,
+      identityFallback,
+    );
+
     const { error } = await supabase
       .from("watch_party_participants")
       .insert({
@@ -455,6 +508,7 @@ export const WatchPartyService = {
         status,
         role,
         permissions,
+        ...identity,
       });
 
     if (error) {
@@ -697,14 +751,16 @@ export const WatchPartyService = {
     // 1. Kiểm tra quyền của caller
     const { data: caller } = await supabase
       .from("watch_party_participants")
-      .select("role, permissions")
+      .select("role, status, permissions")
       .eq("room_id", roomId)
       .eq("user_id", callerId)
       .single();
 
     const callerPermissions = caller?.permissions as ParticipantPermissions;
     const canManageUsers =
-      caller?.role === "host" || callerPermissions?.can_manage_users;
+      caller?.status === "approved" &&
+      (caller?.role === "host" ||
+        (caller?.role === "guest" && callerPermissions?.can_manage_users === true));
 
     if (!canManageUsers) {
       throw new NoPermissionError("Bạn không có quyền quản lý thành viên");
@@ -713,7 +769,7 @@ export const WatchPartyService = {
     // 2. Kiểm tra target user
     const { data: targetUser } = await supabase
       .from("watch_party_participants")
-      .select("role")
+      .select("id, role, status, display_name, avatar_url")
       .eq("room_id", roomId)
       .eq("user_id", targetUserId)
       .single();
@@ -729,6 +785,17 @@ export const WatchPartyService = {
       );
     }
 
+    if (action === "approve" && targetUser.status !== "pending") {
+      throw new BadRequestError("Chỉ có thể duyệt yêu cầu đang chờ", "INVALID_PARTICIPANT_STATUS");
+    }
+
+    if (action === "reject" && targetUser.status !== "pending") {
+      throw new BadRequestError("Chỉ có thể từ chối yêu cầu đang chờ", "INVALID_PARTICIPANT_STATUS");
+    }
+
+    if (action === "kick" && targetUser.status !== "approved") {
+      throw new BadRequestError("Chỉ có thể trục xuất thành viên đã duyệt", "INVALID_PARTICIPANT_STATUS");
+    }
     // 3. Thực hiện action
     if (action === "approve") {
       // Kiểm tra capacity trước khi approve
@@ -748,9 +815,13 @@ export const WatchPartyService = {
         throw new RoomFullError("Phòng đã đạt giới hạn người tham gia tối đa");
       }
 
+      const identity = await getParticipantIdentitySnapshot(supabase, targetUserId, {
+        fullName: targetUser.display_name,
+        avatarUrl: targetUser.avatar_url,
+      });
       const { error: approveErr } = await supabase
         .from("watch_party_participants")
-        .update({ status: "approved" })
+        .update({ status: "approved", ...identity })
         .eq("room_id", roomId)
         .eq("user_id", targetUserId);
 
@@ -783,7 +854,8 @@ export const WatchPartyService = {
         .from("watch_party_participants")
         .delete()
         .eq("room_id", roomId)
-        .eq("user_id", targetUserId);
+        .eq("user_id", targetUserId)
+        .eq("status", "approved");
 
       if (kickErr) {
         logger.error("Failed to kick participant", {
@@ -795,7 +867,25 @@ export const WatchPartyService = {
       }
     }
 
-    return { success: true };
+    if (action === "approve") {
+      const { data: participant, error: participantError } = await supabase
+        .from("watch_party_participants")
+        .select("*, profiles:user_id(full_name, avatar_url)")
+        .eq("room_id", roomId)
+        .eq("user_id", targetUserId)
+        .single();
+
+      if (participantError) throw participantError;
+
+      return { success: true, participant };
+    }
+
+    return {
+      success: true,
+      removedUserId: targetUserId,
+      removedParticipantId: targetUser.id,
+      action,
+    };
   },
 
   // ==================== VIDEO SYNC ====================
@@ -826,6 +916,7 @@ export const WatchPartyService = {
         `
         role,
         permissions,
+        profiles:user_id(full_name),
         room:watch_party_rooms!inner(settings)
       `,
       )
@@ -881,11 +972,32 @@ export const WatchPartyService = {
       currentState = await redis.get(`wp:room:${params.roomId}:state`);
     }
 
+    const now = Date.now();
+    let nextVersion = (currentState?.version ?? 0) + 1;
+    if (redis) {
+      nextVersion = await redis.incr(`wp:room:${params.roomId}:state:version`);
+      if (currentState?.version && nextVersion <= currentState.version) {
+        nextVersion = currentState.version + 1;
+        await redis.set(`wp:room:${params.roomId}:state:version`, nextVersion, {
+          ex: REDIS_STATE_TTL,
+        });
+      }
+    }
+    const profileData = participant.profiles as
+      | { full_name?: string | null }
+      | { full_name?: string | null }[]
+      | null
+      | undefined;
+    const profile = Array.isArray(profileData) ? profileData[0] : profileData;
+
     const newState: WatchPartyVideoState = {
       status: params.status || currentState?.status || "pause",
       time: params.time ?? currentState?.time ?? 0,
       episode_slug: params.episodeSlug || currentState?.episode_slug,
-      updated_at: Date.now(),
+      active_controller_id: params.userId,
+      active_controller_name: profile?.full_name ?? undefined,
+      version: nextVersion,
+      updated_at: now,
     };
 
     // 4. Lưu vào Redis
@@ -929,3 +1041,7 @@ export const WatchPartyService = {
     return { success: true, state: newState };
   },
 };
+
+
+
+

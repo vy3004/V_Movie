@@ -63,8 +63,26 @@ export const syncVideoSchema = z.object({
   action: z.enum(["play", "pause", "seek"], {
     message: "Action phải là play, pause hoặc seek",
   }),
-  time: z.number().min(0, "Time phải >= 0"),
-  episodeSlug: z.string().optional(),
+  time: z.number().finite("Time không hợp lệ").min(0, "Time phải >= 0"),
+  episodeSlug: z
+    .string()
+    .regex(/^[a-zA-Z0-9-]+$/, "Episode slug không hợp lệ")
+    .optional(),
+});
+
+export const syncVideoRouteSchema = z.object({
+  roomId: z.string().uuid("Room ID không hợp lệ"),
+  status: z
+    .enum(["play", "pause"], {
+      message: "Status phải là play hoặc pause",
+    })
+    .optional(),
+  time: z.number().finite("Time không hợp lệ").min(0, "Time phải >= 0"),
+  episodeSlug: z
+    .string()
+    .regex(/^[a-zA-Z0-9-]+$/, "Episode slug không hợp lệ")
+    .optional(),
+  requestId: z.string().optional(),
 });
 
 export const participantActionSchema = z.object({
@@ -75,11 +93,11 @@ export const participantActionSchema = z.object({
   }),
 });
 
-// Infer type từ schema
 export type CreateRoomFormValues = z.infer<typeof createRoomSchema>;
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 export type AddToPlaylistInput = z.infer<typeof addToPlaylistSchema>;
 export type JoinRoomInput = z.infer<typeof joinRoomSchema>;
 export type LeaveRoomInput = z.infer<typeof leaveRoomSchema>;
 export type SyncVideoInput = z.infer<typeof syncVideoSchema>;
+export type SyncVideoRouteInput = z.infer<typeof syncVideoRouteSchema>;
 export type ParticipantActionInput = z.infer<typeof participantActionSchema>;

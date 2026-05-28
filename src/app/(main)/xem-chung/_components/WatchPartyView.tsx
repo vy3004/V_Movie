@@ -16,8 +16,27 @@ import {
 
 // Context & Hooks
 import { useWatchParty } from "@/providers/WatchPartyProvider";
+import { useWatchPartyStore } from "@/stores/watch-party";
+import {
+  selectRoom,
+  selectParticipants,
+  selectIsHost,
+  selectCanControl,
+  selectCanAccessRoomSettings,
+  selectIsLoadingRoom,
+  selectKickTarget,
+  selectIsKicked,
+  selectUser,
+  selectActiveTab,
+  selectMyParticipant,
+} from "@/stores/watch-party/selectors";
+import {
+  sendChatMessage,
+  handleParticipantAction,
+  handleSelectEpisode,
+} from "@/stores/watch-party";
 import { useQuery } from "@tanstack/react-query";
-import { Movie } from "@/types";
+import { ChatMessage, Movie } from "@/types";
 
 // Components
 import EpisodeSelectorSkeleton from "@/components/shared/EpisodeSelectorSkeleton";
@@ -71,8 +90,6 @@ const EpisodeSelector = dynamic(
   },
 );
 
-type TabType = "chat" | "members" | "playlist" | "settings";
-
 // Cấu hình nội dung linh hoạt cho 2 trường hợp
 const DISCONNECT_CONFIG = {
   kicked: {
@@ -87,28 +104,37 @@ const DISCONNECT_CONFIG = {
 
 export default function WatchPartyView() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<TabType>("chat");
 
+  // Zustand selectors
+  const room = useWatchPartyStore(selectRoom);
+  const user = useWatchPartyStore(selectUser);
+  const participants = useWatchPartyStore(selectParticipants);
+  const isRealHost = useWatchPartyStore(selectIsHost);
+  const canControl = useWatchPartyStore(selectCanControl);
+  const canAccessRoomSettings = useWatchPartyStore(
+    selectCanAccessRoomSettings,
+  );
+  const isLoadingRoom = useWatchPartyStore(selectIsLoadingRoom);
+  const kickTarget = useWatchPartyStore(selectKickTarget);
+  const isKicked = useWatchPartyStore(selectIsKicked);
+  const activeTab = useWatchPartyStore(selectActiveTab);
+  const myParticipant = useWatchPartyStore(selectMyParticipant);
+
+  // Zustand actions
+  const setRoom = useWatchPartyStore((state) => state.setRoom);
+  const updateRoom = useWatchPartyStore((state) => state.updateRoom);
+  const setKickTarget = useWatchPartyStore((state) => state.setKickTarget);
+  const setActiveTab = useWatchPartyStore((state) => state.setActiveTab);
+
+  // Context (sync functions only)
   const {
-    room,
-    setRoom,
-    user,
-    messages,
-    participants,
-    isRealHost,
-    canControl,
-    hasModeratorAuth,
     sendControl,
     sendHeartbeat,
+    applyInitialState,
+    requestControllerSync,
     playerSyncRef,
-    isLoadingRoom,
-    handleSendMessage,
-    handleSelectEpisode,
-    handleParticipantAction,
-    initialState,
-    kickTarget,
-    setKickTarget,
-    isKicked,
+    activeControllerId,
+    activeControllerName,
   } = useWatchParty();
 
   // --- REFS & STATES PHỤC HỒI CHỨC NĂNG CŨ ---
@@ -144,16 +170,21 @@ export default function WatchPartyView() {
       return d.item || d;
     },
     enabled: !!room?.current_movie_slug,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
+  const allEpisodes = useMemo(
+    () => movie?.episodes?.flatMap((ep) => ep.server_data) ?? [],
+    [movie?.episodes],
+  );
   // --- TÍNH TOÁN TẬP PHIM ĐANG CHIẾU ---
   const activeEpisode = useMemo(() => {
-    if (!movie?.episodes || !room) return null;
-    const allEpisodes = movie.episodes.flatMap((ep) => ep.server_data);
+    if (allEpisodes.length === 0) return null;
     return (
       allEpisodes.find((e) => e.slug === room?.current_episode_slug) ||
       allEpisodes[0]
     );
-  }, [movie, room]);
+  }, [allEpisodes, room?.current_episode_slug]);
 
   // ĐỒNG BỘ THỜI GIAN LÚC MỚI VÀO PHÒNG
   useEffect(() => {
@@ -163,14 +194,12 @@ export default function WatchPartyView() {
     if (episodeChanged) {
       setStartVideoTime(0);
       prevEpisodeRef.current = room?.current_episode_slug;
-    } else if (initialState?.time !== undefined) {
-      setStartVideoTime(initialState.time);
     }
-  }, [initialState, room?.current_episode_slug]);
+  }, [room?.current_episode_slug]);
 
   // --- XỬ LÝ AUTO-NEXT (CHUYỂN TẬP/CHUYỂN PHIM) ---
   const handleWatchPartyAutoNext = useCallback(async () => {
-    if (!isRealHost || !canControl) return;
+    if (!isRealHost || !canControl || !room) return;
 
     if (isProcessingAutoNext.current) return;
     isProcessingAutoNext.current = true;
@@ -205,7 +234,7 @@ export default function WatchPartyView() {
 
       const { data: nextItems } = await supabase
         .from("watch_party_playlist")
-        .select("*")
+        .select("id,movie_slug,movie_name,episode_slug,thumb_url,sort_order")
         .eq("room_id", room.id)
         .order("sort_order", { ascending: true })
         .limit(1);
@@ -224,11 +253,10 @@ export default function WatchPartyView() {
           const previousRoomState = { ...room };
 
           // 2. OPTIMISTIC UPDATE: Cập nhật UI ngay lập tức cho mượt
-          setRoom((prev) => ({
-            ...prev,
+          updateRoom({
             current_movie_slug: nextItem.movie_slug,
             movie_image: nextItem.thumb_url,
-          }));
+          });
 
           // 3. GỌI DATABASE NGẦM
           const { error: updateError } = await supabase
@@ -259,7 +287,8 @@ export default function WatchPartyView() {
         isProcessingAutoNext.current = false;
       }, 3000);
     }
-  }, [isRealHost, canControl, movie, activeEpisode, room, handleSelectEpisode, setRoom]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRealHost, canControl, movie, activeEpisode, room, setRoom, updateRoom]);
 
   const executeKick = async () => {
     if (!kickTarget) return;
@@ -270,13 +299,11 @@ export default function WatchPartyView() {
         "kick",
         kickTarget.profiles?.full_name || "Thành viên",
       );
-      toast.success("Đã trục xuất thành viên khỏi phòng");
+      setKickTarget(null);
     } catch (error) {
       console.error("Lỗi khi trục xuất:", error);
-      toast.error("Không thể trục xuất thành viên. Vui lòng thử lại.");
     } finally {
       setIsKicking(false);
-      setKickTarget(null);
     }
   };
 
@@ -296,6 +323,8 @@ export default function WatchPartyView() {
   };
 
   const executeLeaveRoom = async (newHostUserId?: string) => {
+    if (!room) return;
+
     setIsLeaving(true);
     const toastId = toast.loading("Đang rời phòng...");
 
@@ -313,11 +342,15 @@ export default function WatchPartyView() {
       if (!res.ok) throw new Error();
 
       toast.success("Hẹn gặp lại bạn nhé! 🍿", { id: toastId });
+      useWatchPartyStore.getState().setWantsVoiceConnected(false);
+      useWatchPartyStore.getState().setIsVoiceConnected(false);
       router.replace("/xem-chung");
     } catch {
       toast.error("Có lỗi xảy ra, nhưng bạn vẫn có thể rời đi", {
         id: toastId,
       });
+      useWatchPartyStore.getState().setWantsVoiceConnected(false);
+      useWatchPartyStore.getState().setIsVoiceConnected(false);
       router.replace("/xem-chung");
     }
   };
@@ -327,19 +360,64 @@ export default function WatchPartyView() {
     await executeLeaveRoom(newHostUserId);
   };
 
+  const handlePlaySync = useCallback(
+    (time: number) => sendControl("play", time),
+    [sendControl],
+  );
+
+  const handlePauseSync = useCallback(
+    (time: number) => sendControl("pause", time),
+    [sendControl],
+  );
+
+  const handleSeekSync = useCallback(
+    (time: number) => sendControl("seek", time),
+    [sendControl],
+  );
+
+  const handleChangeEpisode = useCallback(
+    (slug: string) => handleSelectEpisode(slug),
+    [],
+  );
+
+  const handleSelectEpisodeFromList = useCallback(
+    (episode: { slug: string; name: string }) =>
+      handleSelectEpisode(episode.slug, episode.name),
+    [],
+  );
+
+  const handleSendOverlayMessage = useCallback((msg: Partial<ChatMessage>) => {
+    if (msg.text) sendChatMessage(msg.text);
+  }, []);
+
+  const handleProgress = useCallback(() => {}, []);
+
+  const handleServerChange = useCallback(() => {}, []);
+
   // --- CẤU HÌNH TABS ---
+  const pendingParticipantsCount = useMemo(
+    () => participants.reduce((count, p) => count + (p.status === "pending" ? 1 : 0), 0),
+    [participants],
+  );
+
+  const isOverlayChatMuted =
+    !myParticipant ||
+    myParticipant.status !== "approved" ||
+    myParticipant.is_muted ||
+    (myParticipant.role !== "host" && room?.settings?.guest_can_chat === false);
+
   const tabsConfig = useMemo(
     () => [
       { id: "chat", icon: ChatBubbleLeftRightIcon },
       {
         id: "members",
         icon: UserGroupIcon,
-        badge: participants.filter((p) => p.status === "pending").length,
+        badge: pendingParticipantsCount,
       },
       { id: "playlist", icon: QueueListIcon },
-      { id: "settings", icon: Cog6ToothIcon, hide: !hasModeratorAuth },
+      { id: "settings", icon: Cog6ToothIcon, hide: !canAccessRoomSettings },
     ],
-    [participants, hasModeratorAuth],
+    [pendingParticipantsCount, canAccessRoomSettings],
   );
 
   if (isLoadingRoom || !room) {
@@ -369,6 +447,11 @@ export default function WatchPartyView() {
             <h1 className="text-sm md:text-base font-black text-white uppercase truncate">
               {room.title}
             </h1>
+            {activeControllerId && (
+              <div className="text-[11px] text-zinc-500 mt-1">
+                Đang điều khiển: {activeControllerId === user?.id ? "Bạn" : activeControllerName || "Thành viên"}
+              </div>
+            )}
             <button
               onClick={() => {
                 if (navigator.clipboard) {
@@ -412,24 +495,20 @@ export default function WatchPartyView() {
               isHost={isRealHost}
               canControl={canControl}
               initialTime={startVideoTime}
-              onPlaySync={(t) => sendControl("play", t)}
-              onPauseSync={(t) => sendControl("pause", t)}
-              onSeekSync={(t) => sendControl("seek", t)}
+              onPlaySync={handlePlaySync}
+              onPauseSync={handlePauseSync}
+              onSeekSync={handleSeekSync}
               onHeartbeatSync={sendHeartbeat}
-              onChangeEpisode={(slug) => handleSelectEpisode(slug)}
+              onChangeEpisode={handleChangeEpisode}
               onAutoNext={handleWatchPartyAutoNext}
-              onProgress={() => {}}
+              onPlayerReady={applyInitialState}
+              onManualSync={requestControllerSync}
+              onProgress={handleProgress}
             >
               <ChatOverlay
-                messages={messages}
-                currentUserId={user.id}
-                onSendMessage={(msg) => {
-                  if (msg.text)
-                    handleSendMessage(
-                      msg.text,
-                      (msg.type as "chat" | "system") || "chat",
-                    );
-                }}
+                currentUserId={user?.id || ""}
+                isMuted={isOverlayChatMuted}
+                onSendMessage={handleSendOverlayMessage}
               />
             </VideoPlayer>
           )}
@@ -438,9 +517,9 @@ export default function WatchPartyView() {
             <EpisodeSelector
               servers={movie.episodes}
               episodeSelected={activeEpisode?.slug || ""}
-              onSelect={(sv) => handleSelectEpisode(sv.slug, sv.name)}
+              onSelect={handleSelectEpisodeFromList}
               activeServerIdx={0}
-              onServerChange={() => {}}
+              onServerChange={handleServerChange}
             />
           )}
         </div>
@@ -453,7 +532,8 @@ export default function WatchPartyView() {
                 !tab.hide && (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id as TabType)}
+                    data-testid={`watch-party-tab-${tab.id}`}
+                    onClick={() => setActiveTab(tab.id as typeof activeTab)}
                     className={`flex-1 py-3 flex justify-center rounded-xl transition-all relative ${
                       activeTab === tab.id
                         ? "bg-zinc-800 text-red-500 shadow-inner"

@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   MagnifyingGlassIcon,
   PlusIcon,
@@ -19,6 +20,10 @@ import { useAuthModal } from "@/providers/AuthModalProvider";
 import RoomCard from "@/app/(main)/xem-chung/_components/RoomCard";
 import RoomCardSkeleton from "@/app/(main)/xem-chung/_components/RoomCardSkeleton";
 
+const ConfirmModal = dynamic(() => import("@/components/ui/ConfirmModal"), {
+  ssr: false,
+});
+
 const CreateRoomModal = dynamic(
   () => import("@/app/(main)/xem-chung/_components/CreateRoomModal"),
   { ssr: false },
@@ -27,10 +32,14 @@ const CreateRoomModal = dynamic(
 export default function WatchPartyLobbyPage() {
   const { user } = useData();
   const { onOpen: openLogin } = useAuthModal();
+  const searchParams = useSearchParams();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [querySearch, setQuerySearch] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [showKickedModal, setShowKickedModal] = useState(
+    searchParams.get("kicked") === "1",
+  );
 
   // Intersection Observer để theo dõi đáy trang
   const { ref, inView } = useInView({
@@ -104,6 +113,11 @@ export default function WatchPartyLobbyPage() {
     } catch {
       toast.error("Không thể làm mới danh sách phòng!");
     }
+  };
+
+  const closeKickedModal = () => {
+    setShowKickedModal(false);
+    window.history.replaceState(null, "", "/xem-chung");
   };
 
   // Làm phẳng dữ liệu từ các trang (pages) thành một mảng duy nhất
@@ -213,6 +227,17 @@ export default function WatchPartyLobbyPage() {
       </div>
 
       {showModal && <CreateRoomModal onClose={() => setShowModal(false)} />}
+      <ConfirmModal
+        isOpen={showKickedModal}
+        isLoading={false}
+        title="Bạn đã bị trục xuất khỏi phòng"
+        description="Chủ phòng hoặc người quản lý đã mời bạn rời phòng xem chung. Bạn có thể tham gia phòng khác hoặc tạo phòng mới."
+        confirmText="Đã hiểu"
+        cancelText="Đóng"
+        variant="primary"
+        onClose={closeKickedModal}
+        onConfirm={closeKickedModal}
+      />
     </div>
   );
 }

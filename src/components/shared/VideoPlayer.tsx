@@ -33,6 +33,7 @@ interface Props {
   onSeekSync?: (time: number) => void;
   onHeartbeatSync?: (time: number, isPaused: boolean) => void;
   onPlayerReady?: () => void;
+  onManualSync?: () => void;
   playerSyncRef?: React.MutableRefObject<PlayerSyncRef | null>;
   onChangeEpisode?: (slug: string) => void;
   children?: React.ReactNode;
@@ -87,19 +88,17 @@ function VideoPlayer(props: Props) {
   const [isReady, setIsReady] = useState(false);
 
   // REFS ĐỂ ĐẢM BẢO HOOK KHÔNG BỊ STALE DATA LÚC ĐỒNG BỘ
-  const canControlRef = useRef(props.canControl);
   const onPlaySyncRef = useRef(props.onPlaySync);
   const onPauseSyncRef = useRef(props.onPauseSync);
   const onSeekSyncRef = useRef(props.onSeekSync);
   const onHeartbeatSyncRef = useRef(props.onHeartbeatSync);
 
   useEffect(() => {
-    canControlRef.current = props.canControl;
     onPlaySyncRef.current = props.onPlaySync;
     onPauseSyncRef.current = props.onPauseSync;
     onSeekSyncRef.current = props.onSeekSync;
     onHeartbeatSyncRef.current = props.onHeartbeatSync;
-  }, [props.canControl, props.onPlaySync, props.onPauseSync, props.onSeekSync, props.onHeartbeatSync]);
+  }, [props.onPlaySync, props.onPauseSync, props.onSeekSync, props.onHeartbeatSync]);
 
   // XỬ LÝ SỰ KIỆN FULLSCREEN CỦA TRÌNH DUYỆT
   useEffect(() => {
@@ -127,23 +126,19 @@ function VideoPlayer(props: Props) {
 
   // CÁC HÀM GỬI TÍN HIỆU ĐỒNG BỘ
   const handlePlaySync = useCallback((time: number) => {
-    if (canControlRef.current && onPlaySyncRef.current)
-      onPlaySyncRef.current(time);
+    onPlaySyncRef.current?.(time);
   }, []);
 
   const handlePauseSync = useCallback((time: number) => {
-    if (canControlRef.current && onPauseSyncRef.current)
-      onPauseSyncRef.current(time);
+    onPauseSyncRef.current?.(time);
   }, []);
 
   const handleSeekSync = useCallback((time: number) => {
-    if (canControlRef.current && onSeekSyncRef.current)
-      onSeekSyncRef.current(time);
+    onSeekSyncRef.current?.(time);
   }, []);
 
   const handleHeartbeatSync = useCallback((time: number, isPaused: boolean) => {
-    if (canControlRef.current && onHeartbeatSyncRef.current)
-      onHeartbeatSyncRef.current(time, isPaused);
+    onHeartbeatSyncRef.current?.(time, isPaused);
   }, []);
 
   const { onPlayerReady, isWatchParty, canControl } = props;
@@ -171,7 +166,7 @@ function VideoPlayer(props: Props) {
     movie: props.movie,
   });
 
-  const { playerRef, syncFromRemote, getCurrentState, isSyncing } =
+  const { playerRef, syncFromRemote, syncHeartbeat, getCurrentState, isSyncing } =
     useVideoPlayer({
       videoRef,
       movieSrc: props.movieSrc,
@@ -203,10 +198,11 @@ function VideoPlayer(props: Props) {
     if (props.playerSyncRef) {
       props.playerSyncRef.current = {
         syncFromRemote,
+        syncHeartbeat,
         getCurrentState,
       };
     }
-  }, [syncFromRemote, getCurrentState, props.playerSyncRef]);
+  }, [syncFromRemote, syncHeartbeat, getCurrentState, props.playerSyncRef]);
 
   // LƯU CẤU HÌNH AUTO-NEXT
   useEffect(() => {
@@ -316,6 +312,8 @@ function VideoPlayer(props: Props) {
           setIsAutoNext={setIsAutoNext}
           isLightsOff={isLightsOff}
           setIsLightsOff={setIsLightsOff}
+          isWatchParty={props.isWatchParty}
+          onManualSync={props.onManualSync}
           onPrev={() => {
             if (!props.prevEpisodeSlug) return;
             if (props.isWatchParty) {

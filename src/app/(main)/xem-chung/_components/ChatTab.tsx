@@ -1,13 +1,24 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import ChatMessageItem from "@/app/(main)/xem-chung/_components/ChatMessageItem";
 import ChatInputForm from "@/app/(main)/xem-chung/_components/ChatInputForm";
-import { useWatchParty } from "@/providers/WatchPartyProvider";
+import { useWatchPartyStore } from "@/stores/watch-party";
+import {
+  selectMessages,
+  selectUser,
+  selectRoom,
+  selectIsHost,
+  selectMyParticipant,
+} from "@/stores/watch-party/selectors";
+import { sendChatMessage } from "@/stores/watch-party";
 
 export default function ChatTab() {
-  const { messages, user, room, isRealHost, myParticipant, handleSendMessage } =
-    useWatchParty();
+  const messages = useWatchPartyStore(selectMessages);
+  const user = useWatchPartyStore(selectUser);
+  const room = useWatchPartyStore(selectRoom);
+  const isRealHost = useWatchPartyStore(selectIsHost);
+  const myParticipant = useWatchPartyStore(selectMyParticipant);
 
   const [text, setText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -33,7 +44,7 @@ export default function ChatTab() {
     e.preventDefault();
     if (!text.trim() || isDisabled) return;
 
-    handleSendMessage(text);
+    sendChatMessage(text);
 
     setText("");
     setShowEmojis(false);
@@ -45,15 +56,25 @@ export default function ChatTab() {
     inputRef.current?.focus();
   };
 
-  const formatTime = (isoString?: string) => {
-    if (!isoString) return "";
-    const date = new Date(isoString);
-    if (isNaN(date.getTime())) return "";
-    return date.toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const messageTimes = useMemo(() => {
+    const times = new Map<string, string>();
+
+    for (const msg of messages) {
+      if (!msg.created_at) continue;
+      const date = new Date(msg.created_at);
+      if (isNaN(date.getTime())) continue;
+      const key = msg.id ?? msg.created_at;
+      times.set(
+        key,
+        date.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      );
+    }
+
+    return times;
+  }, [messages]);
 
   const stopProp = (e: React.SyntheticEvent) => {
     e.stopPropagation();
@@ -95,7 +116,7 @@ export default function ChatTab() {
               key={msg.id || i}
               msg={msg}
               isMe={msg.user_id === user?.id}
-              timeString={formatTime(msg.created_at)}
+              timeString={messageTimes.get(msg.id ?? msg.created_at ?? "") ?? ""}
             />
           );
         })}

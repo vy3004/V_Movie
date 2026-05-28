@@ -6,12 +6,14 @@ import NProgress from "nprogress";
 import { toast } from "sonner";
 import { LockClosedIcon, GlobeAltIcon } from "@heroicons/react/24/outline";
 import ConfirmModal from "@/components/ui/ConfirmModal";
-import { useWatchParty } from "@/providers/WatchPartyProvider";
+import { useWatchPartyStore } from "@/stores/watch-party";
+import { selectRoom } from "@/stores/watch-party/selectors";
 import { WatchPartyRoom, RoomSettings } from "@/types";
 
 export default function SettingsTab() {
   const router = useRouter();
-  const { room, setRoom } = useWatchParty(); //
+  const room = useWatchPartyStore(selectRoom);
+  const setRoom = useWatchPartyStore((state) => state.setRoom);
 
   const [isEndModalOpen, setIsEndModalOpen] = useState(false);
   const [isEnding, setIsEnding] = useState(false);

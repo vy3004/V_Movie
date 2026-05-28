@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { LiveKitRoom } from "@livekit/components-react";
 import { RoomOptions, VideoPresets } from "livekit-client";
 import { WatchPartyRoom } from "@/types";
-import { useWatchParty } from "@/providers/WatchPartyProvider";
+import { useWatchPartyStore } from "@/stores/watch-party";
+import { selectParticipants, selectUser } from "@/stores/watch-party/selectors";
 
 interface WatchPartyVoiceWrapperProps {
   room: WatchPartyRoom;
@@ -16,7 +17,17 @@ export default function WatchPartyVoiceWrapper({
   room,
   children,
 }: WatchPartyVoiceWrapperProps) {
-  const { participants, user } = useWatchParty();
+  const participants = useWatchPartyStore(selectParticipants);
+  const user = useWatchPartyStore(selectUser);
+  const wantsVoiceConnected = useWatchPartyStore(
+    (state) => state.wantsVoiceConnected,
+  );
+  const setWantsVoiceConnected = useWatchPartyStore(
+    (state) => state.setWantsVoiceConnected,
+  );
+  const setIsVoiceConnected = useWatchPartyStore(
+    (state) => state.setIsVoiceConnected,
+  );
   const [voiceToken, setVoiceToken] = useState<string | null>(null);
 
   // CẤU HÌNH BỘ LỌC ÂM THANH & TỐI ƯU HÓA CAMERA
@@ -25,20 +36,28 @@ export default function WatchPartyVoiceWrapper({
       adaptiveStream: true, // BẬT TÍNH NĂNG TỐI ƯU BĂNG THÔNG DỰA TRÊN KÍCH THƯỚC KHUNG HÌNH
       dynacast: true, // Bật dynacast để tối ưu băng thông gửi đi
       audioCaptureDefaults: {
-        noiseSuppression: true,
         echoCancellation: true,
         autoGainControl: true,
+        noiseSuppression: true,
       },
       videoCaptureDefaults: {
-        // Ép độ phân giải xuống mức cực thấp (160x120 hoặc 320x180) vì chỉ render khung nhỏ
-        // Hỗ trợ tốt cho trường hợp mạng yếu khi xem phim
         resolution: VideoPresets.h180.resolution,
+        frameRate: 15,
+      },
+      publishDefaults: {
+        videoSimulcastLayers: [VideoPresets.h180],
+        videoCodec: "vp8",
       },
     };
   }, []);
 
   useEffect(() => {
-    // Chỉ fetch khi user đã là participant
+    if (!wantsVoiceConnected) {
+      setVoiceToken(null);
+      setIsVoiceConnected(false);
+      return;
+    }
+
     if (!user?.id || !participants) return;
     const isMeInList = participants.some((p) => p.user_id === user.id);
     if (!isMeInList) return;
@@ -54,7 +73,7 @@ export default function WatchPartyVoiceWrapper({
           body: JSON.stringify({
             roomCode: room.room_code,
           }),
-          signal: abortController.signal, // Gắn công tắc hủy vào fetch
+          signal: abortController.signal,
         });
 
         if (!res.ok) {
@@ -62,16 +81,16 @@ export default function WatchPartyVoiceWrapper({
         }
 
         const data = await res.json();
-        // Cập nhật token nếu component vẫn còn trên màn hình
         if (isMounted && data.token) {
           setVoiceToken(data.token);
         }
       } catch (error) {
-        // Nếu lỗi là do người dùng thoát sớm (AbortError) -> Bỏ qua, không làm gì cả
         if (error instanceof Error && error.name === "AbortError") return;
 
-        // Nếu lỗi mạng thực sự VÀ component vẫn còn hiện -> Mới quăng Toast
         if (isMounted) {
+          setVoiceToken(null);
+          setIsVoiceConnected(false);
+          setWantsVoiceConnected(false);
           toast.error("Hệ thống Voice Chat đang gián đoạn.");
         }
       }
@@ -79,21 +98,38 @@ export default function WatchPartyVoiceWrapper({
 
     fetchVoiceToken();
 
-    // Cleanup function: Chạy khi component bị hủy (người dùng thoát phòng)
     return () => {
       isMounted = false;
-      abortController.abort(); // Lập tức cắt đứt kết nối mạng đang fetch dở dang
+      abortController.abort();
     };
-  }, [room.room_code, participants, user.id]); // Thêm participants và user.id vào dependencies
+  }, [
+    room.room_code,
+    participants,
+    user,
+    wantsVoiceConnected,
+    setIsVoiceConnected,
+    setWantsVoiceConnected,
+  ]);
 
   return (
     <LiveKitRoom
-      video={false} // Khởi tạo ban đầu là tắt (Người dùng tự bật qua TrackToggle)
-      audio={false} // Khởi tạo ban đầu là tắt (Người dùng tự bật qua TrackToggle)
+      video={false}
+      audio={false}
       token={voiceToken || ""}
       serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
-      connect={!!voiceToken}
+      connect={!!voiceToken && wantsVoiceConnected}
       options={roomOptions}
+      onConnected={() => setIsVoiceConnected(true)}
+      onDisconnected={() => setIsVoiceConnected(false)}
+      onError={(error) => {
+        console.error("[WP_VOICE_CONNECT_ERROR]:", error);
+        setVoiceToken(null);
+        setIsVoiceConnected(false);
+        setWantsVoiceConnected(false);
+        if (wantsVoiceConnected) {
+          toast.error("Không thể kết nối kênh thoại.");
+        }
+      }}
     >
       {children}
     </LiveKitRoom>

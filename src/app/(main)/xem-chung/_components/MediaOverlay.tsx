@@ -5,11 +5,20 @@ import { useParticipants, VideoTrack } from "@livekit/components-react";
 import { Track, Participant } from "livekit-client";
 import UserAvatar from "@/components/shared/UserAvatar";
 import SpeakingEffect from "@/app/(main)/xem-chung/_components/SpeakingEffect";
-import { useWatchParty } from "@/providers/WatchPartyProvider";
+import { useWatchPartyStore } from "@/stores/watch-party";
+import { selectParticipants } from "@/stores/watch-party/selectors";
 import { WatchPartyParticipant } from "@/types";
 
 export default function MediaOverlay() {
-  const { participants } = useWatchParty();
+  const isVoiceConnected = useWatchPartyStore((state) => state.isVoiceConnected);
+
+  if (!isVoiceConnected) return null;
+
+  return <ConnectedMediaOverlay />;
+}
+
+function ConnectedMediaOverlay() {
+  const participants = useWatchPartyStore(selectParticipants);
   const lkParticipants = useParticipants();
 
   // Danh sách ID những người đang nói hoặc vừa mới nói xong (grace period)

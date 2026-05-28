@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
@@ -25,6 +25,15 @@ export default function WaitingRoomClient({
 }: WaitingRoomClientProps) {
   const router = useRouter();
   const [supabase] = useState(() => createSupabaseClient());
+  const enteringRoomRef = useRef(false);
+
+  const enterApprovedRoom = useCallback(() => {
+    if (enteringRoomRef.current) return;
+
+    enteringRoomRef.current = true;
+    toast.success("Host đã duyệt! Đang vào phòng...");
+    window.location.reload();
+  }, []);
 
   const { data: approvedCount = 0, refetch: refetchCount } = useQuery({
     queryKey: ["wp-approved-count", room.id],
@@ -38,6 +47,32 @@ export default function WaitingRoomClient({
     },
   });
 
+  const { refetch: refetchMe } = useQuery({
+    queryKey: ["wp-waiting-participant", room.id, me?.id],
+    enabled: !!me?.id,
+    refetchInterval: 1000,
+    queryFn: async () => {
+      if (!me?.id) return null;
+
+      const { data } = await supabase
+        .from("watch_party_participants")
+        .select("id, status")
+        .eq("id", me.id)
+        .maybeSingle();
+
+      if (!data) {
+        toast.error("Yêu cầu tham gia của bạn đã bị từ chối.");
+        router.replace("/xem-chung");
+        return null;
+      }
+
+      if (data.status === "approved") {
+        enterApprovedRoom();
+      }
+
+      return data;
+    },
+  });
   const isFull = approvedCount >= room.max_participants;
 
   useEffect(() => {
@@ -55,6 +90,7 @@ export default function WaitingRoomClient({
         },
         (payload: RealtimePostgresChangesPayload<WatchPartyParticipant>) => {
           refetchCount();
+          refetchMe();
 
           const eventType = payload.eventType;
 
@@ -64,15 +100,15 @@ export default function WaitingRoomClient({
               payload.new?.id === me.id &&
               payload.new?.status === "approved"
             ) {
-              toast.success("Host đã duyệt! Đang vào phòng...", { icon: "🎉" });
-              window.location.reload();
+              enterApprovedRoom();
             }
           }
 
-          // Xử lý khi Host bấm TỪ CHỐI (DELETE)
           if (eventType === "DELETE") {
             if (payload.old?.id === me.id) {
-              toast.error("Yêu cầu tham gia của bạn đã bị từ chối.");
+              toast.error(
+                "Yêu cầu tham gia của bạn đã bị từ chối.",
+              );
               router.replace("/xem-chung");
             }
           }
@@ -83,7 +119,15 @@ export default function WaitingRoomClient({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [room.id, me?.id, router, refetchCount, supabase]);
+  }, [
+    room.id,
+    me?.id,
+    router,
+    refetchCount,
+    refetchMe,
+    supabase,
+    enterApprovedRoom,
+  ]);
 
   useEffect(() => {
     if (isFull) {
@@ -128,7 +172,9 @@ export default function WaitingRoomClient({
 
         <div className="max-w-sm mx-auto">
           <h1 className="text-2xl font-bold text-white mb-2">
-            {isFull ? "Phòng hiện đã đầy" : "Đang đợi phê duyệt..."}
+            {isFull
+              ? "Phòng hiện đã đầy"
+              : "Đang đợi phê duyệt..."}
           </h1>
           <p className="text-zinc-400 text-sm">
             {isFull
