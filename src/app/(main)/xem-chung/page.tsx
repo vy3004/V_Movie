@@ -29,6 +29,8 @@ const CreateRoomModal = dynamic(
   { ssr: false },
 );
 
+type LobbySort = "newest" | "most_viewers" | "most_slots";
+
 export default function WatchPartyLobbyPage() {
   const { user } = useData();
   const { onOpen: openLogin } = useAuthModal();
@@ -36,6 +38,7 @@ export default function WatchPartyLobbyPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [querySearch, setQuerySearch] = useState("");
+  const [sortBy, setSortBy] = useState<LobbySort>("newest");
   const [showModal, setShowModal] = useState(false);
   const [showKickedModal, setShowKickedModal] = useState(
     searchParams.get("kicked") === "1",
@@ -75,12 +78,13 @@ export default function WatchPartyLobbyPage() {
     refetch,
     isRefetching,
   } = useInfiniteQuery({
-    queryKey: ["wp-lobby", querySearch],
+    queryKey: ["wp-lobby", querySearch, sortBy],
     queryFn: async ({ pageParam = 0 }) => {
       const params = new URLSearchParams({
         search: querySearch,
         page: String(pageParam),
         limit: "12",
+        sort: sortBy,
       });
       const res = await fetch(`/api/watch-party/lobby?${params}`);
       if (!res.ok) throw new Error("Failed to fetch rooms");
@@ -166,11 +170,21 @@ export default function WatchPartyLobbyPage() {
       {/* Options & Filters */}
       <div className="flex flex-wrap items-center justify-between gap-6 mb-12 py-6 border-y border-white/5">
         <div className="flex flex-wrap items-center gap-3">
-          <FilterPill label="Tất cả" active />
-          <FilterPill label="Hành động" />
-          <FilterPill label="Kinh dị" />
-          <FilterPill label="Lãng mạn" />
-          <FilterPill label="Âm nhạc" />
+          <FilterPill
+            label="Mới nhất"
+            active={sortBy === "newest"}
+            onClick={() => setSortBy("newest")}
+          />
+          <FilterPill
+            label="Nhiều người xem"
+            active={sortBy === "most_viewers"}
+            onClick={() => setSortBy("most_viewers")}
+          />
+          <FilterPill
+            label="Còn nhiều chỗ"
+            active={sortBy === "most_slots"}
+            onClick={() => setSortBy("most_slots")}
+          />
         </div>
 
         <div className="flex items-center gap-3">
@@ -245,12 +259,15 @@ export default function WatchPartyLobbyPage() {
 function FilterPill({
   label,
   active = false,
+  onClick,
 }: {
   label: string;
   active?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <button
+      onClick={onClick}
       className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
         active
           ? "bg-white text-black border-white"

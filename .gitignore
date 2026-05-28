@@ -9,6 +9,8 @@
 # testing
 /coverage
 /test-results
+/test/e2e/auth
+/.playwright-mcp
 
 # next.js
 /.next/
@@ -32,6 +34,9 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# docs
+/docs
 
 # typescript
 *.tsbuildinfo

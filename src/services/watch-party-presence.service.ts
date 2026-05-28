@@ -1,6 +1,7 @@
 import "server-only";
 
 import { redis } from "@/lib/redis";
+import { logger } from "@/lib/logger";
 import type { UserPresence } from "@/types";
 
 export const WATCH_PARTY_PRESENCE_TTL_SECONDS = 45;
@@ -199,5 +200,45 @@ export const WatchPartyPresenceService = {
     if (hasPipelineCommands) await pipeline.exec();
 
     return Array.from(staleUserIds);
+  },
+
+  hasAnyActiveLeaseByRoomIds: async (
+    roomIds: string[],
+    now = Date.now(),
+  ): Promise<Record<string, boolean> | null> => {
+    if (!redis) return null;
+    if (!roomIds.length) return {};
+
+    const cutoff = now - WATCH_PARTY_PRESENCE_STALE_MS;
+
+    try {
+      const pipeline = redis.pipeline();
+      for (const roomId of roomIds) {
+        pipeline.zrange<string[]>(roomIndexKey(roomId), cutoff, now, {
+          byScore: true,
+          rev: true,
+          offset: 0,
+          count: 1,
+        });
+      }
+
+      const results = (await pipeline.exec()) as Array<
+        [Error | null, string[] | null | undefined]
+      >;
+      const map: Record<string, boolean> = {};
+
+      roomIds.forEach((roomId, index) => {
+        const [, members] = results[index] ?? [];
+        map[roomId] = Array.isArray(members) && members.length > 0;
+      });
+
+      return map;
+    } catch (error) {
+      logger.warn("Failed to check active leases by room IDs", {
+        roomCount: roomIds.length,
+        error,
+      });
+      return null;
+    }
   },
 };

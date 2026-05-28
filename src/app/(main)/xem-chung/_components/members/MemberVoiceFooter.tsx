@@ -45,7 +45,7 @@ function MemberVoiceFooter({
 }: MemberVoiceFooterProps) {
   const activeVoiceCount = useWatchPartyStore(selectActiveVoiceCount);
   return (
-    <div className="shrink-0 p-3 bg-zinc-950/90 backdrop-blur-xl border-t border-zinc-800 flex items-center justify-between rounded-b-xl z-10">
+    <div className="shrink-0 p-3 border-t border-zinc-800 flex items-center justify-between z-10">
       <div className="flex items-center gap-3">
         <UserAvatar
           avatar_url={myParticipantData?.profiles?.avatar_url}

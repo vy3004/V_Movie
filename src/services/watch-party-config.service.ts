@@ -5,7 +5,22 @@ import { redis } from "@/lib/redis";
 import { logger } from "@/lib/logger";
 import { sanitizeHtml } from "@/lib/utils";
 import { updateSettingsSchema } from "@/lib/validations/watch-party.validation";
+import {
+  WatchPartyPresenceService,
+  WATCH_PARTY_PRESENCE_STALE_MS,
+} from "@/services/watch-party-presence.service";
 import type { RoomSettings } from "@/types/watch-party";
+
+const getSearchCacheHash = (search: string) => {
+  let hash = 0;
+  const normalized = search.toLowerCase();
+
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0;
+  }
+
+  return hash.toString(36);
+};
 
 /**
  * Watch Party Config Service
@@ -160,24 +175,23 @@ export const WatchPartyConfigService = {
     search?: string;
     page?: number;
     limit?: number;
+    sort?: "newest" | "most_viewers" | "most_slots";
   }) => {
     const supabase = await createSupabaseServer();
 
     const search = params.search?.trim() || "";
     const page = Math.max(0, params.page || 0);
     const limit = Math.min(100, Math.max(1, params.limit || 12));
+    const sort = params.sort ?? "newest";
     const from = page * limit;
     const to = from + limit - 1;
 
-    // Generate cache key: hash search term for consistent key naming
-    // Use simple string encoding instead of crypto hash for edge runtime compatibility
-    const searchHash = search
-      ? Buffer.from(search)
-          .toString("base64")
-          .substring(0, 8)
-          .replace(/[/+=]/g, "")
-      : "all";
-    const cacheKey = `wp:lobby:list:${page}:${searchHash}`;
+    // Generate cache key: deterministic hash for edge-safe runtime compatibility
+    const searchHash = search ? getSearchCacheHash(search) : "all";
+    const leaseBucket = Math.floor(
+      Date.now() / WATCH_PARTY_PRESENCE_STALE_MS,
+    );
+    const cacheKey = `wp:lobby:list:${page}:${searchHash}:${sort}:${leaseBucket}`;
 
     // Try cache first
     if (redis) {
@@ -219,9 +233,19 @@ export const WatchPartyConfigService = {
       query = query.eq("is_private", false);
     }
 
-    const { data, error } = await query
-      .order("created_at", { ascending: false })
-      .range(from, to);
+    if (sort === "most_viewers") {
+      query = query
+        .order("participant_count", { ascending: false })
+        .order("created_at", { ascending: false });
+    } else if (sort === "most_slots") {
+      query = query
+        .order("max_participants", { ascending: false })
+        .order("created_at", { ascending: false });
+    } else {
+      query = query.order("created_at", { ascending: false });
+    }
+
+    const { data, error } = await query.range(from, to);
 
     if (error) {
       logger.error("Failed to fetch lobby rooms", { error: error.message });
@@ -229,12 +253,32 @@ export const WatchPartyConfigService = {
     }
 
     const rooms = data || [];
+
+    let visibleRooms = rooms;
+    const roomIds = rooms.map((room) => room.id);
+
+    if (roomIds.length) {
+      const activeLeaseByRoomId =
+        await WatchPartyPresenceService.hasAnyActiveLeaseByRoomIds(roomIds);
+
+      if (activeLeaseByRoomId) {
+        visibleRooms = rooms.filter((room) => activeLeaseByRoomId[room.id] === true);
+      }
+    }
+
+    const hasMoreRawPages = rooms.length === limit;
+    const hasVisibleRooms = visibleRooms.length > 0;
+
     const result = {
-      rooms,
-      nextPage: rooms.length === limit ? page + 1 : null,
+      rooms: visibleRooms,
+      nextPage: hasMoreRawPages && hasVisibleRooms ? page + 1 : null,
     };
 
-    logger.info("Lobby rooms fetched", { count: rooms.length, page });
+    logger.info("Lobby rooms fetched", {
+      count: visibleRooms.length,
+      rawCount: rooms.length,
+      page,
+    });
 
     // Cache result for 60 seconds
     if (redis) {

@@ -63,8 +63,7 @@ function ParticipantItem({
   const isSpeaking = lkParticipant?.isSpeaking ?? false;
   const isMicEnabled = lkParticipant?.isMicrophoneEnabled ?? false;
 
-  // Get camera track directly from participant instead of useTracks
-  const cameraPublication = useMemo(() => {
+  const cameraPublication = (() => {
     if (!lkParticipant) return undefined;
 
     const pubs = Array.from(
@@ -73,19 +72,19 @@ function ParticipantItem({
       >,
     );
     return pubs.find((pub) => pub.source === Track.Source.Camera);
-  }, [lkParticipant]);
+  })();
 
-  const myVideoTrack = useMemo(() => {
-    if (!lkParticipant || !cameraPublication || cameraPublication.isMuted)
-      return undefined;
-    if (!cameraPublication.track) return undefined;
-
-    return {
-      participant: lkParticipant,
-      publication: cameraPublication,
-      source: Track.Source.Camera,
-    };
-  }, [lkParticipant, cameraPublication]);
+  const myVideoTrack =
+    !lkParticipant ||
+    !cameraPublication ||
+    cameraPublication.isMuted ||
+    !cameraPublication.track
+      ? undefined
+      : {
+          participant: lkParticipant,
+          publication: cameraPublication,
+          source: Track.Source.Camera,
+        };
 
   const participantIdentity = useMemo(
     () => getParticipantIdentity(participant),
