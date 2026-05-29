@@ -1,135 +1,200 @@
-# 🎬 V-Movie
+# 🎬 V-Movie: Real-time Streaming & Watch Party Platform
 
-**V-Movie** là một nền tảng xem phim trực tuyến hiện đại, được xây dựng với kiến trúc tối ưu hiệu suất và trải nghiệm người dùng. Dự án không chỉ cung cấp tính năng xem phim cơ bản mà còn tích hợp hệ thống **Watch Party (Xem chung)** theo thời gian thực, quản lý lịch sử xem, bình luận, và hỗ trợ PWA (Progressive Web App).
+**V-Movie** is a full-stack movie streaming platform focused on low-latency real-time collaboration, scalable watch-session orchestration, and production-ready user experience.
 
 <br/>
 
 [![Next.js](https://img.shields.io/badge/Next.js-14.2-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
+[![Zustand](https://img.shields.io/badge/Zustand-5.0-orange?style=for-the-badge&logo=react)](https://zustand-demo.pmnd.rs/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
-[![Supabase](https://img.shields.io/badge/Supabase-Database_&_Auth-3ECF8E?style=for-the-badge&logo=supabase)](https://supabase.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-DB_&_Realtime-3ECF8E?style=for-the-badge&logo=supabase)](https://supabase.com/)
 [![Redis](https://img.shields.io/badge/Upstash-Redis-FF4D4D?style=for-the-badge&logo=redis)](https://upstash.com/)
+[![LiveKit](https://img.shields.io/badge/LiveKit-WebRTC-white?style=for-the-badge&logo=livekit)](https://livekit.io/)
 
 ---
 
-## ✨ Tính Năng Nổi Bật
+## ✨ High-Value Features (through latest commit)
 
-### 🌐 1. Real-time Watch Party (Xem Chung)
+### 1) Real-time Watch Party Engine
 
-Đây là tính năng cốt lõi giúp V-Movie trở nên khác biệt, mang lại trải nghiệm xem phim cùng bạn bè dù ở bất cứ đâu.
+- **Hybrid video sync (Hard + Soft):** combines seek correction with dynamic playback-rate adjustment (`0.85x → 1.15x`) to keep participants aligned with smooth playback.
+- **Role-based room governance:** Host/Moderator/Guest permissions with controlled actions for sync, settings, and member management.
+- **Live room interaction stack:** room chat, playlist collaboration, room settings, participant permissions, and voice controls.
+- **LiveKit voice integration:** in-room voice chat with participant-level voice state controls.
 
-<!-- ![Watch Party Demo](./docs/watch-party-demo.gif) -->
+### 2) Reliable Presence & Room Lifecycle
 
-- **Hệ thống phòng (Room-based):** Tạo phòng nhanh chóng và mời bạn bè tham gia thông qua **mã code gồm 6 ký tự** ngẫu nhiên.
-- **Cơ chế Soft Sync thông minh:** Tự động đồng bộ hóa thời gian phát video giữa các thành viên. Tốc độ phát (playback speed) sẽ linh hoạt điều chỉnh trong khoảng **0.85x đến 1.15x** để các luồng video bắt kịp nhau một cách mượt mà mà không gây giật lag (buffering).
-- **Mô hình phân quyền Host/User:** Host có toàn quyền kiểm soát video (Play, Pause, Seek). Hỗ trợ cơ chế chuyển giao quyền Host (Host Succession) cho người khác trong phòng.
-- **Tương tác trực tiếp:** Khung chat real-time tích hợp cơ chế **rate-limiting 1500ms** cho tính năng thả cảm xúc (emote), ngăn chặn tình trạng spam làm quá tải hệ thống.
+- **Lease-based presence tracking:** active-session lease model prevents stale participants from being treated as online.
+- **Automatic stale-session janitor:** scheduled cleanup removes stale leases and reconciles participant presence.
+- **Auto cleanup for empty rooms:** periodic server-side cleanup keeps lobby/state consistent and reduces stale room drift.
+- **Lobby sorting strategies (latest):** `newest`, `most_viewers`, `most_slots` for better room discovery.
 
-### 🍿 2. Trải Nghiệm Xem Phim Tối Ưu
+### 3) Scalable Data & Caching Strategy
 
-Giao diện người dùng được thiết kế tập trung vào nội dung và sự tiện lợi.
+- **Redis-backed hot path:** watch-party presence, lobby caching, and rate-limited flows run on Upstash Redis.
+- **Cache invalidation for lobby data:** targeted invalidation strategy for room list consistency.
+- **Server-driven pagination + infinite loading:** efficient large-lobby browsing on client and API.
 
-<!-- <img src="./docs/movie-player.png" alt="Video Player Interface" width="800" /> -->
+### 4) AI Recommendations Pipeline
 
-- **Trình phát Video tùy chỉnh:** Sử dụng `video.js` kết hợp `videojs-hotkeys` để người dùng có thể điều khiển bằng bàn phím tiện lợi (Space để dừng/phát, phím mũi tên để tua,...).
-- **Quản lý danh sách tự động:** Tự động lưu lại lịch sử xem phim (Watch History) và cho phép thêm phim vào danh sách đăng ký theo dõi (Subscriptions).
-- **Khám phá nội dung:** Hệ thống lọc phim đa dạng, tìm kiếm thông minh và danh sách phim thịnh hành.
+- **AI-based recommendation flow:** user/guest recommendation paths with queue-based async scheduling.
+- **QStash-backed orchestration:** recommendation jobs use QStash instead of direct cron-only flow for better delivery reliability.
+- **Failure-aware batch processing:** improved atomic claim and partial-failure handling in recommendation workers.
 
-### 💬 3. Hệ Thống Tương Tác & Cộng Đồng
+### 5) Product Experience Surface
 
-Không chỉ là xem phim, người dùng còn có thể thảo luận và kết nối.
+- **Custom player UX:** `video.js` + hotkeys, progress tracking, and episode-flow support.
+- **Community features:** threaded comments, likes, notification flows, profile/subscription/dashboard surfaces.
+- **PWA support + web push stack:** installable app behavior and browser push pipeline.
 
-<!-- <img src="./docs/comment-section.png" alt="Nested Comments" width="800" /> -->
+---
 
-- **Bình luận đa cấp (Threaded Comments):** Hỗ trợ trả lời (reply) theo từng luồng thảo luận riêng biệt.
-- **Tương tác thời gian thực:** Thích (Like) bình luận và hệ thống nhận thông báo (Push Notifications) ngay khi có tương tác mới.
+## 🗺️ Platform Surface
 
-### ⚡ 4. PWA & Tối Ưu Hiệu Suất Cao
+### Main user flows
 
-Dự án được xây dựng với tư duy "Performance First".
+- Home, movie listing/filtering, movie detail/watch pages
+- Watch Party lobby and room experience
+- Profile, history, subscriptions, notifications dashboard
 
-- **Progressive Web App (PWA):** Người dùng có thể cài đặt trực tiếp V-Movie lên màn hình điện thoại hoặc máy tính, mang lại trải nghiệm như một ứng dụng Native thực thụ.
-- **Lazy Loading & Infinite Scroll:** Tối ưu hóa tải trang, chỉ fetch dữ liệu và hình ảnh khi cuộn đến vùng hiển thị.
-- **SEO Tối Ưu:** Hỗ trợ Dynamic Metadata, `sitemap.ts` và `robots.ts` để thân thiện với các công cụ tìm kiếm.
+### Admin flows
+
+- Admin movie operations and indexing surface
+- Collection/review/sync-related admin pages
+- Merge-log/admin operational pages
+
+### Watch Party API surface
+
+`/api/watch-party/*` includes routes for:
+
+- Room lifecycle (`create/join/leave/close`)
+- Lobby discovery
+- Sync and presence
+- Playlist and messaging
+- Settings and participant permissions
+- Voice token provisioning
+
+## 📊 Additional Feature Matrix
+
+| Capability | What it provides | Tradeoff |
+|---|---|---|
+| Admin movie indexer | Multi-source movie indexing and database-backed catalog operations for admin workflows. | Higher operational complexity than single-source ingestion. |
+| User dashboard suite | Profile, watch history, subscriptions, and notification management in one surface. | More API/state synchronization across modules. |
+| Community layer | Threaded comments, likes, and push-notification interactions to increase retention loops. | More moderation and notification edge cases. |
+| Watch Party moderation | Participant permissions, room settings, capacity rules, and enforced leave/kick flows. | More policy handling and role-transition paths. |
+| Realtime collaboration | Shared playlist, chat, presence, and playback sync in collaborative rooms. | Tight latency/reliability requirements across services. |
+| Broad API surface | Dedicated endpoints for watch-party lifecycle, sync, messaging, and voice-token issuance. | Larger contract surface to test and maintain. |
 
 ---
 
 ## 🛠 Tech Stack
 
-**Frontend Architecture:**
+### Frontend
 
-- [Next.js 14](https://nextjs.org/) (App Router, Server Actions)
-- [TypeScript](https://www.typescriptlang.org/)
-- **Styling:** [Tailwind CSS](https://tailwindcss.com/) & Tailwind Animate
-- **State & Data Fetching:** [@tanstack/react-query](https://tanstack.com/query/latest) & Axios
-- **Form Handling:** React Hook Form + Zod
+- **Framework:** Next.js 14 (App Router)
+- **Language:** TypeScript
+- **State management:** Zustand (client state), TanStack Query (server state)
+- **Styling:** Tailwind CSS
+- **Media player:** Video.js
 
-**Backend & Infrastructure:**
+### Backend & Infrastructure
 
-- **Database & Auth:** [Supabase](https://supabase.com/) (PostgreSQL, Realtime WebSockets)
-- **Caching & Rate Limiting:** [Upstash Redis](https://upstash.com/)
+- **Database/Auth/Realtime:** Supabase (PostgreSQL + Realtime)
+- **Caching & rate control:** Upstash Redis
+- **Voice/WebRTC:** LiveKit
+- **Async job transport:** Upstash QStash
 
-**Testing & QA:**
+### Quality tooling
 
-- **Unit Testing:** Vitest & React Testing Library
-- **E2E Testing:** Playwright
+- **Unit test runner configured:** Vitest (`npm run test:unit`)
+- **E2E test runner configured:** Playwright (`npm run test:e2e`)
 
 ---
 
-## 🚀 Hướng Dẫn Cài Đặt (Local Development)
+## 📜 Available Scripts
 
-### Yêu cầu
+<!-- AUTO-GENERATED:package.json-scripts:start -->
+| Command | Description |
+|---|---|
+| `npm run dev` | Start Next.js development server |
+| `npm run build` | Build production bundle |
+| `npm run start` | Start production server |
+| `npm run lint` | Run Next.js ESLint checks |
+| `npm run test:unit` | Run unit tests with Vitest |
+| `npm run test:e2e` | Run end-to-end tests with Playwright |
+| `npm run test:e2e:ui` | Run Playwright UI test runner |
+| `npm run index:movies` | Run movie indexing script |
+<!-- AUTO-GENERATED:package.json-scripts:end -->
 
-- Node.js (v18+ hoặc v20+)
-- npm / yarn / pnpm
+---
 
-### 1. Clone Source Code
+## 🚀 Local Setup
+
+### Prerequisites
+
+- Node.js 18+ (20+ recommended)
+- npm (or compatible package manager)
+
+### 1) Clone repository
 
 ```bash
-git clone [https://github.com/vy3004/v-movie.git](https://github.com/vy3004/v-movie.git)
+git clone https://github.com/vy3004/v-movie.git
 cd v-movie
 ```
 
-### 2. Cài đặt Dependencies
+### 2) Install dependencies
 
 ```bash
 npm install
 ```
 
-### 3. Cấu hình Biến Môi Trường (Environment Variables)
+### 3) Configure environment
 
-Tạo file .env.local ở thư mục gốc và cung cấp các thông tin sau:
+Create `.env.local` in project root.
 
-```bash
-# Môi trường hệ thống
-NODE_ENV=development
+> Note: repository currently has no `.env.example`; table below is generated from environment variables referenced in source.
 
-# Supabase Keys
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+<!-- AUTO-GENERATED:env-vars:start -->
+| Variable | Required | Scope | Description | Example |
+|---|---|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Web/API | Supabase project URL used by app clients and server helpers. | `https://xxx.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Web/API | Public Supabase anon key for browser-authenticated requests. | `eyJ...` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | API/Jobs | Service-role key for privileged server operations. | `eyJ...` |
+| `UPSTASH_REDIS_REST_URL` | Yes | API/Jobs | Upstash Redis REST endpoint for cache/presence/rate flows. | `https://xxx.upstash.io` |
+| `UPSTASH_REDIS_REST_TOKEN` | Yes | API/Jobs | Upstash Redis REST token. | `A...` |
+| `NEXT_PUBLIC_LIVEKIT_URL` | Yes (voice features) | Web/API | LiveKit server URL for room voice sessions. | `wss://xxx.livekit.cloud` |
+| `LIVEKIT_API_KEY` | Yes (voice features) | API | LiveKit API key for token issuance. | `API...` |
+| `LIVEKIT_API_SECRET` | Yes (voice features) | API | LiveKit API secret for token signing. | `SECRET...` |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Yes (push features) | Web/API | Public VAPID key for browser push subscription. | `BEl...` |
+| `VAPID_PRIVATE_KEY` | Yes (push features) | API | Private VAPID key for push signing. | `n0...` |
+| `VAPID_CONTACT_EMAIL` | Yes (push features) | API | Contact email in VAPID subject. | `ops@example.com` |
+| `QSTASH_URL` | Yes (recommendation queue) | API/Jobs | Base URL for Upstash QStash publish endpoints. | `https://qstash.upstash.io` |
+| `QSTASH_TOKEN` | Yes (recommendation queue) | API/Jobs | Bearer token for publishing QStash jobs. | `qst_...` |
+| `QSTASH_CURRENT_SIGNING_KEY` | Yes (signed callbacks) | API/Jobs | Current QStash signing key used to verify callbacks. | `sig_...` |
+| `QSTASH_NEXT_SIGNING_KEY` | Optional | API/Jobs | Next QStash signing key for key rotation windows. | `sig_...` |
+| `CRON_SECRET` | Optional | API | Secret guard for cron-triggered API endpoints. | `cron_secret` |
+| `CRON_SECRET_SUPABASE` | Yes (Supabase cron routes) | API/Jobs | Secret guard for Supabase-triggered cleanup/scheduled endpoints. | `supabase_cron_secret` |
+| `SUPABASE_URL` | Yes (Supabase Edge Function) | Jobs | Supabase project URL used in edge janitor function runtime. | `https://xxx.supabase.co` |
+| `APP_BASE_URL` | Yes (Supabase Edge Function) | Jobs | Base app URL for scheduled/server-to-server calls. | `https://your-app.com` |
+| `NEXT_PUBLIC_PORT` | Optional (fallback supported) | Web/API | App base URL used by some server/client flows; defaults to localhost in code paths with fallback. | `http://localhost:3000` |
+| `NEXT_PUBLIC_MOVIE_API` | Yes (catalog provider) | Web/API | Upstream movie catalog API base URL. | `https://api.example.com` |
+| `NEXT_PUBLIC_IMG_API` | Yes (image provider) | Web | Upstream image API/CDN base URL. | `https://img.example.com` |
+| `NODE_ENV` | Optional | Web/API | Runtime environment mode. | `development` |
+<!-- AUTO-GENERATED:env-vars:end -->
 
-# Upstash Redis Keys
-UPSTASH_REDIS_REST_URL=your_upstash_redis_url
-UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token
-
-# Livekit Keys
-NEXT_PUBLIC_LIVEKIT_URL=your_livekit_url
-LIVEKIT_API_KEY=your_livekit_api_key
-LIVEKIT_API_SECRET=your_livekit_api_secret
-```
-
-### 4. Chạy Ứng Dụng
+### 4) Run application
 
 ```bash
 npm run dev
 ```
 
-Trang web sẽ chạy tại: http://localhost:3000
+Open `http://localhost:3000`.
 
 ---
 
-## 👨‍💻 Tác giả
+## 👨‍💻 Author
 
-Được thiết kế và phát triển bởi **Trần Nguyễn Kha Vỹ**  
-_Nếu bạn thấy dự án này thú vị, đừng quên cho mình một ⭐ nhé!_
+Designed and developed by **Trần Nguyễn Kha Vỹ**.
+
+If this project architecture and real-time system design are useful to you, consider starring the repository.
