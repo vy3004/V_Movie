@@ -1,16 +1,11 @@
 /* eslint-disable @next/next/no-img-element */
 import { StarIcon } from "@heroicons/react/24/solid";
 import ExpandableText from "@/components/ui/ExpandableText";
-import { WSRV_PROXY } from "@/lib/configs";
+import { resolveImageUrl } from "@/lib/image";
 import { Movie } from "@/types";
 
 interface MovieDetailProps {
   movie: Movie;
-}
-
-function proxyImageUrl(url: string, width: number) {
-  if (!url) return "";
-  return `${WSRV_PROXY}/?output=webp&q=65&url=${encodeURIComponent(url)}&w=${width}`;
 }
 
 const MovieDetail = ({ movie }: MovieDetailProps) => {
@@ -19,11 +14,11 @@ const MovieDetail = ({ movie }: MovieDetailProps) => {
       <picture className="col-span-3 sm:col-span-1">
         <source
           media="(min-width: 640px)"
-          srcSet={proxyImageUrl(movie.thumb_url, 400)}
+          srcSet={resolveImageUrl(movie.thumb_url, 400)}
         />
         <img
           alt={movie.origin_name || movie.name}
-          src={proxyImageUrl(movie.poster_url || movie.thumb_url, 640)}
+          src={resolveImageUrl(movie.poster_url || movie.thumb_url, 640)}
           className="object-cover rounded-lg"
           loading="eager"
           fetchPriority="high"
@@ -170,4 +165,3 @@ export const CategoryAndCountry = ({
     ))}
   </div>
 );
-
